@@ -6,10 +6,9 @@ from finmcp.providers.types import Account, Balance, Transaction
 
 
 class BankDataProvider(Protocol):
-    """Interfaz común para proveedores Open Banking (TrueLayer, GoCardless, ...).
+    """Interfaz de solo lectura para el proveedor Open Banking (Enable Banking).
 
-    Solo lectura: ninguna operación inicia pagos ni transferencias. Permite
-    intercambiar de proveedor sin tocar la capa de sincronización ni la analítica.
+    Ninguna operación inicia pagos ni transferencias.
     """
 
     def get_accounts(self) -> list[Account]: ...

@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-# Modelos normalizados, independientes del proveedor (TrueLayer, GoCardless, ...).
-# La capa de mapeo de cada proveedor traduce su JSON a estos tipos.
+# Modelos normalizados que desacoplan la analítica del JSON de Enable Banking.
+# La capa de mapeo del proveedor traduce su JSON a estos tipos.
 
 
 @dataclass
@@ -14,6 +14,7 @@ class Account:
     type: str
     currency: str
     iban: str | None = None
+    bank_id: str | None = None
     raw: dict = field(default_factory=dict)
 
 

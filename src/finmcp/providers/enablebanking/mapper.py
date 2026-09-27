@@ -10,7 +10,7 @@ _AVAILABLE = {"ITAV", "FWAV"}  # interim/forward available
 _CURRENT = {"CLBD", "ITBD", "XPCD", "OPBD", "PRCD"}  # closing/interim booked, etc.
 
 
-def to_account(a: dict) -> Account:
+def to_account(a: dict, bank_id: str | None = None) -> Account:
     acct_id = a.get("account_id") or {}
     return Account(
         provider_account_id=a["uid"],
@@ -18,6 +18,7 @@ def to_account(a: dict) -> Account:
         type=a.get("cash_account_type", "CACC"),
         currency=a.get("currency", "EUR"),
         iban=acct_id.get("iban"),
+        bank_id=bank_id,
         raw=a,
     )
 
