@@ -12,6 +12,27 @@ def list_accounts(session: Session) -> list[models.Account]:
     return session.query(models.Account).all()
 
 
+def latest_sync_runs(session: Session) -> list[models.SyncRun]:
+    """Último SyncRun por bank_id."""
+    subq = (
+        session.query(
+            models.SyncRun.bank_id,
+            func.max(models.SyncRun.started_at).label("ts"),
+        )
+        .group_by(models.SyncRun.bank_id)
+        .subquery()
+    )
+    return (
+        session.query(models.SyncRun)
+        .join(
+            subq,
+            (models.SyncRun.bank_id == subq.c.bank_id)
+            & (models.SyncRun.started_at == subq.c.ts),
+        )
+        .all()
+    )
+
+
 def latest_balances(session: Session) -> list[models.Balance]:
     """Último snapshot de saldo por cuenta."""
     subq = (
@@ -36,6 +57,7 @@ def latest_balances(session: Session) -> list[models.Balance]:
 def query_transactions(
     session: Session,
     account_id: str | None = None,
+    bank_id: str | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
     type: str | None = None,
@@ -45,6 +67,8 @@ def query_transactions(
     q = session.query(models.Transaction)
     if account_id:
         q = q.filter(models.Transaction.account_id == account_id)
+    if bank_id:
+        q = q.join(models.Account).filter(models.Account.bank_id == bank_id)
     if start:
         q = q.filter(models.Transaction.booked_at >= start)
     if end:

@@ -3,30 +3,59 @@ from __future__ import annotations
 import typer
 
 app = typer.Typer(
-    help="Finanzas personales sobre TrueLayer (solo lectura)."
+    help="Finanzas personales sobre Open Banking / Enable Banking (solo lectura)."
 )
 rules_app = typer.Typer(help="Reglas de categorización personalizadas.")
 app.add_typer(rules_app, name="rules")
+banks_app = typer.Typer(help="Bancos configurados (multi-banco vía Enable Banking).")
+app.add_typer(banks_app, name="banks")
+
+
+def _resolve_bank(bank_id: str | None):
+    """Resuelve un `BankConfig` por id, o el único configurado si no hay ambigüedad."""
+    from finmcp.config import settings
+
+    banks = settings.banks
+    if not banks:
+        raise typer.BadParameter(
+            "No hay ningún banco configurado. Define ENABLEBANKING_ASPSP_NAME "
+            "o FINMCP_BANK_1_ASPSP_NAME en .env."
+        )
+    if bank_id:
+        for b in banks:
+            if b.id == bank_id:
+                return b
+        ids = ", ".join(b.id for b in banks)
+        raise typer.BadParameter(f"Banco '{bank_id}' no encontrado. Disponibles: {ids}")
+    if len(banks) == 1:
+        return banks[0]
+    ids = ", ".join(b.id for b in banks)
+    raise typer.BadParameter(f"Hay varios bancos configurados; indica --bank. Disponibles: {ids}")
 
 
 @app.command()
-def auth() -> None:
-    """Autoriza con el proveedor activo y guarda las credenciales cifradas."""
+def auth(
+    bank: str = typer.Option(None, "--bank", help="Id del banco (ver `finmcp banks list`)"),
+) -> None:
+    """Autoriza con Enable Banking y guarda las credenciales cifradas."""
+    from finmcp.providers.enablebanking.auth import run_link_flow
+
+    run_link_flow(_resolve_bank(bank))
+
+
+@banks_app.command("list")
+def banks_list() -> None:
+    """Lista los bancos configurados y si ya tienen vínculo (auth) guardado."""
     from finmcp.config import settings
+    from finmcp.providers.enablebanking.auth import has_link
 
-    prov = settings.provider.lower()
-    if prov == "enablebanking":
-        from finmcp.providers.enablebanking.auth import run_link_flow
-
-        run_link_flow()
-    elif prov == "gocardless":
-        from finmcp.providers.gocardless.auth import run_link_flow
-
-        run_link_flow()
-    else:
-        from finmcp.providers.truelayer.auth import run_authorization_flow
-
-        run_authorization_flow()
+    banks = settings.banks
+    if not banks:
+        typer.echo("No hay ningún banco configurado. Ver .env.example.")
+        raise typer.Exit()
+    for b in banks:
+        vinculado = "sí" if has_link(b.id) else "no"
+        typer.echo(f"- {b.id} · {b.aspsp_name or 's/nombre'} · {b.country} · vinculado: {vinculado}")
 
 
 @app.command()
@@ -35,31 +64,17 @@ def institutions(
         None, help="Código país ISO-3166 (p.ej. es). Por defecto, el del proveedor."
     ),
 ) -> None:
-    """Lista las entidades del proveedor activo (para fijar el banco en .env)."""
+    """Lista las entidades de Enable Banking (para fijar `ENABLEBANKING_ASPSP_NAME`)."""
     from finmcp.config import settings
+    from finmcp.providers.enablebanking.auth import list_aspsps
 
-    prov = settings.provider.lower()
-    if prov == "enablebanking":
-        from finmcp.providers.enablebanking.auth import list_aspsps
-
-        code = country or settings.enablebanking_country
-        rows = list_aspsps(code)
-        if not rows:
-            typer.echo(f"Sin entidades para el país '{code}'.")
-            raise typer.Exit()
-        for a in rows:
-            typer.echo(f"{a.get('name', '')}  ·  {a.get('country', '')}")
-        return
-
-    from finmcp.providers.gocardless.auth import list_institutions
-
-    code = country or settings.gocardless_country
-    rows = list_institutions(code)
+    code = country or settings.enablebanking_country
+    rows = list_aspsps(code)
     if not rows:
         typer.echo(f"Sin entidades para el país '{code}'.")
         raise typer.Exit()
-    for inst in rows:
-        typer.echo(f"{inst['id']}  ·  {inst.get('name', '')}")
+    for a in rows:
+        typer.echo(f"{a.get('name', '')}  ·  {a.get('country', '')}")
 
 
 @app.command()
@@ -67,13 +82,21 @@ def sync(
     from_date: str = typer.Option(None, "--from", help="Fecha inicio YYYY-MM-DD"),
     to_date: str = typer.Option(None, "--to", help="Fecha fin YYYY-MM-DD"),
 ) -> None:
-    """Sincroniza cuentas, saldos y movimientos a la base de datos local."""
+    """Sincroniza cuentas, saldos y movimientos a la base de datos local (por banco)."""
     from finmcp.sync.service import run_sync
 
-    run = run_sync(from_date, to_date)
-    typer.echo(
-        f"Sync OK · cuentas: {run.accounts_synced} · nuevas tx: {run.tx_added}"
-    )
+    runs = run_sync(from_date, to_date)
+    any_error = False
+    for run in runs:
+        if run.status == "ok":
+            typer.echo(
+                f"[{run.bank_id}] OK · cuentas: {run.accounts_synced} · nuevas tx: {run.tx_added}"
+            )
+        else:
+            any_error = True
+            typer.echo(f"[{run.bank_id}] ERROR · {run.detail}")
+    if any_error:
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -90,7 +113,7 @@ def accounts() -> None:
             raise typer.Exit()
         for a in rows:
             typer.echo(
-                f"- {a.name} ({a.type}) · {a.currency} · {a.iban or 's/IBAN'}"
+                f"- [{a.bank_id}] {a.name} ({a.type}) · {a.currency} · {a.iban or 's/IBAN'}"
             )
 
 

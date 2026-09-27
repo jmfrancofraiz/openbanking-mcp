@@ -20,6 +20,7 @@ class Account(Base):
     __tablename__ = "accounts"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)  # provider_account_id
+    bank_id: Mapped[str] = mapped_column(String, default="default")
     name: Mapped[str] = mapped_column(String)
     type: Mapped[str] = mapped_column(String)
     currency: Mapped[str] = mapped_column(String)
@@ -74,6 +75,7 @@ class SyncRun(Base):
     __tablename__ = "sync_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bank_id: Mapped[str] = mapped_column(String, default="default")
     started_at: Mapped[datetime] = mapped_column(DateTime)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String, default="running")

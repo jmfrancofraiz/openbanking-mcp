@@ -9,11 +9,15 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import jwt
 
-from finmcp.config import settings
+from finmcp.config import BankConfig, settings
 from finmcp.security.tokens import load_secret, save_secret
 
-# Vínculo (session + cuentas) cifrado en data/enablebanking_link.enc
-_LINK_STORE = "enablebanking_link"
+
+def _link_store(bank_id: str) -> str:
+    """Nombre del fichero data/<store>.enc; "default" conserva el nombre legacy."""
+    if bank_id == "default":
+        return "enablebanking_link"
+    return f"enablebanking_link_{bank_id}"
 
 
 # --- Autenticación: JWT RS256 firmado con la clave privada de la app ---------
@@ -106,15 +110,14 @@ def create_session(code: str) -> dict:
     return r.json()
 
 
-def run_link_flow() -> dict:
-    name = settings.enablebanking_aspsp_name
-    if not name:
+def run_link_flow(bank: BankConfig) -> dict:
+    if not bank.aspsp_name:
         raise RuntimeError(
-            "Falta ENABLEBANKING_ASPSP_NAME en .env. "
+            f"Falta el nombre del banco para '{bank.id}'. "
             "Lista las entidades con `finmcp institutions`."
         )
     state = secrets.token_urlsafe(16)
-    auth_resp = start_auth(name, settings.enablebanking_country, state)
+    auth_resp = start_auth(bank.aspsp_name, bank.country, state)
     print("Abre esta URL y autoriza con tu banco (SCA):\n")
     print(f"  {auth_resp['url']}\n")
     webbrowser.open(auth_resp["url"])
@@ -127,7 +130,7 @@ def run_link_flow() -> dict:
 
     session = create_session(code)
     save_secret(
-        _LINK_STORE,
+        _link_store(bank.id),
         {
             "session_id": session["session_id"],
             "accounts": session.get("accounts", []),
@@ -137,10 +140,15 @@ def run_link_flow() -> dict:
     return session
 
 
-def load_link() -> dict:
-    link = load_secret(_LINK_STORE)
+def load_link(bank_id: str) -> dict:
+    link = load_secret(_link_store(bank_id))
     if not link or not link.get("accounts"):
         raise RuntimeError(
-            "No hay vínculo con el banco. Ejecuta `finmcp auth` primero."
+            f"No hay vínculo con el banco '{bank_id}'. Ejecuta `finmcp auth --bank {bank_id}` primero."
         )
     return link
+
+
+def has_link(bank_id: str) -> bool:
+    link = load_secret(_link_store(bank_id))
+    return bool(link and link.get("accounts"))

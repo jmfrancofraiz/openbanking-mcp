@@ -11,6 +11,7 @@ def upsert_account(session: Session, acc: Account) -> None:
     if row is None:
         row = models.Account(id=acc.provider_account_id)
         session.add(row)
+    row.bank_id = acc.bank_id or "default"
     row.name = acc.name
     row.type = acc.type
     row.currency = acc.currency

@@ -34,6 +34,7 @@ def list_accounts() -> list[dict]:
         return [
             {
                 "id": a.id,
+                "bank_id": a.bank_id,
                 "name": a.name,
                 "type": a.type,
                 "currency": a.currency,
@@ -62,16 +63,18 @@ def get_balances() -> list[dict]:
 @mcp.tool()
 def get_transactions(
     account_id: str | None = None,
+    bank_id: str | None = None,
     start: str | None = None,
     end: str | None = None,
     type: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
-    """Movimientos filtrados por cuenta, fechas (YYYY-MM-DD) y tipo (debit/credit)."""
+    """Movimientos filtrados por cuenta, banco, fechas (YYYY-MM-DD) y tipo (debit/credit)."""
     with SessionLocal() as s:
         txs = queries.query_transactions(
             s,
             account_id=account_id,
+            bank_id=bank_id,
             start=parse_date(start),
             end=parse_date(end),
             type=type,
@@ -81,10 +84,12 @@ def get_transactions(
 
 
 @mcp.tool()
-def search_transactions(query: str, limit: int = 50) -> list[dict]:
+def search_transactions(
+    query: str, bank_id: str | None = None, limit: int = 50
+) -> list[dict]:
     """Busca movimientos por texto en el comercio o el concepto."""
     with SessionLocal() as s:
-        txs = queries.query_transactions(s, text=query, limit=limit)
+        txs = queries.query_transactions(s, bank_id=bank_id, text=query, limit=limit)
         return [_tx_dict(t) for t in txs]
 
 
@@ -121,23 +126,23 @@ def monthly_summary_tool(year: int, month: int) -> dict:
 
 
 @mcp.tool()
-def sync_status() -> dict:
-    """Estado de la última sincronización."""
+def sync_status() -> list[dict]:
+    """Estado de la última sincronización, por banco."""
     with SessionLocal() as s:
-        run = (
-            s.query(models.SyncRun)
-            .order_by(models.SyncRun.started_at.desc())
-            .first()
-        )
-        if run is None:
-            return {"status": "never", "detail": "Ejecuta `finmcp sync`."}
-        return {
-            "status": run.status,
-            "started_at": run.started_at.isoformat(),
-            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
-            "accounts_synced": run.accounts_synced,
-            "tx_added": run.tx_added,
-        }
+        runs = queries.latest_sync_runs(s)
+        if not runs:
+            return [{"status": "never", "detail": "Ejecuta `finmcp sync`."}]
+        return [
+            {
+                "bank_id": run.bank_id,
+                "status": run.status,
+                "started_at": run.started_at.isoformat(),
+                "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+                "accounts_synced": run.accounts_synced,
+                "tx_added": run.tx_added,
+            }
+            for run in runs
+        ]
 
 
 def _wrap_bearer_auth(app, token: str):

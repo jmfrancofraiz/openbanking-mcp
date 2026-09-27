@@ -35,9 +35,8 @@ El servidor MCP **lee de SQLite, nunca llama al banco en caliente**. La sincroni
 es un proceso aparte (`finmcp sync`, manual o por cron).
 
 > ¿Por qué Enable Banking? Es el agregador AIS **self-serve y gratis para uso personal**
-> que cubre la banca europea. (GoCardless/Nordigen cerró nuevos registros y la Data API de
-> TrueLayer ya no se concede self-serve.) El código mantiene una interfaz `BankDataProvider`,
-> así que añadir otro proveedor es sencillo.
+> que cubre la banca europea. Es el único proveedor soportado por el proyecto; el código
+> mantiene una interfaz `BankDataProvider` por si se añade otro proveedor en el futuro.
 
 ## Paso a paso
 
@@ -71,7 +70,6 @@ cp .env.example .env
 Guarda la clave privada en `data/enablebanking_private.pem` y edita el `.env`:
 
 ```dotenv
-FINMCP_PROVIDER=enablebanking
 ENABLEBANKING_APP_ID=<tu Application ID>
 ENABLEBANKING_COUNTRY=ES
 # ENABLEBANKING_KEY_PATH=/ruta/a/clave.pem   # solo si NO usas data/enablebanking_private.pem
@@ -101,13 +99,41 @@ direcciones (o pega la URL entera) cuando el CLI lo pida. El código nunca sale 
 
 > El consentimiento dura **~90 días** (límite PSD2); pasado ese plazo, repite `finmcp auth`.
 
+## Varios bancos
+
+Puedes vincular más de un banco (p.ej. CaixaBank y BBVA) a la vez. Define bancos
+numerados en el `.env` (ver `.env.example`):
+
+```dotenv
+FINMCP_BANK_1_ID=caixa
+FINMCP_BANK_1_ASPSP_NAME=CaixaBank
+FINMCP_BANK_1_COUNTRY=ES
+
+FINMCP_BANK_2_ID=bbva
+FINMCP_BANK_2_ASPSP_NAME=BBVA
+FINMCP_BANK_2_COUNTRY=ES
+```
+
+Autoriza cada uno por separado y comprueba el estado:
+
+```bash
+finmcp auth --bank caixa
+finmcp auth --bank bbva
+finmcp banks list           # lista bancos configurados y si están vinculados
+finmcp sync                 # sincroniza todos; un fallo en uno no bloquea a los demás
+```
+
+Si solo defines `ENABLEBANKING_ASPSP_NAME` (sin `FINMCP_BANK_1_*`), el proyecto sigue
+funcionando en modo de un solo banco (`--bank` no es necesario).
+
 ## Comandos
 
 | Comando | Descripción |
 |---|---|
-| `finmcp auth` | Autoriza con tu banco y guarda la sesión cifrada |
+| `finmcp auth [--bank ID]` | Autoriza con un banco y guarda la sesión cifrada |
+| `finmcp banks list` | Lista los bancos configurados y su estado de vínculo |
 | `finmcp institutions` | Lista las entidades disponibles (para fijar `ENABLEBANKING_ASPSP_NAME`) |
-| `finmcp sync` | Trae cuentas/saldos/movimientos a SQLite |
+| `finmcp sync` | Trae cuentas/saldos/movimientos a SQLite (por banco) |
 | `finmcp accounts` | Lista las cuentas locales |
 | `finmcp import-csv` | Importa movimientos desde un CSV (histórico anterior a 90 días) |
 | `finmcp categorize` | Reaplica tus reglas de categorización |

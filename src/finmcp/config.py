@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
+import re
+from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import Field
+from dotenv import dotenv_values
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Scopes de SOLO LECTURA. Ninguno permite iniciar pagos ni transferencias.
@@ -16,32 +19,49 @@ SCOPES = [
     "offline_access",  # necesario para obtener refresh_token
 ]
 
+_BANK_ENV_RE = re.compile(r"^FINMCP_BANK_(\d+)_([A-Z0-9_]+)$")
+
+
+@dataclass
+class BankConfig:
+    """Un banco (ASPSP) vinculado vía Enable Banking."""
+
+    id: str
+    aspsp_name: str = ""
+    country: str = "ES"
+
+
+def _discover_bank_configs(env_file: Path | None = None) -> list[BankConfig]:
+    """Agrupa `FINMCP_BANK_<n>_<campo>` de .env/entorno en `BankConfig`s ordenados por n."""
+    if env_file is None:
+        env_file = Path(__file__).resolve().parents[2] / ".env"
+    values: dict[str, str] = {}
+    if env_file.exists():
+        values.update({k: v for k, v in dotenv_values(env_file).items() if v is not None})
+    values.update(os.environ)  # el entorno real gana sobre .env, como pydantic-settings
+
+    grouped: dict[int, dict[str, str]] = {}
+    for key, val in values.items():
+        m = _BANK_ENV_RE.match(key)
+        if not m:
+            continue
+        idx, field_name = int(m.group(1)), m.group(2).lower()
+        grouped.setdefault(idx, {})[field_name] = val
+
+    return [
+        BankConfig(
+            id=grouped[idx].get("id", str(idx)),
+            aspsp_name=grouped[idx].get("aspsp_name", ""),
+            country=grouped[idx].get("country", "ES"),
+        )
+        for idx in sorted(grouped)
+    ]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
-
-    # --- Proveedor Open Banking activo ---
-    provider: str = Field(
-        "truelayer",
-        validation_alias="FINMCP_PROVIDER",
-        description='"truelayer" | "gocardless" | "enablebanking"',
-    )
-
-    # --- TrueLayer ---
-    truelayer_env: str = Field("sandbox", description='"sandbox" | "live"')
-    truelayer_client_id: str = ""
-    truelayer_client_secret: str = ""
-    truelayer_redirect_uri: str = "http://localhost:3000/callback"
-    truelayer_providers: str = "uk-cs-mock"
-
-    # --- GoCardless Bank Account Data (antes Nordigen) ---
-    gocardless_secret_id: str = ""
-    gocardless_secret_key: str = ""
-    gocardless_institution_id: str = ""  # p.ej. CAIXABANK_CAIXESBBXXX
-    gocardless_country: str = "es"
-    gocardless_redirect_uri: str = "http://localhost:3000/callback"
 
     # --- Enable Banking ---
     enablebanking_app_id: str = ""  # Application ID (kid del JWT)
@@ -57,26 +77,6 @@ class Settings(BaseSettings):
     # --- Seguridad ---
     finmcp_encryption_key: str = ""
     finmcp_callback_port: int = 3000
-
-    @property
-    def is_sandbox(self) -> bool:
-        return self.truelayer_env.lower() != "live"
-
-    @property
-    def auth_base(self) -> str:
-        return (
-            "https://auth.truelayer-sandbox.com"
-            if self.is_sandbox
-            else "https://auth.truelayer.com"
-        )
-
-    @property
-    def api_base(self) -> str:
-        return (
-            "https://api.truelayer-sandbox.com"
-            if self.is_sandbox
-            else "https://api.truelayer.com"
-        )
 
     @property
     def data_dir(self) -> Path:
@@ -97,10 +97,6 @@ class Settings(BaseSettings):
         return SCOPES
 
     @property
-    def gocardless_base(self) -> str:
-        return "https://bankaccountdata.gocardless.com/api/v2"
-
-    @property
     def enablebanking_base(self) -> str:
         return "https://api.enablebanking.com"
 
@@ -109,6 +105,22 @@ class Settings(BaseSettings):
         return self.enablebanking_key_path or (
             self.data_dir / "enablebanking_private.pem"
         )
+
+    @property
+    def banks(self) -> list[BankConfig]:
+        """Bancos configurados: `FINMCP_BANK_N_*` indexados, o el legacy de uno solo."""
+        discovered = _discover_bank_configs()
+        if discovered:
+            return discovered
+        if self.enablebanking_aspsp_name:
+            return [
+                BankConfig(
+                    id="default",
+                    aspsp_name=self.enablebanking_aspsp_name,
+                    country=self.enablebanking_country,
+                )
+            ]
+        return []
 
 
 settings = Settings()

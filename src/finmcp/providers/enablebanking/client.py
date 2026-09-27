@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from finmcp.config import settings
+from finmcp.config import BankConfig, settings
 from finmcp.providers.enablebanking import auth, mapper
 from finmcp.providers.types import Account, Balance, Transaction
 
@@ -11,12 +11,13 @@ class EnableBankingClient:
     """Cliente de SOLO LECTURA de Enable Banking (Account Information / PSD2).
 
     Implementa la interfaz `BankDataProvider`. Lee las cuentas vinculadas en el
-    último `finmcp auth` (session) y consulta saldos y movimientos.
+    último `finmcp auth` (session) de un banco concreto, y consulta saldos y movimientos.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, bank: BankConfig) -> None:
+        self._bank = bank
         self._base = settings.enablebanking_base
-        self._link = auth.load_link()
+        self._link = auth.load_link(bank.id)
 
     def _get(self, path: str, params: dict | None = None) -> dict:
         with httpx.Client(
@@ -27,7 +28,10 @@ class EnableBankingClient:
             return r.json()
 
     def get_accounts(self) -> list[Account]:
-        return [mapper.to_account(a) for a in self._link["accounts"]]
+        return [
+            mapper.to_account(a, bank_id=self._bank.id)
+            for a in self._link["accounts"]
+        ]
 
     def get_balance(self, account_id: str) -> Balance:
         data = self._get(f"/accounts/{account_id}/balances")
