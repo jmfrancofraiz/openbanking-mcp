@@ -72,4 +72,7 @@ def run_sync(
         runs = [_sync_one_bank(session, bank, from_date, to_date) for bank in banks]
         # Recategoriza según las reglas del usuario tras incorporar lo nuevo de todos los bancos.
         apply_rules(session)
+        # Un rollback de un banco posterior expira los SyncRun anteriores: recargamos antes de cerrar.
+        for run in runs:
+            session.refresh(run)
         return runs

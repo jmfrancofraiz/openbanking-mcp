@@ -103,3 +103,36 @@ def test_run_sync_partial_failure_does_not_abort_other_banks(monkeypatch, Sessio
     assert runs["bank1"].status == "error"
     assert runs["bank2"].status == "ok"
     assert runs["bank2"].accounts_synced == 1
+
+
+def test_run_sync_failure_after_ok_keeps_previous_run_loaded(monkeypatch, Session):
+    """El rollback del banco que falla no debe dejar inaccesible el SyncRun del anterior."""
+    from finmcp.providers.types import Account
+
+    monkeypatch.setattr(service, "init_db", lambda: None)
+    monkeypatch.setattr(service, "SessionLocal", Session)
+    monkeypatch.setattr(service, "settings", _fake_settings(_TWO_BANKS))
+
+    class BoomClient:
+        def get_accounts(self):
+            raise RuntimeError("token caducado")
+
+    class FakeClient:
+        def get_accounts(self):
+            return [Account(provider_account_id="a1", name="C1", type="T", currency="EUR")]
+
+        def get_balance(self, account_id):
+            raise RuntimeError("sin saldo")
+
+        def get_transactions(self, account_id, from_date=None, to_date=None):
+            return []
+
+    def fake_get_provider(bank):
+        return FakeClient() if bank.id == "bank1" else BoomClient()
+
+    monkeypatch.setattr(service, "get_provider", fake_get_provider)
+
+    runs = {r.bank_id: r for r in service.run_sync()}
+    assert runs["bank1"].status == "ok"
+    assert runs["bank1"].accounts_synced == 1
+    assert runs["bank2"].status == "error"
