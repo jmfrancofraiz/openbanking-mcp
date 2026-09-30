@@ -145,6 +145,27 @@ def sync_status() -> list[dict]:
         ]
 
 
+@mcp.tool()
+def sync(from_date: str | None = None, to_date: str | None = None) -> list[dict]:
+    """Sincroniza cuentas, saldos y movimientos desde el banco (fechas YYYY-MM-DD).
+
+    Es la única herramienta que sale a la red; el resto solo lee SQLite.
+    """
+    from finmcp.sync.service import run_sync
+
+    runs = run_sync(from_date, to_date)
+    return [
+        {
+            "bank_id": run.bank_id,
+            "status": run.status,
+            "accounts_synced": run.accounts_synced,
+            "tx_added": run.tx_added,
+            "detail": run.detail,
+        }
+        for run in runs
+    ]
+
+
 def _wrap_bearer_auth(app, token: str):
     """Middleware mínimo: exige `Authorization: Bearer <token>` en cada petición."""
     from starlette.middleware.base import BaseHTTPMiddleware

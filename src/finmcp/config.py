@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import dotenv_values
+from pydantic import PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_UNSET = object()
 
 # Scopes de SOLO LECTURA. Ninguno permite iniciar pagos ni transferencias.
 SCOPES = [
@@ -31,12 +34,10 @@ class BankConfig:
     country: str = "ES"
 
 
-def _discover_bank_configs(env_file: Path | None = None) -> list[BankConfig]:
+def _discover_bank_configs(env_file: Path | None) -> list[BankConfig]:
     """Agrupa `FINMCP_BANK_<n>_<campo>` de .env/entorno en `BankConfig`s ordenados por n."""
-    if env_file is None:
-        env_file = Path(__file__).resolve().parents[2] / ".env"
     values: dict[str, str] = {}
-    if env_file.exists():
+    if env_file is not None and env_file.exists():
         values.update({k: v for k, v in dotenv_values(env_file).items() if v is not None})
     values.update(os.environ)  # el entorno real gana sobre .env, como pydantic-settings
 
@@ -63,6 +64,10 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
+    # Ruta del .env efectivo; los bancos se descubren fuera de pydantic y necesitan
+    # respetar el `_env_file` recibido (los tests pasan None para aislarse del .env real).
+    _env_file_path: Path | None = PrivateAttr(default=None)
+
     # --- Enable Banking ---
     enablebanking_app_id: str = ""  # Application ID (kid del JWT)
     enablebanking_key_path: Path | None = None  # ruta al .pem de la clave privada
@@ -77,6 +82,14 @@ class Settings(BaseSettings):
     # --- Seguridad ---
     finmcp_encryption_key: str = ""
     finmcp_callback_port: int = 3000
+
+    def __init__(self, **kwargs) -> None:
+        env_file = kwargs.get("_env_file", _UNSET)
+        super().__init__(**kwargs)
+        if env_file is _UNSET:
+            self._env_file_path = Path(__file__).resolve().parents[2] / ".env"
+        elif env_file is not None:
+            self._env_file_path = Path(env_file)
 
     @property
     def data_dir(self) -> Path:
@@ -109,7 +122,7 @@ class Settings(BaseSettings):
     @property
     def banks(self) -> list[BankConfig]:
         """Bancos configurados: `FINMCP_BANK_N_*` indexados, o el legacy de uno solo."""
-        discovered = _discover_bank_configs()
+        discovered = _discover_bank_configs(self._env_file_path)
         if discovered:
             return discovered
         if self.enablebanking_aspsp_name:
