@@ -99,13 +99,25 @@ def start_auth(aspsp_name: str, country: str, state: str) -> dict:
     return r.json()
 
 
-def create_session(code: str) -> dict:
-    r = httpx.post(
-        f"{settings.enablebanking_base}/sessions",
-        json={"code": code},
-        headers=auth_headers(),
-        timeout=30,
-    )
+def create_session(code: str, attempts: int = 5) -> dict:
+    # ConnectError = la petición no llegó a salir, así que reintentar no consume el code.
+    for attempt in range(1, attempts + 1):
+        try:
+            r = httpx.post(
+                f"{settings.enablebanking_base}/sessions",
+                json={"code": code},
+                headers=auth_headers(),
+                timeout=30,
+            )
+            break
+        except httpx.ConnectError as exc:
+            if attempt == attempts:
+                raise RuntimeError(
+                    f"No se pudo conectar con Enable Banking ({exc}). "
+                    "Revisa la red/DNS y repite `finmcp auth`."
+                ) from exc
+            print(f"Error de red ({exc}); reintentando ({attempt}/{attempts - 1})...")
+            time.sleep(2 * attempt)
     r.raise_for_status()
     return r.json()
 
