@@ -1,0 +1,340 @@
+description_pattern,empresa_identificada,actividad,categoria_especifica,confianza
+"ABONO DE NOMINA POR TRANSFERENCIA // INGRESO POR NÓMINA O PENSIÓN // CRAPD VIGO","Nómina (CRAPD Vigo)",Abono de nómina por transferencia,Ingresos - Nómina,Media
+"Abono de nómina - Crapd vigo","Nómina (CRAPD Vigo)",Abono de nómina por transferencia,Ingresos - Nómina,Alta
+"Adeudo bbva allianz seguros y reaseguros, s.a. - Adeudo nº 2026209001391943","BBVA Allianz Seguros",Adeudo de póliza de seguro,Seguros,Alta
+"Adeudo comunidad de usuarios rexidouro, a pedra y barro - Adeudo nº 2026210000101643","Comunidad de Usuarios Rexidouro, A Pedra e Barro",Cuota de comunidad de regantes/usuarios,Vivienda - Comunidad,Alta
+"Aldeana - Pago con tarjeta",Aldeana,Bar/restaurante en Vigo,Restauración,Media
+"Ataquilla.com vtas .onlin - Pago con tarjeta","Ataquilla.com",Plataforma de venta de entradas para espectáculos,Ocio y entretenimiento,Alta
+"Bizum - Enviado: abadia",Bizum,Transferencia P2P enviada - Abadía (bar/restaurante),Transferencias personales,Alta
+"Bizum - Enviado: cena",Bizum,Transferencia P2P enviada - cena,Transferencias personales,Alta
+"Bizum - Enviado: cena abadia",Bizum,Transferencia P2P enviada - cena Abadía,Transferencias personales,Alta
+"Bizum - Enviado: cine",Bizum,Transferencia P2P enviada - cine,Transferencias personales,Alta
+"Bizum - Enviado: comida padre",Bizum,Transferencia P2P enviada - comida padre,Transferencias personales,Alta
+"Bizum - Enviado: cumple dani",Bizum,Transferencia P2P enviada - regalo cumpleaños Dani,Transferencias personales,Alta
+"Bizum - Enviado: cumple nerea gote y berta",Bizum,Transferencia P2P enviada - regalo cumpleaños Nerea/Gote/Berta,Transferencias personales,Alta
+"Bizum - Enviado: cumple vera. de jorge franco",Bizum,Transferencia P2P enviada - regalo cumpleaños (Jorge),Transferencias personales,Alta
+"Bizum - Enviado: desbroce talud tomino",Bizum,Transferencia P2P enviada - desbroce de talud en Tomiño,Transferencias personales,Alta
+"Bizum - Enviado: flores marina",Bizum,Transferencia P2P enviada - flores Marina,Transferencias personales,Alta
+"Bizum - Enviado: sin concepto",Bizum,Transferencia P2P enviada sin concepto especificado,Transferencias personales,Alta
+"Bizum - Recibido: cena playa de lagos",Bizum,Transferencia P2P recibida - cena Playa de Lagos,Transferencias personales,Alta
+"Bizum - Recibido: comida domingo tomino",Bizum,Transferencia P2P recibida - comida domingo en Tomiño,Transferencias personales,Alta
+"Cargo por amortizacion de prestamo/credito - 0182-5334-98-0830370851",BBVA,Cuota mensual de la hipoteca,Vivienda - Hipoteca,Alta
+"Cash.privicompras - Pago con tarjeta","Cash Privicompras",Comercio online sin identificar con certeza,Compras online,Baja
+"Chiringo areiña - Pago con tarjeta","Chiringo Areiña",Chiringuito de playa en Cangas,Restauración,Media
+"Concello de vigo ejecutivvigo         es - Compra: concello de vigo ejecutiv","Concello de Vigo",Ayuntamiento de Vigo - vía ejecutiva (recargo de apremio/impuesto),Impuestos,Alta
+"Media markt online       el prat de lles - Compra: media markt online",MediaMarkt,Cadena de electrónica de consumo (compra online),Electrónica,Alta
+"Ret. efectivo  a debito con tarj. en cajero. aut. - Otros","Cajero automático (tarjeta débito)",Reintegro de efectivo en cajero,Efectivo / Cajero,Alta
+"Revolut**4663* - Pago con tarjeta",Revolut,Fintech/banca digital - carga de tarjeta prepago,Servicios financieros,Alta
+"Transferencia realizada - Grados 2026 jorge franco brieva","Transferencia propia",Gasto de graduación 2026 de Jorge,Educación - Graduación,Alta
+"Transferencia realizada - Traspaso","Traspaso propio",Traspaso entre cuentas propias,Traspasos internos,Alta
+"Transferencia recibida - Alquiler camelias 85","Inquilino - Camelias 85",Ingreso mensual por alquiler de inmueble en Camelias 85,Ingresos - Alquiler,Alta
+"Abono en cuenta","Abono en cuenta (origen no especificado)",Ingreso genérico en cuenta,Otros ingresos,Baja
+"Abono por campaña Plan Viaje Cam.Divisa KENNEDY HOSPITALIT","ING Plan Viaje",Reembolso de comisión de cambio de divisa (viaje),Reembolsos ING,Alta
+"Abono por campaña Plan Viaje Cam.Divisa Lodging H KENNEDY","ING Plan Viaje",Reembolso de comisión de cambio de divisa (viaje),Reembolsos ING,Alta
+"Abono por campaña Plan Viaje Cam.Divisa ZIZI MLY SMAIL","ING Plan Viaje",Reembolso de comisión de cambio de divisa (viaje),Reembolsos ING,Alta
+"Abono por campaña Plan Viaje Uso Cajero 0000020909","ING Plan Viaje",Reembolso de comisión de cajero en el extranjero,Reembolsos ING,Alta
+"Abono por campaña Plan Viaje Uso Cajero 45014","ING Plan Viaje",Reembolso de comisión de cajero en el extranjero,Reembolsos ING,Alta
+"BIZUM // OTROS // COMPRA: YELMOBIZUM POZUELO DE ALES","Yelmo Cines (vía Bizum)","Cadena de cines - entrada comprada vía Bizum (sede Pozuelo de Alarcón)",Ocio y entretenimiento,Alta
+"BIZUM // OTROS // ENVIADO: corte",Bizum,Transferencia P2P enviada,Transferencias personales,Alta
+"BIZUM // OTROS // ENVIADO: Limpieza",Bizum,Transferencia P2P enviada - servicio de limpieza doméstica,Transferencias personales,Alta
+"BIZUM // OTROS // RECIBIDO: Comida pizzeria Toni PT",Bizum,Transferencia P2P recibida,Transferencias personales,Alta
+"Bizum enviado a Ana Belen Lopez Gutierrez Cumpleaños Rafa de Elsa",Bizum,Transferencia P2P enviada - regalo cumpleaños,Transferencias personales,Alta
+"CARGO POR COMPRA CON TARJETA EN COMERCIOS // PAGO CON TARJETA // Revolut**4663*",Revolut,Fintech/banca digital - carga de tarjeta prepago,Servicios financieros,Alta
+"Cargo mensual Tarjeta crédito",ING,Liquidación mensual de tarjeta de crédito,Servicios financieros,Alta
+"Comisión cajero 0000020909","ING/banco corresponsal",Comisión por uso de cajero,Comisiones bancarias,Alta
+"Comisión cajero 45014","ING/banco corresponsal",Comisión por uso de cajero,Comisiones bancarias,Alta
+"Devolución Tarjeta E203 Tui","E203 (Tui)",Estación de servicio en Tui - devolución,Combustible y transporte,Alta
+"Devolución Tarjeta MGP*Vinted Vilnius LT",Vinted,Marketplace de ropa de segunda mano - devolución,Compraventa segunda mano,Alta
+"Devolución Tarjeta OCULUS *7DWG5ZMZK2","Oculus (Meta)",Tienda de contenido VR/gafas Meta Quest - devolución,Ocio y entretenimiento,Alta
+"Devolución Tarjeta PARFOIS OUTLETUI FASHI AREAS (TUI) ES",Parfois,Cadena de moda y complementos - devolución,Moda y complementos,Alta
+"Nomina recibida NETCENTRIC IBERICA SL","Netcentric Ibérica SL","Consultora de marketing digital y analítica web (parte de Merkle/Dentsu)",Ingresos - Nómina,Alta
+"PAGO CON TARJETA EN ESPECTACULOS, MUSEOS Y DEPORTES // PAGO CON TARJETA // MASQUETICKET VIGO ES",MasQueTicket,Plataforma de venta de entradas para espectáculos,Ocio y entretenimiento,Alta
+"PAGO CON TARJETA EN MODA, CALZADO Y COMPLEMENTOS // PAGO CON TARJETA // SHEIN.COM",Shein,Comercio electrónico de moda low-cost (China),Moda y complementos,Alta
+"Pago de impuestos","Administración pública",Pago de impuestos genérico,Impuestos,Alta
+"Pago en 082-GADIS HIPER TUI TUI ES",Gadis,Cadena de supermercados gallega (hipermercado en Tui),Alimentación - Supermercado,Alta
+"Pago en 182- SFERA PO CC GRAN VIAVIGO ES",Sfera,"Cadena de moda (grupo El Corte Inglés) en el C.C. Gran Vía de Vigo",Moda y complementos,Alta
+"Pago en 241138 TUI 1","241138 TUI 1 (Tui)",Estación de servicio en Tui,Combustible y transporte,Alta
+"Pago en 241277 VIGO","241277 (Vigo)",Comercio sin identificar con certeza,Otros gastos,Baja
+"Pago en 241277 VIGO VIGO ES","241277 (Vigo)",Comercio sin identificar con certeza,Otros gastos,Baja
+"Pago en 2641 TEDI MAZEDO",Tedi,"Cadena alemana de bazar y artículos para el hogar a bajo coste",Bazar y hogar,Alta
+"Pago en 272 - BELROS GRAN VIA DE VIGO ES",Belros,Tienda de golosinas y snacks en el C.C. Gran Vía de Vigo,Golosinas y snacks,Alta
+"Pago en 453.GADIS C.C.CAMELIAS VIGO ES",Gadis,"Cadena de supermercados gallega (C.C. Camelias, Vigo)",Alimentación - Supermercado,Alta
+"Pago en 459-GA.VI.CALLE BARCELONAVIGO ES","Gadis (Calle Barcelona, Vigo)",Cadena de supermercados gallega,Alimentación - Supermercado,Alta
+"Pago en 693 GADIS LOPEZ MORA VIGO ES","Gadis (López Mora, Vigo)",Cadena de supermercados gallega,Alimentación - Supermercado,Alta
+"Pago en 782- MANDUKA TUI TUI ES",Manduka,Restaurante/comercio de alimentación en Tui,Restauración,Media
+"Pago en 8290 VIGO CC ELIPTICA VIGO ES","Comercio C.C. Elíptica (Vigo)",Comercio sin identificar con certeza en el C.C. A Laxe/Elíptica,Otros gastos,Baja
+"Pago en A TAPA DO BARRIL VIGO ES","A Tapa do Barril",Bar de tapas en Vigo,Restauración,Media
+"Pago en ABADIA DE NURIA VIGO ES","Abadía de Nuria",Bar/cafetería en Vigo,Restauración,Media
+"Pago en ADROS PIZZA VIGO ES","Adros Pizza",Pizzería en Vigo,Restauración,Alta
+"Pago en AGRICOLA BOUZADA PONTEVEDRA ES","Agrícola Bouzada","Tienda de piensos, abonos y ferretería agrícola en Tomiño",Agricultura y jardinería,Alta
+"Pago en AGRICOLA TOMI¥O O SEIXO (TOMIES","Agrícola Tomiño","Tienda de productos agrícolas en O Seixo, Tomiño",Agricultura y jardinería,Media
+"Pago en ALCAMPO HIPERMERCADOS VIGVIGO ES",Alcampo,Cadena de hipermercados,Alimentación - Supermercado,Alta
+"Pago en ALDEANA VIGO ES",Aldeana,Bar/restaurante en Vigo,Restauración,Media
+"Pago en ANDRADE HAIR VIGO ES","Andrade Hair",Peluquería en Vigo,Salud y belleza,Alta
+"Pago en APARCAMIENTO GENARO YA¥EZ CALEXOES","Aparcamiento Genaro Yáñez",Aparcamiento,Aparcamiento,Alta
+"Pago en APEGO CENTRO FISIOTERAPIAVIGO ES","Apego Centro Fisioterapia",Clínica de fisioterapia en Vigo,Salud - Fisioterapia,Alta
+"Pago en AREMA VIGO ES",Arema,Comercio de alimentación/panadería en Vigo,Alimentación - Supermercado,Media
+"Pago en ATRIGA SANTIAGO DE CES","ATRIGA (Xunta de Galicia)",Agencia Tributaria de Galicia - pago de tasas/impuestos,Impuestos,Alta
+"Pago en AWS EMEA LUXEMBOURG LU","Amazon Web Services",Servicios de computación en la nube,Suscripciones digitales,Alta
+"Pago en Alensa Medical","Alensa Medical",Óptica online - lentillas y productos oftalmológicos,Salud - Óptica,Alta
+"Pago en BAIONA BAIONA ES","Baiona (comercio genérico)",Comercio sin identificar con certeza,Otros gastos,Baja
+"Pago en BAR CHARRA SANTIAGO DE CES","Bar Charra",Bar en Santiago de Compostela,Restauración,Media
+"Pago en BAR ESTADIO PONTEVEDRA ES","Bar Estadio",Bar en Pontevedra,Restauración,Media
+"Pago en BAY ONE BAIONA ES","Bay One",Bar/restaurante en Baiona,Restauración,Media
+"Pago en BAZAR CHINO TOMIO ES","Bazar chino (Tomiño)",Bazar de artículos varios en Tomiño,Bazar y hogar,Media
+"Pago en BEKARI MAESTROS PANADEROSVIGO ES","Bekari Maestros Panaderos",Panadería en Vigo,Panadería y pastelería,Alta
+"Pago en BK14603 SANTIAGO SERNA SANTIAGO DE CES","Burger King (Santiago)",Cadena de comida rápida,Restauración,Alta
+"Pago en BK16993 TUI AREAS (TUI) ES","Burger King (Área de servicio, Tui)",Cadena de comida rápida,Restauración,Alta
+"Pago en BKT-SCQ-PARK-V-PREPAGO A CORUA ES","Parking aeropuerto Santiago (BKT)",Aparcamiento prepago aeroportuario,Aparcamiento,Media
+"Pago en CA MODAS GRAN VIA VIGO VIGO ES","CA Modas","Tienda de moda en el C.C. Gran Vía, Vigo",Moda y complementos,Alta
+"Pago en CAFE BAR PLAZA VIGO ES","Café Bar Plaza",Bar/cafetería en Vigo,Restauración,Media
+"Pago en CAFETERIA HELIOS VIGO ES","Cafetería Helios",Cafetería en Vigo,Restauración,Media
+"Pago en CAFETERIA MOVENPICK VIGO ES","Cafetería Movenpick",Cafetería en Vigo,Restauración,Media
+"Pago en CAFETERIA NOVELTY VIGO ES","Café Novelty",Cafetería histórica en Vigo,Restauración,Alta
+"Pago en CAMPING BAYONA PLAYA BAIONA ES","Camping Bayona Playa",Camping en Baiona,Ocio y viajes - Alojamiento,Alta
+"Pago en CARREFOUR VIGO2 VIGO ES",Carrefour,Cadena de supermercados (Vigo),Alimentación - Supermercado,Alta
+"Pago en CASA DAS DO CORREO GOYAN ES","Casa das do Correo",Restaurante/casa de comidas en Goián,Restauración,Media
+"Pago en CASA DEL LIBRO VIGO ES","Casa del Libro",Cadena de librerías,Librería y papelería,Alta
+"Pago en CASA ERMELINDA AGUAS DE MOU PT","Casa Ermelinda",Restaurante en Águas de Moura (Portugal),Restauración,Media
+"Pago en CASA TELLEIRO PONTEVEDRA ES","Casa Telleiro",Restaurante/casa de comidas en Pontevedra,Restauración,Media
+"Pago en CBD VILA NOVA","Continente (Vila Nova de Cerveira)","Supermercado Continente (Sonae) en Vila Nova de Cerveira, Portugal — CBD es el código de tienda, no cannabidiol",Alimentación - Supermercado,Alta
+"Pago en CENTER 3128-CAMELIAS VIGO ES","Eroski Center 3128 (Camelias, Vigo)","Supermercado Eroski (formato Center) en el barrio de Camelias, Vigo",Alimentación - Supermercado,Alta
+"Pago en CEPAS VELLAS VIGO ES","Cepas Vellas",Bar de vinos en Vigo,Restauración,Media
+"Pago en CEPSA17157-1INV PENADA PAREDES (VILAES",Cepsa,Cadena de estaciones de servicio,Combustible y transporte,Alta
+"Pago en CHIRINGO AREIA CANGAS ES","Chiringo Areia",Chiringuito de playa en Cangas,Restauración,Media
+"Pago en CHIRINGO PLAYA DE LAGOS BUEU ES","Chiringo Playa de Lagos",Chiringuito de playa en Bueu,Restauración,Media
+"Pago en CHIRINGUITO O PEIRAO ARCADE (SANTIES","Chiringuito O Peirao",Chiringuito en Arcade (Pontevedra),Restauración,Media
+"Pago en CHULADA PERK CANGAS ES","Chulada Perk","Cafetería/brunch en Avda. de Ourense 60, Cangas do Morrazo",Restauración,Alta
+"Pago en CINES TAMBERLICK PZA ELIPVIGO ES","Cines Tamberlick","Cine en el C.C. Plaza Elíptica, Vigo",Ocio y entretenimiento,Alta
+"Pago en CM391 VIGO","CM391 (Vigo)",Comercio sin identificar con certeza,Otros gastos,Baja
+"Pago en CONCELLO DE VIGO VIGO ES","Concello de Vigo",Ayuntamiento de Vigo - tasas/impuestos municipales,Impuestos,Alta
+"Pago en CONSERBAR VIGO ES",Conserbar,Bar en Vigo,Restauración,Media
+"Pago en CRISANTONY VIGO ES","Cris&ntony",Panadería-pastelería en Vigo,Panadería y pastelería,Alta
+"Pago en CROSBOMER TOMIO ES",Crosbomer,Bar/restaurante en Tomiño,Restauración,Media
+"Pago en Civitatis Tours",Civitatis,Plataforma de reserva de tours y excursiones turísticas,Ocio y viajes - Actividades,Alta
+"Pago en DECATHLON VIGO VIGO ES",Decathlon,Cadena de artículos deportivos,Deporte,Alta
+"Pago en DIA 45044 VIGO ES",DIA,Cadena de supermercados (Vigo),Alimentación - Supermercado,Alta
+"Pago en DIA 8977 TUI ES",DIA,Cadena de supermercados,Alimentación - Supermercado,Alta
+"Pago en DIA RETAIL ESPA¥A VIGO S S REYES ES",DIA,Cadena de supermercados,Alimentación - Supermercado,Alta
+"Pago en DISTRIB. FROIZ - LOPEZ MOVIGO ES",Froiz,"Cadena de supermercados gallega (López Mora, Vigo)",Alimentación - Supermercado,Alta
+"Pago en DORNIER - XER DE VIGO VIGO ES","Dornier / Parking Vigo",Operador de aparcamiento en Vigo,Aparcamiento,Media
+"Pago en DRINKS DREAMS VIANA DO CAS PT","Drinks Dreams",Bar/coctelería en Viana do Castelo (Portugal),Ocio nocturno / Bares,Media
+"Pago en DRUNI CC GRAN VIA VIGO VIGO ES",Druni,"Cadena de perfumería y cosmética (C.C. Gran Vía, Vigo)",Salud y belleza,Alta
+"Pago en DRUNI CC TUI SHOPPING TUI ES",Druni,Cadena de perfumería y cosmética,Salud y belleza,Alta
+"Pago en DUAS DE TRETA ESPOSENDE PT","Duas de Treta",Restaurante/bar en Esposende (Portugal),Restauración,Media
+"Pago en DEKORA VIGO ES",Dekora,"Tienda bazar de artículos de hogar, decoración y regalo en Vigo",Bazar y hogar,Alta
+"Pago en DUFRY*HUDSON MKECH SH Marrakech MA",Dufry/Hudson,Tienda duty-free en aeropuerto de Marrakech,Ocio y viajes - Viaje,Alta
+"Pago en DOMUS PANIS","Domus Panis","Panadería/pastelería portuguesa (Valença do Minho y otras localidades)",Restauración,Alta
+"Pago en E203 Tui","E203 (Tui)",Estación de servicio en Tui,Combustible y transporte,Alta
+"Pago en EL BAR VIGO ES","El Bar",Bar en Vigo,Restauración,Media
+"Pago en ENBOXES PARK S.L. PONTEVEDRA ES","Enboxes Park",Sala de escape/ocio en Pontevedra,Ocio y entretenimiento,Media
+"Pago en EROSKI CENTER 3020 VIGO ES","Eroski Center 3020 (Vigo)",Supermercado Eroski (formato Center),Alimentación - Supermercado,Alta
+"Pago en EL CORTE INGLES-DEPARTAM.VIGO ES","El Corte Inglés (Gran Vía, Vigo)",Grandes almacenes - departamento especializado,Moda y complementos,Alta
+"Pago en EROSKI CENTER 3108 CANGAS ES","Eroski Center 3108 (Cangas)",Supermercado Eroski (formato Center) en Cangas do Morrazo,Alimentación - Supermercado,Alta
+"Pago en EXPCAMELI VIGO ES",ExpCameli,"Comercio de alimentación en el barrio de Camelias, Vigo",Alimentación - Supermercado,Media
+"Pago en FERIA MEJORADA CAMPES","FERIA MEJORADA CAMPES (comercio no identificado)",Comercio sin identificar con certeza en Mejorada del Campo (Madrid),Otros gastos,Baja
+"Pago en FARMACIA CARRASCAL VIGO ES","Farmacia Carrascal",Farmacia en Vigo,Salud - Farmacia,Alta
+"Pago en FARMACIA IGLESIAS TOMIO ES","Farmacia Iglesias",Farmacia en Tomiño,Salud - Farmacia,Alta
+"Pago en FARMACIA LOPEZ MORA 52 VIGO ES","Farmacia López Mora",Farmacia en Vigo,Salud - Farmacia,Alta
+"Pago en FIFTY FACTORY VIGO ES","Fifty Factory",Tienda de moda outlet en Vigo,Moda y complementos,Alta
+"Pago en FLOR DE VALENCA","Flor de Valença","Restaurante en Valença do Minho (Portugal)",Restauración,Alta
+"Pago en COMIDAS JOSE LOUREIRO AMOEIRO ES","Comidas José Loureiro",Restaurante/comercio de comidas en Amoeiro (Ourense),Restauración,Alta
+"Transferencia emitida a Jose Maria Franco Fraiz","Transferencia propia (José María Franco Fraiz)",Transferencia a nombre propio del titular - probable traspaso entre cuentas propias,Traspasos internos,Media
+"Pago en FILIPO CAMELIAS VIGO ES",Filipo,"Bar/cafetería en el barrio de Camelias, Vigo",Restauración,Media
+"Pago en FLAMINGO VIGO S.L VIGO ES","Flamingo Vigo",Bar/discoteca en Vigo,Ocio nocturno / Bares,Media
+"Pago en FONSECA DELICATESSEN VIGO ES","Fonseca Delicatessen",Tienda gourmet/delicatessen en Vigo,Alimentación - Supermercado,Media
+"Pago en FRESA Y NATA VIGO ES","Fresa y Nata",Heladería/cafetería en Vigo,Restauración,Media
+"Pago en FROIZ BAIONA BAIONA ES",Froiz,Cadena de supermercados gallega (Baiona),Alimentación - Supermercado,Alta
+"Pago en FROIZ ELIPTICA VIGO ES",Froiz,"Cadena de supermercados gallega (C.C. Elíptica, Vigo)",Alimentación - Supermercado,Alta
+"Pago en FROIZ GRAN VIA VIGO ES",Froiz,"Cadena de supermercados gallega (Gran Vía, Vigo)",Alimentación - Supermercado,Alta
+"Pago en GELATERIA CARTE DOR VIGO ES","Gelatería Carte D'Or",Heladería en Vigo,Restauración,Media
+"Pago en GENYSA VIGO ES",Genysa,Tienda de mascotas/veterinaria en Vigo,Mascotas,Media
+"Pago en GGXM",GGXM,Comercio sin identificar con certeza,Otros gastos,Baja
+"Pago en GONNET VIGO ES",Gonnet,Bar/cafetería en Vigo,Restauración,Media
+"Pago en GOOGLE *Google One DUBLIN IE","Google One",Suscripción de almacenamiento en la nube (Google),Suscripciones digitales,Alta
+"Pago en GOOGLE*CLOUD XXVQ7V","Google Cloud",Servicios de computación en la nube,Suscripciones digitales,Alta
+"Pago en GUAY TUI AREAS DE TUI ES","Guay (Área de servicio, Tui)",Estación de servicio en Tui,Combustible y transporte,Alta
+"Pago en IL GOURMET PASIVA VIGO ES","Il Gourmet",Restaurante italiano en Vigo,Restauración,Media
+"Pago en INTERMARCHE MONCAO",Intermarché,"Cadena de supermercados francesa (Monção, Portugal)",Alimentación - Supermercado,Alta
+"Pago en IRIS VIGO ES",Iris,Bar/cafetería en Vigo,Restauración,Media
+"Pago en JD SPORTS","JD Sports",Cadena de artículos deportivos,Deporte,Alta
+"Pago en KAMBU VIGO ES",Kambu,Restaurante/bar en Vigo,Restauración,Media
+"Pago en KENNEDY HOSPITALITY RE Marrakech MA","Kennedy Hospitality",Restaurante/servicio de hostelería en Marrakech,Restauración,Media
+"Pago en KFC VIGO- ROSALIA DE CASTVIGO ES",KFC,Cadena de comida rápida (Vigo),Restauración,Alta
+"Pago en KIWOKO VIGO ES",Kiwoko,Cadena de tiendas de mascotas,Mascotas,Alta
+"Pago en LA MAFIA VILLAGARCIA DES","La Mafia se sienta a la mesa (Vilagarcía de Arousa)","Cadena de restaurantes italianos (renombrada 'La Famiglia se sienta a la mesa')",Restauración,Alta
+"Pago en LA CREP ELDUAYEN BAIONA ES","La Crep",Creperia en Baiona,Restauración,Media
+"Pago en LA DE IRE VIGO ES","La de Ire",Cervecería/bar de pinchos en Vigo (Ronda de Don Bosco),Restauración,Alta
+"Pago en LA ESENCIA GASTRO BAR VIGO ES","La Esencia Gastro Bar",Bar gastronómico en Vigo,Restauración,Media
+"Pago en LA PEDRERA VIGO ES","La Pedrera",Bar/restaurante en Vigo,Restauración,Media
+"Pago en LA SUCURSAL MOAA ES","La Sucursal",Restaurante en Moaña,Restauración,Media
+"Pago en LENDA LOPEZ MORA PONTEVEDRA ES",Lenda,Comercio de alimentación en López Mora,Alimentación - Supermercado,Media
+"Pago en LIBROS E REGALOS NOVIDADETOMIO ES",Novidade,Librería y tienda de regalos en Tomiño,Librería y papelería,Alta
+"Pago en LIDL TUI TUI ES",Lidl,Cadena de supermercados,Alimentación - Supermercado,Alta
+"Pago en LIDL VIGO GANDARI¥A VIGO ES",Lidl,"Cadena de supermercados (Gandaría, Vigo)",Alimentación - Supermercado,Alta
+"Pago en LIDL VIGO-JACINTO BENAVENVIGO ES",Lidl,"Cadena de supermercados (Jacinto Benavente, Vigo)",Alimentación - Supermercado,Alta
+"Pago en LOPEZ DLMM ASOCIADOS VIGO ES","López DLMM Asociados",Comercio sin identificar con certeza,Otros gastos,Baja
+"Pago en LinkedIn*P3069327645",LinkedIn,Suscripción profesional (Premium),Suscripciones digitales,Alta
+"Pago en Lodging H KENNEDY HOSP Marrakech MA","Kennedy Hospitality",Alojamiento en Marrakech,Ocio y viajes - Alojamiento,Media
+"Pago en MARU BARBER SHOP SERGIO SABORIES","Maru Barber Shop",Barbería en Vigo,Salud y belleza,Alta
+"Pago en MERENDEIRO ALOIA TUI ES","Merendeiro Aloia",Restaurante/merendero en Tui,Restauración,Media
+"Pago en MERKAL VIGO II VIGO ES","Merkal Calzados",Cadena de zapaterías,Moda y complementos,Alta
+"Pago en MESON EL ANGEL VIGO ES","Mesón El Ángel",Restaurante en Vigo,Restauración,Media
+"Pago en MESON MANZANEDA VIGO ES","Mesón Manzaneda",Restaurante en Vigo,Restauración,Media
+"Pago en MGI TUI TUI PONTEVEDES","MGI (Master Gift Import)","Bazar/tienda de regalos y hogar a precio fijo (10€/15€/20€)",Bazar y hogar,Alta
+"Pago en MGP*Vinted Vilnius LT",Vinted,Marketplace de ropa de segunda mano (Lituania),Compraventa segunda mano,Alta
+"Pago en MGP*Wallapop SL 128260 Barcelona ES",Wallapop,Marketplace de compraventa de segunda mano,Compraventa segunda mano,Alta
+"Pago en MGP*Wallapop SL 128542 Barcelona ES",Wallapop,Marketplace de compraventa de segunda mano,Compraventa segunda mano,Alta
+"Pago en MGP*Wallapop SL 128733 Barcelona ES",Wallapop,Marketplace de compraventa de segunda mano,Compraventa segunda mano,Alta
+"Pago en MIN YAO VIGO ES","Min Yao",Bazar/tienda de importación en Vigo,Bazar y hogar,Media
+"Pago en MKBAIONAII ALCOBENDAS ES","MKBaiona II",Comercio sin identificar con certeza,Otros gastos,Baja
+"Pago en MKP CARREFOUR MADRID ES","Carrefour Market",Cadena de supermercados,Alimentación - Supermercado,Alta
+"Pago en MP CARS 2021 SL VIGO ES","MP Cars 2021 SL",Taller/concesionario de vehículos en Vigo,Vehículo - Mantenimiento/compra,Media
+"Pago en NOVA SIGLA S.L. VIGO ES","Nova Sigla",Tienda de moda en Vigo,Moda y complementos,Media
+"Pago en NUEVA COLINA S.L. PONTEVEDRA ES","Nueva Colina",Alojamiento/hostal en Pontevedra,Ocio y viajes - Alojamiento,Media
+"Pago en O DE SEMPRE VILABOA ES","O de Sempre",Restaurante en Vilaboa,Restauración,Media
+"Pago en O PETISCO BAIONA ES","O Petisco",Restaurante en Baiona,Restauración,Media
+"Pago en OCULUS *7DWG5ZMZK2","Oculus (Meta)",Tienda de contenido VR/gafas Meta Quest,Ocio y entretenimiento,Alta
+"Pago en OTHILIO BAR VIGO ES","Othilio Bar",Bar en Vigo,Ocio nocturno / Bares,Media
+"Pago en PANADERIA DE MIGUEL VIGO ES","Panadería de Miguel",Panadería en Vigo,Panadería y pastelería,Alta
+"Pago en PANADERIA Y CONFITERIA LASALCEDA DE CAES","Panadería y Confitería Lasalceda",Panadería en A Cañiza,Panadería y pastelería,Media
+"Pago en PARFOIS CC GV VIGO VIGO ES",Parfois,"Cadena de moda y complementos (C.C. Gran Vía, Vigo)",Moda y complementos,Alta
+"Pago en PARFOIS OUTLETUI FASHI AREAS (TUI) ES",Parfois,"Cadena de moda y complementos (bolsos, bisutería) - tienda outlet en Tui",Moda y complementos,Alta
+"Pago en PARKIA LA PALMA TNA BAIONA ES",Parkia,Operador de aparcamientos,Aparcamiento,Alta
+"Pago en PARKING ARAL BAIONA ES","Parking Aral",Aparcamiento en Baiona,Aparcamiento,Alta
+"Pago en PARKING C.C. A LAXE VIGO ES","Parking C.C. A Laxe",Aparcamiento en Vigo,Aparcamiento,Alta
+"Pago en PARKING C.C.VIGOVIALIA VIGO ES","Parking Vigo Vialia","Aparcamiento en la estación Vialia, Vigo",Aparcamiento,Alta
+"Pago en PARKING EL CALVARIO VIGO ES","Parking El Calvario",Aparcamiento en Vigo,Aparcamiento,Alta
+"Pago en PARKING NOVO HOSPITAL VIGO ES","Parking Novo Hospital","Aparcamiento del hospital Álvaro Cunqueiro, Vigo",Aparcamiento,Alta
+"Pago en PARKING PLAZA DE LA ESTREVIGO ES","Parking Plaza de la Estrella",Aparcamiento en Vigo,Aparcamiento,Alta
+"Pago en PARKING PLAZA ELIPTICA VIGO ES","Parking Plaza Elíptica",Aparcamiento en Vigo,Aparcamiento,Alta
+"Pago en PESCADOS ENRIQUE FREIRIA GONDOMAR ES","Pescados Enrique",Pescadería/freiduría en Gondomar,Alimentación - Pescadería,Alta
+"Pago en PIZZA PARK LALIN ES","Pizza Park",Pizzería en Lalín,Restauración,Media
+"Pago en PIZZARIA TONIC","Pizzaria Tonic",Pizzería,Restauración,Media
+"Pago en PLENERGY US 0205 NIGRAN NIGRAN ES",Plenergy,Cadena de estaciones de servicio (gasolinera),Combustible y transporte,Alta
+"Pago en PLENERGY US 216 VIGO VIGO ES",Plenergy,Cadena de estaciones de servicio (Vigo),Combustible y transporte,Alta
+"Pago en POPPY PARK SANTIAGO SANTIAGO DE CES","Poppy Park",Parque de ocio/atracciones en Santiago de Compostela,Ocio y entretenimiento,Media
+"Pago en Promofarma Ecom",Promofarma,Farmacia online,Salud - Farmacia,Alta
+"Pago en QUIOSCO DORA BAIONA ES","Quiosco Dora",Quiosco de prensa/golosinas en Baiona,Quiosco y prensa,Media
+"Devolución Tarjeta ALCAMPO HIPERMERCADOS VIGVIGO ES",Alcampo,Cadena de hipermercados - devolución,Alimentación - Supermercado,Alta
+"Pago en RESTAURANTE VIGO ES","Restaurante Vigo (cafetería)",Cafetería en Vigo (nombre comercial genérico del TPV),Restauración,Alta
+"Pago en RE CORDIS,UNIPESSOAL","Re-Cordis Unipessoal Lda",Café/restaurante en Vila Nova de Cerveira (Re-Cordis Caffè),Restauración,Alta
+"Pago en REST DUQUE CAMINHA","Rest. Duque",Restaurante en Caminha (Portugal),Restauración,Media
+"Pago en RIZOMA VIGO ES",Rizoma,Bar/restaurante en Vigo,Restauración,Media
+"Pago en ROYAL YA¥EZ CALEXOES","Royal Yáñez",Aparcamiento/comercio en Cangas,Aparcamiento,Baja
+"Pago en SALUD VISION CENTRO OPTOMVIGO ES","Salud Visión",Óptica/centro optométrico en Vigo,Salud - Óptica,Alta
+"Pago en SBC TUI TUI (PONTEVEDES","SBC (Tui)",Estación de servicio en Tui,Combustible y transporte,Media
+"Pago en SUPERMARKET VIGO ES","Supermercado (Vigo)",Comercio de alimentación sin identificar con certeza,Alimentación - Supermercado,Baja
+"Pago en Sprinter Vigo Gran Via",Sprinter,"Cadena de artículos deportivos (C.C. Gran Vía, Vigo)",Deporte,Alta
+"Pago en TABERNA FELIX PONTEVEDRA ES","Taberna Félix",Taberna en Pontevedra,Restauración,Media
+"Pago en TAPERIA A CAMBOA OIA ES","Tapería A Camboa",Restaurante de tapas en Oia,Restauración,Media
+"Pago en TAPERIA O CANDIL TOMIO ES","Tapería O Candil",Restaurante de tapas en Tomiño,Restauración,Media
+"Pago en TIENDAS ESPACIO CASA VIGO ES","Espacio Casa",Tienda de decoración y menaje del hogar en Vigo,Bazar y hogar,Media
+"Pago en TOMIFER 2024 TOMIO ES",Tomifer,Ferretería en Tomiño (Pontevedra),Ferretería y bricolaje,Media
+"Pago en UNICO COCTELERIA TOMIO ES","Único Coctelería",Coctelería en Tomiño,Ocio nocturno / Bares,Media
+"Pago en WOODY POOL TOMIO ES","Woody Pool",Bar/piscina de ocio en Tomiño,Ocio y entretenimiento,Media
+"Pago en WWW.AMAZON* NB1O75NM4",Amazon,Comercio electrónico,Compras online,Alta
+"Pago en WWW.AMAZON* NN5B74W54",Amazon,Comercio electrónico,Compras online,Alta
+"Pago en YANCO CAFE VIGO ES","Yanco Café",Cafetería en Vigo,Restauración,Media
+"Pago en YING YE IMPORTACION VIGO ES","Ying Ye Importación",Bazar de importación en Vigo,Bazar y hogar,Media
+"Pago en YING YE IMPORTACIONES VIGO ES","Ying Ye Importación",Bazar de importación en Vigo,Bazar y hogar,Media
+"Pago en YOKA SERGIO SABORIES",Yoka,Bar/restaurante en Vigo,Restauración,Media
+"Pago en ZARA VIGO ES",Zara,Cadena de moda (grupo Inditex),Moda y complementos,Alta
+"Pago en ZIZI MLY SMAIL Marrakech MA","Zizi Mly Smail",Comercio/mercado en Marrakech,Ocio y viajes - Viaje,Media
+"Recibo ALSI BERAL, S.L.","Alsi Beral SL",Explotación de salones recreativos y máquinas de juego/azar,Ocio - Juego y máquinas recreativas,Alta
+"Recibo APLAZOS",Aplazos,Financiación aplazada de un pago dental,Salud - Dentista,Alta
+"Recibo AQUALIA-FCC UTE VIGO",Aqualia,Compañía de suministro de agua (Vigo),Suministros - Agua,Alta
+"Recibo CONCELLO DE VIGO","Concello de Vigo","Tasa/impuesto municipal domiciliado (IBI, basura u otra exacción; calendario de cobro de padrones a final de agosto)",Impuestos,Media
+"Recibo ARAMARK SERVICIOS DE CATERING",Aramark,Empresa de catering/comedor (posiblemente escolar),Alimentación - Catering,Alta
+"Recibo BASER COMER. REFER. SA","Baser Comercializadora",Compañía comercializadora de energía,Suministros - Electricidad,Media
+"Recibo BIP   DRIVE, S.A.",Bip&Drive,Telepeaje Via-T para autopistas de España y Portugal,Peajes y transporte,Alta
+"Recibo BIP DRIVE, S.A.",Bip&Drive,Telepeaje Via-T para autopistas de España y Portugal,Peajes y transporte,Alta
+"Recibo C.P. CAMELIAS 85","Comunidad de Propietarios Camelias 85",Cuota de comunidad de vecinos,Vivienda - Comunidad,Alta
+"Recibo C.P. LOPEZ MORA 30","Comunidad de Propietarios López Mora 30",Cuota de comunidad de vecinos,Vivienda - Comunidad,Alta
+"Recibo CDD PROP LOPEZ MORA 30","Comunidad de Propietarios López Mora 30",Cuota de comunidad de vecinos (notación alternativa CDD PROP),Vivienda - Comunidad,Alta
+"Recibo CAIXABANK PAYMENTS   CONSUMER, E.f.c., E","CaixaBank Payments Consumer",Financiera de pagos aplazados/préstamo al consumo (compras bazar/hogar),Bazar y hogar,Alta
+"Recibo IBERDROLA CLIENTES, S.A.U",Iberdrola,Compañía eléctrica,Suministros - Electricidad,Alta
+"Recibo MEDICOS SIN FRONTERAS, ESPA/A","Médicos Sin Fronteras",ONG - donación periódica,Donaciones - ONG,Alta
+"Recibo PayPal (Europe) S.a.r.l. et Cie., S.C.A.",PayPal,Pasarela de pagos online (Luxemburgo),Pagos digitales / Suscripciones online,Alta
+"Recibo Vodafone Servicios, S.L.U.",Vodafone,Compañía de telecomunicaciones,Suministros - Telefonía/Internet,Alta
+"Reintegro efectivo tarjeta 0000020909","Cajero (banco corresponsal)",Reintegro de efectivo en cajero,Efectivo / Cajero,Alta
+"Reintegro efectivo tarjeta 45014","Cajero (banco corresponsal)",Reintegro de efectivo en cajero,Efectivo / Cajero,Alta
+"Reintegro efectivo tarjeta ABANCA TOMIO ES",ABANCA,Banco - reintegro de efectivo en cajero,Efectivo / Cajero,Alta
+"Reintegro efectivo tarjeta BANCO SANTANDER TOMIO (SANTAES","Banco Santander",Reintegro de efectivo en cajero (Tomiño),Efectivo / Cajero,Alta
+"Transferencia emitida a ASOC DE NAIS E PAIS DE ALUMNOS AS D CINE FAMILIA FRANCO BRIEVA + 2","ANPA (Asociación de Nais e Pais)",Cuota/pago a asociación de padres del colegio,Educación - Colegio,Alta
+"Transferencia emitida a Academia de inglés Camelias Elsa  Franco Brieva abril 2026","Academia de Inglés Camelias",Clases de inglés para Elsa,Educación - Academia,Alta
+"Transferencia emitida a Academia de inglés Camelias Elsa  Franco Brieva julio 2026","Academia de Inglés Camelias",Clases de inglés para Elsa,Educación - Academia,Alta
+"Transferencia emitida a Academia de inglés Camelias Elsa  Franco Brieva junio 2026","Academia de Inglés Camelias",Clases de inglés para Elsa,Educación - Academia,Alta
+"Transferencia emitida a Academia de inglés Camelias Elsa  Franco Brieva mayo 2026","Academia de Inglés Camelias",Clases de inglés para Elsa,Educación - Academia,Alta
+"Transferencia emitida a CLUB SIEIRO ACROBACIA VIGO Elsa Franco Brieva abril 2026","Club Sieiro Acrobacia",Clases de acrobacia/gimnasia para Elsa,Educación - Deporte,Alta
+"Transferencia emitida a CLUB SIEIRO ACROBACIA VIGO Elsa Franco Brieva junio 2026","Club Sieiro Acrobacia",Clases de acrobacia/gimnasia para Elsa,Educación - Deporte,Alta
+"Transferencia emitida a CLUB SIEIRO ACROBACIA VIGO Elsa Franco Brieva mayo 2026","Club Sieiro Acrobacia",Clases de acrobacia/gimnasia para Elsa,Educación - Deporte,Alta
+"Transferencia emitida a CONCELLO DE TOMIÑO BALEIRADO FOSA SEPTICA CODIGO EXPEDIENTE AUGAS GALICIA B353647 TOMIÑO","Concello de Tomiño",Tasa por vaciado de fosa séptica,Suministros - Saneamiento,Alta
+"Transferencia emitida a ESPERANZA VAZQUEZ DOCAMPO Comida Julio","Esperanza Vázquez Docampo",Transferencia personal - comida,Transferencias personales,Alta
+"Transferencia emitida a ESPERANZA VAZQUEZ DOCAMPO Comida","Esperanza Vázquez Docampo",Transferencia personal - comida,Transferencias personales,Alta
+"Transferencia emitida a ESPERANZA VAZQUEZ DOCAMPO Recados","Esperanza Vázquez Docampo",Transferencia personal - recados,Transferencias personales,Alta
+"Transferencia emitida a Ensíname Servicios de formación Reserva de plaza Jorge Franco Brieva campamento verano Labor","Ensíname Servicios de Formación",Campamento de verano para Jorge,Educación - Campamento,Alta
+"Transferencia emitida a Ensíname Servicios de formación Segundo pago Jorge Franco Brieva campamento verano Labor","Ensíname Servicios de Formación",Campamento de verano para Jorge,Educación - Campamento,Alta
+"Transferencia emitida a Ensíname Servicios de formación Semana del 27 al 31 Jorge Franco Brieva campamento verano Labor","Ensíname Servicios de Formación",Campamento de verano para Jorge,Educación - Campamento,Alta
+"Transferencia emitida a Francisco Javier Soria Rodero Jorge Franco Brieva abril mayo junio","Francisco Javier Soria Rodero",Transferencia personal - concepto relacionado con Jorge (terapia/apoyo),Educación - Apoyo especializado,Media
+"Transferencia emitida a LITUS CALEO SL Pago recibo Jorge Franco Brieva abril 2026","Litus Caleo SL",Servicio relacionado con Jorge (terapia/apoyo),Educación - Apoyo especializado,Media
+"Transferencia emitida a LITUS CALEO SL Pago recibo Jorge Franco Brieva junio 2026","Litus Caleo SL",Servicio relacionado con Jorge (terapia/apoyo),Educación - Apoyo especializado,Media
+"Transferencia emitida a LITUS CALEO SL Pago recibo Jorge Franco Brieva marzo 2026","Litus Caleo SL",Servicio relacionado con Jorge (terapia/apoyo),Educación - Apoyo especializado,Media
+"Transferencia emitida a LITUS CALEO SL Pago recibo Jorge Franco Brieva mayo 2026","Litus Caleo SL",Servicio relacionado con Jorge (terapia/apoyo),Educación - Apoyo especializado,Media
+"Transferencia emitida periódica","Transferencia periódica (orden permanente)",Transferencia recurrente propia (alquiler trastero/comida a domicilio según fecha),Transferencias personales,Media
+"Traspaso emitido a JOSE MARIA Movimiento ING","José María (traspaso propio)",Traspaso entre cuentas propias,Traspasos internos,Alta
+"Traspaso recibido de JOSE MARIA Movimiento ING","José María (traspaso propio)",Traspaso entre cuentas propias,Traspasos internos,Alta
+"Ukvi etamob00001594696 - Pago con tarjeta","UK Visas and Immigration (UKVI)","Pago de autorización electrónica de viaje (ETA) al Reino Unido, vía app móvil",Trámites y visados,Alta
+"Pago en ENBOXES PARK A CORUA ES","Enboxes Park (A Coruña)","Sala de ocio activo/juego (balón prisionero extremo) - sede A Coruña",Ocio y entretenimiento,Alta
+"Pago en GASLANDER TUI GUARDA A ES","Gaslander (Tui)","Estación de servicio en Tui (Carretera Anta km. 1)",Combustible y transporte,Alta
+"Pago en FARMACIA RAQUEL ACEA LOREVIGO ES","Farmacia Acea Lorenzo, Raquel","Farmacia en Rúa do Regueiro 8, Vigo",Salud - Farmacia,Alta
+"Pago en SumUp **ATRANSVICADE S","SumUp (comercio no identificado: ATRANSVICADE)","Pago con terminal móvil SumUp - comercio pequeño sin identificar con certeza",Otros gastos,Baja
+"Pago en MULTIOPTICAS VIGO 3 VIGO ES","Multiópticas","Cadena de ópticas - tienda en Vigo",Salud - Óptica,Alta
+"Pago en TIGER STORES NORTH WEST SVIGO ES","Flying Tiger Copenhagen","Cadena danesa de tienda 'todo a 100' / bazar de diseño en Vigo",Bazar y hogar,Alta
+"Transferencia emitida a Asociación de nais e pais Doutor Fl cota socio curso 26 27 Jorge Franco Brieva","ANPA Doutor Fleming","Cuota anual de socio de la asociación de padres del colegio Doutor Fleming (Jorge)",Educación - Colegio,Alta
+"Pago en LEFTIES VIGO ES",Lefties,"Cadena de moda a bajo coste del grupo Inditex - tienda en Rúa do Miradoiro, Vigo",Moda y complementos,Alta
+"Pago en FEVER* CANDLELIGHT QUE",Fever,"Plataforma de entradas para conciertos temáticos 'Candlelight' (velas) - evento en Vigo",Ocio y entretenimiento,Alta
+"BIZUM // OTROS // RECIBIDO: Abadia",Bizum,Transferencia P2P recibida - Abadía (bar/restaurante),Transferencias personales,Alta
+"BIZUM // OTROS // RECIBIDO: pizzas",Bizum,Transferencia P2P recibida - pizzas,Transferencias personales,Alta
+"BIZUM // OTROS // RECIBIDO: Los paladines siempre pagan",Bizum,Transferencia P2P recibida,Transferencias personales,Alta
+"Transferencia emitida a José María Franco Fraiz Traspaso","José María (traspaso propio)",Traspaso entre cuentas propias,Traspasos internos,Alta
+"Traspaso recibido de JOSE MARIA","José María (traspaso propio)",Traspaso entre cuentas propias,Traspasos internos,Alta
+"Pago en HOSPITAL MEIXOEIRO VIGO ES","Cafetería/tienda Hospital Meixoeiro (Vigo)","Compra en cafetería (Oh'Vigo) o tienda ILUNION dentro del complejo hospitalario Meixoeiro de Vigo",Restauración,Media
+"Pago en Google One","Google One",Suscripción de almacenamiento en la nube (Google),Suscripciones digitales,Alta
+"Pago en EXPCAMELI ALCOBENDAS ES",ExpCameli,"Comercio de alimentación (mismo comercio que EXPCAMELI Vigo; posible enrutamiento de pago a sede en Alcobendas)",Alimentación - Supermercado,Media
+"Pago en VITRUVIA CAFE VIGO ES","Vitruvia Café","Cafetería cultural en Plaza de Compostela, Vigo",Restauración,Alta
+"Pago en STRADIVARIUS VIGO ES",Stradivarius,Cadena de moda del grupo Inditex,Moda y complementos,Alta
+"Pago en MANGO-EUR SERRA LA (PAES",Mango,Cadena de moda española (Grupo Mango),Moda y complementos,Alta
+"Pago en PRIMARK VIGO",Primark,Cadena de moda a bajo coste (grupo ABF) en Vigo,Moda y complementos,Alta
+"Bizum recibido de Monica Tamara Franco Fraiz",Bizum,"Transferencia P2P recibida de Mónica Tamara Franco Fraiz (familiar)",Transferencias personales,Alta
+"Pago en CENTRO GOIANES TOMINO ES","Centro Goianés (Cantina)","Espacio cultural con cafetería-bar en Goián, Tomiño (Av. Ordóñez 54)",Restauración,Alta
+"Pago en TAHONA COLMEIRO VIGO ES","Tahona Colmeiro","Panadería, confitería y comidas preparadas en Rúa Pintor Colmeiro 6, Vigo (desde 1988)",Panadería y pastelería,Alta
+"Pago en DIPUTACION DE PONTEVEDRA PONTEVEDRA ES","IBI Casa de Tomiño (Diputación de Pontevedra / ORAL)","Organismo provincial de recaudación tributaria (ORAL) - IBI (Impuesto sobre Bienes Inmuebles) de la casa de Tomiño",Vivienda - IBI,Alta
+"Pago en ANABELL ABARCA SALAS OURENSE ES","Anabell Abarca Academia","Academia de clases particulares de inglés y matemáticas en Ourense",Educación - Academia,Alta
+"Pago en Notino Italia s.r.l.",Notino,"Perfumería y cosmética online (grupo Notino, filial Notino Italia S.r.l.)",Salud y belleza,Alta
+"Pago en BRAVURA VIGO ES","Bravura Urban Bold","Restaurante/bar de cocina urbana y coctelería en el Casco Vello de Vigo (C/ Joaquín Yáñez 15)",Restauración,Media
+"Pago en FARMACIA CC GRAN VIA - VIVIGO ES","Farmacia C.C. Gran Vía","Farmacia dentro del Centro Comercial Gran Vía de Vigo",Salud - Farmacia,Alta
+"Devolución Tarjeta LEFTIES VIGO ES",Lefties,"Cadena de moda a bajo coste del grupo Inditex - devolución",Moda y complementos,Alta
+"Devolución Tarjeta 182- SFERA PO CC GRAN VIAVIGO ES",Sfera,"Cadena de moda (grupo El Corte Inglés) en el C.C. Gran Vía de Vigo - devolución",Moda y complementos,Alta
+"BIZUM // OTROS // ENVIADO: limpieza semanal",Bizum,Transferencia P2P enviada - servicio de limpieza semanal,Transferencias personales,Alta
+"ABONO BONIFICACIÓN PACK VIAJES // OTROS // BONIFICACION PACK VIAJES","BBVA Pack Viajes",Bonificación de comisiones por compras en el extranjero (Pack Viajes BBVA),Reembolsos BBVA,Alta
+"COMPRA EN COMERCIO EXTRANJERO-COMISIÓN 3 % INCLUÍDA // PAGO CON TARJETA // DEEPSEERWEA","DEEPSEERWEA (comercio extranjero)",Comercio extranjero sin identificar con certeza — pendiente de aclarar por el usuario,Otros gastos,Baja
+"PAGO CON TARJETA EN RESTAURANTES Y CAFETERIAS // PAGO CON TARJETA // RICON DO BUCANERO 2 PONTEVEDRA ES","O Rincón do Bucanero","Bar-taberna de comida casera y tapas en Gondomar (Pontevedra)",Restauración,Alta
+"RET. EFECTIVO A DEBITO CON TARJ. EN CAJERO. AUT. // OTROS // 01826621 999","Cajero automático BBVA (Vigo-Traviesas)",Reintegro de efectivo en cajero automático BBVA,Efectivo / Cajero,Alta
+"Pago en AS LOLAS ESPACIO GASTRO VIGO ES","As Lolas Espacio Gastronómico","Restaurante de cocina tradicional gallega e internacional en Rúa Faustino Álvarez 2, Vigo",Restauración,Alta
+"Pago en MAGROS CAFE VIGO ES","Magros Café","Cafetería/bar en Calle Camelias 129, Vigo",Restauración,Alta
+"Pago en EL CORTE INGLES VENTA DISMADRID ES","El Corte Inglés (Venta a Distancia, Madrid)","Compra online/a distancia gestionada desde la sede de Madrid de El Corte Inglés",Compras online,Media
+"Pago en MCDONALDS AEROPUERTO PRATEL PRAT DE LLES","McDonald's (Aeropuerto El Prat)","Cadena de comida rápida - local en el Aeropuerto de Barcelona-El Prat",Restauración,Alta
+"Pago en YOOTOO BCN GIRAFFE WORLD AEROPORT DEL ES","YooToo (Giraffe World)","Espacio de ocio y restauración familiar (Giraffe World Kitchen) en el Aeropuerto de Barcelona-El Prat, Terminal 1",Ocio y entretenimiento,Alta
+"Pago en DOMINOS PIZZA VIGO ES","Domino's Pizza (Vigo)","Cadena de pizzerías - local en Vigo",Restauración,Alta
+"Devolución Tarjeta SPRINTER MEGACENTROS D",Sprinter,"Cadena de artículos deportivos - devolución (Sprinter Megacentros)",Deporte,Alta
+"Reintegro efectivo tarjeta ABANCA VIGO ES",ABANCA,"Banco - reintegro de efectivo en cajero (Vigo)",Efectivo / Cajero,Alta
+"Pago en ESTANCO CAMELIAS 84 VIGO ES","Estanco Camelias","Estanco (venta de tabaco y prensa) en Av. das Camelias 84, Vigo",Tabaco y prensa,Alta
+"Pago en SP DON DISFRAZ PONTEAREAS ES","Don Disfraz","Tienda de disfraces y artículos de fiesta (empresa gallega) con sede en Ponteareas",Ocio y entretenimiento,Alta
+"Pago en EASY VENDING Spain ES","Easy Vending","Compañía líder de máquinas expendedoras (vending) en España",Restauración,Media
+"Pago en FERRETERIA VALFER VIGO ES","Ferretería Valfer","Ferretería en Vigo (Ctra. de Zamáns 44, Polígono A Pasaxe)",Ferretería y bricolaje,Alta
+BAZAR GRAN VIA,Bazar Gran Vía,Bazar / tienda de variedades,Bazar y hogar,Alta
+PATRICIA SANDE LLOVO,Farmacia Sande Llovo,Farmacia,Salud - Farmacia,Alta
+VAPE DAWG,Vape Dawg,Tienda de vapeo,Tabaco y prensa,Media
+CITY CHICKEN,City Chicken (Berlín),Restaurante de pollo,Restauración,Alta
+IBIS STYLE BERLIN,Ibis Styles Hotel Berlin Mitte,Hotel (alojamiento),Ocio y viajes - Alojamiento,Alta
