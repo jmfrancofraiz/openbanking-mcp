@@ -123,6 +123,176 @@ def accounts() -> None:
             )
 
 
+def _query(fn, *args, **kwargs):
+    """Ejecuta una tool del servidor MCP sobre SQLite; fechas inválidas -> BadParameter."""
+    from finmcp.db.session import init_db
+
+    init_db()
+    try:
+        return fn(*args, **kwargs)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _echo_txs(rows: list[dict]) -> None:
+    if not rows:
+        typer.echo("Sin movimientos.")
+        raise typer.Exit()
+    for t in rows:
+        sign = "-" if t["type"] == "debit" else "+"
+        typer.echo(
+            f"{t['date']}  {sign}{t['amount']:>10.2f} {t['currency']}  "
+            f"{t['merchant'] or t['description'] or ''}  [{t['category'] or 's/cat'}]  "
+            f"(cuenta={t['account_id']})"
+        )
+
+
+@app.command()
+def balances() -> None:
+    """Saldo más reciente de cada cuenta."""
+    from finmcp.mcp.server import get_balances
+
+    rows = _query(get_balances)
+    if not rows:
+        typer.echo("Sin saldos. Ejecuta `finmcp sync` primero.")
+        raise typer.Exit()
+    for b in rows:
+        typer.echo(
+            f"- {b['account_id']} · disponible: {b['available']} · actual: {b['current']} "
+            f"{b['currency']} · a {b['as_of']}"
+        )
+
+
+@app.command()
+def transactions(
+    account_id: str = typer.Option(None, "--account", help="Id de la cuenta"),
+    bank: str = typer.Option(None, "--bank", help="Id del banco"),
+    start: str = typer.Option(None, "--from", help="Fecha inicio YYYY-MM-DD"),
+    end: str = typer.Option(None, "--to", help="Fecha fin YYYY-MM-DD"),
+    type: str = typer.Option(None, "--type", help="debit | credit"),
+    limit: int = typer.Option(100, help="Máximo de movimientos"),
+) -> None:
+    """Movimientos filtrados por cuenta, banco, fechas y tipo."""
+    from finmcp.mcp.server import get_transactions
+
+    _echo_txs(
+        _query(
+            get_transactions,
+            account_id=account_id,
+            bank_id=bank,
+            start=start,
+            end=end,
+            type=type,
+            limit=limit,
+        )
+    )
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="Texto a buscar en comercio o concepto"),
+    bank: str = typer.Option(None, "--bank", help="Id del banco"),
+    limit: int = typer.Option(50, help="Máximo de movimientos"),
+) -> None:
+    """Busca movimientos por texto en el comercio o el concepto."""
+    from finmcp.mcp.server import search_transactions
+
+    _echo_txs(_query(search_transactions, query, bank_id=bank, limit=limit))
+
+
+@app.command()
+def spend(
+    start: str = typer.Option(None, "--from", help="Fecha inicio YYYY-MM-DD"),
+    end: str = typer.Option(None, "--to", help="Fecha fin YYYY-MM-DD"),
+) -> None:
+    """Gasto agregado por categoría en un periodo."""
+    from finmcp.mcp.server import spend_by_category_tool
+
+    rows = _query(spend_by_category_tool, start, end)
+    if not rows:
+        typer.echo("Sin gasto en el periodo.")
+        raise typer.Exit()
+    for r in rows:
+        typer.echo(f"{r['total']:>10.2f}  {r['category']}  ({r['count']} tx)")
+
+
+@app.command()
+def subscriptions(
+    months: int = typer.Option(6, "--months", help="Meses hacia atrás a analizar"),
+) -> None:
+    """Cargos recurrentes detectados (suscripciones / domiciliaciones)."""
+    from finmcp.mcp.server import list_subscriptions
+
+    rows = _query(list_subscriptions, lookback_months=months)
+    if not rows:
+        typer.echo("No se detectan cargos recurrentes.")
+        raise typer.Exit()
+    for r in rows:
+        typer.echo(
+            f"- {r['merchant']} · {r['amount']:.2f} {r['currency']} · {r['cadence']} · "
+            f"{r['occurrences']} cargos · último {r['last_charge']}"
+        )
+
+
+@app.command()
+def unusual(
+    start: str = typer.Option(None, "--from", help="Fecha inicio YYYY-MM-DD"),
+    end: str = typer.Option(None, "--to", help="Fecha fin YYYY-MM-DD"),
+) -> None:
+    """Cargos atípicos respecto al histórico de cada comercio."""
+    from finmcp.mcp.server import unusual_charges
+
+    rows = _query(unusual_charges, start, end)
+    if not rows:
+        typer.echo("Sin cargos atípicos.")
+        raise typer.Exit()
+    for r in rows:
+        z = f"z={r['z_score']}" if r["z_score"] is not None else "sin dispersión"
+        typer.echo(
+            f"{r['date']}  {r['merchant']} · {r['amount']:.2f} {r['currency']} "
+            f"(habitual {r['usual_amount']:.2f}) · {z}"
+        )
+
+
+@app.command()
+def summary(
+    year: int = typer.Argument(..., help="Año (p.ej. 2026)"),
+    month: int = typer.Argument(..., min=1, max=12, help="Mes 1-12"),
+) -> None:
+    """Resumen mensual: ingresos, gastos, neto, top comercios y categorías."""
+    from finmcp.mcp.server import monthly_summary_tool
+
+    r = _query(monthly_summary_tool, year, month)
+    typer.echo(
+        f"{r['period']} · ingresos {r['income']:.2f} · gastos {r['expense']:.2f} · "
+        f"neto {r['net']:.2f} · {r['transactions']} tx"
+    )
+    if r["by_category"]:
+        typer.echo("Por categoría:")
+        for c in r["by_category"]:
+            typer.echo(f"  {c['total']:>10.2f}  {c['category']}  ({c['count']} tx)")
+    if r["top_merchants"]:
+        typer.echo("Top comercios:")
+        for m in r["top_merchants"]:
+            typer.echo(f"  {m['total']:>10.2f}  {m['merchant']}")
+
+
+@app.command()
+def status() -> None:
+    """Estado de la última sincronización, por banco."""
+    from finmcp.mcp.server import sync_status
+
+    for r in _query(sync_status):
+        if r["status"] == "never":
+            typer.echo(f"Nunca sincronizado. {r['detail']}")
+            continue
+        typer.echo(
+            f"[{r['bank_id']}] {r['status']} · inicio {r['started_at']} · "
+            f"fin {r['finished_at'] or '-'} · cuentas {r['accounts_synced']} · "
+            f"nuevas tx {r['tx_added']}"
+        )
+
+
 @rules_app.command("add")
 def rules_add(
     pattern: str = typer.Argument(..., help="Subcadena a buscar (case-insensitive)"),
@@ -183,64 +353,16 @@ def import_csv(
     Deduplica contra lo ya existente, así que es seguro reimportar o solapar
     con lo que ya bajó la API. Útil para histórico anterior a los 90 días PSD2.
     """
-    from pathlib import Path
-
     from finmcp.analytics.categorization import apply_rules
-    from finmcp.db import models
     from finmcp.db.session import SessionLocal, init_db
-    from finmcp.importers.csv_import import (
-        import_transactions,
-        parse_rows,
-        parse_xls,
-        parse_xlsx,
-    )
-
-    ext = Path(path).suffix.lower()
-    if ext in (".xlsx", ".xlsm"):
-        rows = parse_xlsx(path)
-    elif ext == ".xls":
-        rows = parse_xls(path)
-    else:
-        raw = Path(path).read_bytes()
-        text = ""
-        for enc in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
-            try:
-                text = raw.decode(enc)
-                break
-            except UnicodeDecodeError:
-                continue
-        rows = parse_rows(text, delimiter)
-    if not rows:
-        typer.echo("No se encontraron movimientos en el fichero.")
-        raise typer.Exit()
-
-    # El fichero puede traer varias cuentas (columna "Número de cuenta"); en ese
-    # caso cada fila se mapea sola. --iban/--account-id solo se usan como destino
-    # por defecto para ficheros de una sola cuenta sin esa columna.
-    has_account_col = any(r.get("account") for r in rows)
+    from finmcp.importers.csv_import import import_file
 
     init_db()
     with SessionLocal() as s:
-        default_acc = None
-        if account_id:
-            default_acc = s.get(models.Account, account_id)
-        elif iban:
-            default_acc = (
-                s.query(models.Account)
-                .filter(models.Account.iban == iban)
-                .first()
-            )
-        elif not has_account_col:
-            accs = s.query(models.Account).all()
-            default_acc = accs[0] if len(accs) == 1 else None
-
-        if default_acc is None and not has_account_col:
-            raise typer.BadParameter(
-                "Indica la cuenta destino con --iban o --account-id "
-                "(hay varias cuentas). Lístalas con `finmcp accounts`."
-            )
-
-        added, skipped = import_transactions(s, rows, account=default_acc)
+        try:
+            added, skipped = import_file(s, path, iban, account_id, delimiter)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
         changed = apply_rules(s)
 
     typer.echo(

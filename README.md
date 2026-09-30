@@ -135,16 +135,30 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp institutions` | Lista las entidades disponibles (para fijar `ENABLEBANKING_ASPSP_NAME`) |
 | `finmcp sync` | Trae cuentas/saldos/movimientos a SQLite (por banco) |
 | `finmcp accounts` | Lista las cuentas locales |
+| `finmcp balances` | Saldo más reciente de cada cuenta |
+| `finmcp transactions` | Movimientos (`--account`, `--bank`, `--from`, `--to`, `--type`, `--limit`) |
+| `finmcp search TEXTO` | Busca movimientos por comercio o concepto |
+| `finmcp spend` | Gasto por categoría (`--from`, `--to`) |
+| `finmcp subscriptions` | Cargos recurrentes detectados (`--months`) |
+| `finmcp unusual` | Cargos atípicos (`--from`, `--to`) |
+| `finmcp summary AÑO MES` | Resumen mensual |
+| `finmcp status` | Estado de la última sincronización por banco |
 | `finmcp import-csv` | Importa movimientos desde un CSV (histórico anterior a 90 días) |
 | `finmcp categorize` | Reaplica tus reglas de categorización |
 | `finmcp rules add/list` | Gestiona reglas de categorización |
 | `finmcp serve` | Arranca el servidor MCP (stdio; `--http` para remoto) |
 
-## Herramientas MCP (solo lectura)
+## Herramientas MCP
+
+Equivalentes a los comandos del CLI, salvo `auth` (solo CLI, requiere navegador) y `serve`:
 
 `list_accounts` · `get_balances` · `get_transactions` · `search_transactions` ·
 `spend_by_category_tool` · `list_subscriptions` · `unusual_charges` ·
-`monthly_summary_tool` · `sync_status`
+`monthly_summary_tool` · `sync_status` · `sync` · `list_banks` · `list_institutions` ·
+`import_csv` · `categorize` · `add_category_rule` · `list_category_rules`
+
+> `import_csv` lee rutas del disco del servidor y `add_category_rule`/`categorize`
+> escriben en SQLite: en modo `--http` define siempre `FINMCP_HTTP_TOKEN`.
 
 > Cargos inusuales usa **mediana + MAD** (robusto): un único pico no contamina
 > su propia línea base, así que se detecta de verdad.

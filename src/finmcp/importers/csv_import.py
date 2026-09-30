@@ -266,3 +266,64 @@ def import_transactions(
         added += 1
     session.commit()
     return added, skipped
+
+
+def read_rows(path: str, delimiter: str | None = None) -> list[dict]:
+    """Lee movimientos de un .csv/.txt/.xlsx/.xls según su extensión."""
+    from pathlib import Path
+
+    ext = Path(path).suffix.lower()
+    if ext in (".xlsx", ".xlsm"):
+        return parse_xlsx(path)
+    if ext == ".xls":
+        return parse_xls(path)
+    raw = Path(path).read_bytes()
+    text = ""
+    for enc in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    return parse_rows(text, delimiter)
+
+
+def import_file(
+    session: Session,
+    path: str,
+    iban: str | None = None,
+    account_id: str | None = None,
+    delimiter: str | None = None,
+) -> tuple[int, int]:
+    """Importa un fichero de movimientos. Devuelve (importadas, saltadas).
+
+    Lanza ValueError si el fichero no trae movimientos o no se puede
+    determinar la cuenta destino.
+    """
+    rows = read_rows(path, delimiter)
+    if not rows:
+        raise ValueError("No se encontraron movimientos en el fichero.")
+
+    # El fichero puede traer varias cuentas (columna "Número de cuenta"); en ese
+    # caso cada fila se mapea sola. iban/account_id solo se usan como destino
+    # por defecto para ficheros de una sola cuenta sin esa columna.
+    has_account_col = any(r.get("account") for r in rows)
+
+    default_acc = None
+    if account_id:
+        default_acc = session.get(models.Account, account_id)
+    elif iban:
+        default_acc = (
+            session.query(models.Account).filter(models.Account.iban == iban).first()
+        )
+    elif not has_account_col:
+        accs = session.query(models.Account).all()
+        default_acc = accs[0] if len(accs) == 1 else None
+
+    if default_acc is None and not has_account_col:
+        raise ValueError(
+            "Indica la cuenta destino con iban o account_id "
+            "(hay varias cuentas o la indicada no existe)."
+        )
+
+    return import_transactions(session, rows, account=default_acc)
