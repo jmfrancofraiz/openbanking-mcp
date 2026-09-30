@@ -136,3 +136,44 @@ def test_run_sync_failure_after_ok_keeps_previous_run_loaded(monkeypatch, Sessio
     assert runs["bank1"].status == "ok"
     assert runs["bank1"].accounts_synced == 1
     assert runs["bank2"].status == "error"
+
+
+def test_run_sync_only_selected_bank(monkeypatch, Session):
+    from finmcp.providers.types import Account
+
+    monkeypatch.setattr(service, "init_db", lambda: None)
+    monkeypatch.setattr(service, "SessionLocal", Session)
+    monkeypatch.setattr(service, "settings", _fake_settings(_TWO_BANKS))
+
+    called = []
+
+    class FakeClient:
+        def get_accounts(self):
+            return [Account(provider_account_id="a1", name="C1", type="T", currency="EUR")]
+
+        def get_balance(self, account_id):
+            raise RuntimeError("sin saldo")
+
+        def get_transactions(self, account_id, from_date=None, to_date=None):
+            return []
+
+    def fake_get_provider(bank):
+        called.append(bank.id)
+        return FakeClient()
+
+    monkeypatch.setattr(service, "get_provider", fake_get_provider)
+
+    runs = service.run_sync(bank_id="bank2")
+    assert [r.bank_id for r in runs] == ["bank2"]
+    assert called == ["bank2"]
+
+
+def test_run_sync_unknown_bank_raises(monkeypatch, Session):
+    import pytest
+
+    monkeypatch.setattr(service, "init_db", lambda: None)
+    monkeypatch.setattr(service, "SessionLocal", Session)
+    monkeypatch.setattr(service, "settings", _fake_settings(_TWO_BANKS))
+
+    with pytest.raises(ValueError, match="nope"):
+        service.run_sync(bank_id="nope")
