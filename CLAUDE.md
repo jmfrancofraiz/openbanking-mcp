@@ -41,8 +41,9 @@ Data flows strictly one direction and each layer only talks to its neighbour:
 provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analytics/  ->  mcp/server.py
 ```
 
-- **The MCP server never calls the bank.** `finmcp serve` only reads SQLite. Fetching happens in
-  a separate process (`finmcp sync`, manually or via the launchd template in `deploy/`).
+- **Only `sync` and `list_institutions` MCP tools call the network**; the rest read/write SQLite
+  (or local files for `import_csv`). `auth` is CLI-only by design (browser consent flow).
+  Scheduled fetching happens via `finmcp sync` (manually or the launchd template in `deploy/`).
 - **Multi-bank** (`config.py`): any number of banks can be linked at once. `Settings.banks`
   discovers `FINMCP_BANK_<n>_ID/ASPSP_NAME/COUNTRY` env vars (grouped by index `n`) and falls
   back to a single legacy bank (`id="default"`) built from `ENABLEBANKING_ASPSP_NAME` if no

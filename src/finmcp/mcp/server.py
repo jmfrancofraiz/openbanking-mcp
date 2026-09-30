@@ -154,7 +154,6 @@ def sync(
     """Sincroniza cuentas, saldos y movimientos desde el banco (fechas YYYY-MM-DD).
 
     Si se indica `bank_id` solo sincroniza ese banco; si no, todos los configurados.
-    Es la única herramienta que sale a la red; el resto solo lee SQLite.
     """
     from finmcp.sync.service import run_sync
 
@@ -169,6 +168,108 @@ def sync(
         }
         for run in runs
     ]
+
+
+@mcp.tool()
+def list_banks() -> list[dict]:
+    """Bancos configurados y si ya tienen vínculo (auth) guardado."""
+    from finmcp.config import settings
+    from finmcp.providers.enablebanking.auth import has_link
+
+    return [
+        {
+            "id": b.id,
+            "aspsp_name": b.aspsp_name,
+            "country": b.country,
+            "linked": has_link(b.id),
+        }
+        for b in settings.banks
+    ]
+
+
+@mcp.tool()
+def list_institutions(country: str | None = None) -> list[dict]:
+    """Entidades disponibles en Enable Banking para un país ISO-3166 (p.ej. es)."""
+    from finmcp.config import settings
+    from finmcp.providers.enablebanking.auth import list_aspsps
+
+    rows = list_aspsps(country or settings.enablebanking_country)
+    return [{"name": a.get("name", ""), "country": a.get("country", "")} for a in rows]
+
+
+@mcp.tool()
+def import_csv(
+    path: str,
+    iban: str | None = None,
+    account_id: str | None = None,
+    delimiter: str | None = None,
+) -> dict:
+    """Importa movimientos desde un CSV/Excel local (histórico anterior a 90 días PSD2).
+
+    Deduplica contra lo ya existente. `iban`/`account_id` fijan la cuenta destino
+    si el fichero no trae columna de cuenta y hay varias cuentas.
+    """
+    from finmcp.analytics.categorization import apply_rules
+    from finmcp.importers.csv_import import import_file
+
+    with SessionLocal() as s:
+        added, skipped = import_file(s, path, iban, account_id, delimiter)
+        changed = apply_rules(s)
+    return {"added": added, "skipped": skipped, "recategorized": changed}
+
+
+@mcp.tool()
+def categorize(only_new: bool = False) -> dict:
+    """Reaplica las reglas de categorización (solo a las sin categoría si `only_new`)."""
+    from finmcp.analytics.categorization import apply_rules
+
+    with SessionLocal() as s:
+        return {"recategorized": apply_rules(s, only_uncategorized=only_new)}
+
+
+@mcp.tool()
+def add_category_rule(
+    pattern: str, category: str, field: str = "any", priority: int = 100
+) -> dict:
+    """Añade una regla de categorización y la aplica a los movimientos existentes.
+
+    `pattern` es una subcadena (case-insensitive); `field` es merchant | description | any;
+    menor `priority` se evalúa antes.
+    """
+    from finmcp.analytics.categorization import apply_rules
+
+    if field not in ("merchant", "description", "any"):
+        raise ValueError("field debe ser merchant, description o any.")
+    with SessionLocal() as s:
+        rule = models.CategoryRule(
+            pattern=pattern, category=category, field=field, priority=priority
+        )
+        s.add(rule)
+        s.commit()
+        rule_id = rule.id
+        changed = apply_rules(s)
+    return {"id": rule_id, "recategorized": changed}
+
+
+@mcp.tool()
+def list_category_rules() -> list[dict]:
+    """Reglas de categorización, en orden de evaluación."""
+    with SessionLocal() as s:
+        rows = (
+            s.query(models.CategoryRule)
+            .order_by(models.CategoryRule.priority.asc(), models.CategoryRule.id.asc())
+            .all()
+        )
+        return [
+            {
+                "id": r.id,
+                "pattern": r.pattern,
+                "category": r.category,
+                "field": r.field,
+                "priority": r.priority,
+            }
+            for r in rows
+        ]
 
 
 def _wrap_bearer_auth(app, token: str):
