@@ -146,14 +146,19 @@ def sync_status() -> list[dict]:
 
 
 @mcp.tool()
-def sync(from_date: str | None = None, to_date: str | None = None) -> list[dict]:
+def sync(
+    from_date: str | None = None,
+    to_date: str | None = None,
+    bank_id: str | None = None,
+) -> list[dict]:
     """Sincroniza cuentas, saldos y movimientos desde el banco (fechas YYYY-MM-DD).
 
+    Si se indica `bank_id` solo sincroniza ese banco; si no, todos los configurados.
     Es la única herramienta que sale a la red; el resto solo lee SQLite.
     """
     from finmcp.sync.service import run_sync
 
-    runs = run_sync(from_date, to_date)
+    runs = run_sync(from_date, to_date, bank_id=bank_id)
     return [
         {
             "bank_id": run.bank_id,

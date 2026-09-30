@@ -81,11 +81,17 @@ def institutions(
 def sync(
     from_date: str = typer.Option(None, "--from", help="Fecha inicio YYYY-MM-DD"),
     to_date: str = typer.Option(None, "--to", help="Fecha fin YYYY-MM-DD"),
+    bank: str = typer.Option(
+        None, "--bank", help="Id del banco (ver `finmcp banks list`). Por defecto, todos."
+    ),
 ) -> None:
     """Sincroniza cuentas, saldos y movimientos a la base de datos local (por banco)."""
     from finmcp.sync.service import run_sync
 
-    runs = run_sync(from_date, to_date)
+    try:
+        runs = run_sync(from_date, to_date, bank_id=bank)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     any_error = False
     for run in runs:
         if run.status == "ok":

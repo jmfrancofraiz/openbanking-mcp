@@ -55,10 +55,13 @@ def _sync_one_bank(
 
 
 def run_sync(
-    from_date: str | None = None, to_date: str | None = None
+    from_date: str | None = None,
+    to_date: str | None = None,
+    bank_id: str | None = None,
 ) -> list[SyncRun]:
     """Pull idempotente de cuentas, saldos y movimientos a SQLite, banco a banco.
 
+    Si se indica `bank_id` solo se sincroniza ese banco; si no, todos los configurados.
     Un fallo en un banco no aborta los demás: cada uno reporta su propio SyncRun.
     """
     init_db()
@@ -68,6 +71,12 @@ def run_sync(
             "No hay ningún banco configurado. Define ENABLEBANKING_ASPSP_NAME "
             "o FINMCP_BANK_1_ASPSP_NAME en .env."
         )
+    if bank_id:
+        selected = [b for b in banks if b.id == bank_id]
+        if not selected:
+            ids = ", ".join(b.id for b in banks)
+            raise ValueError(f"Banco '{bank_id}' no encontrado. Disponibles: {ids}")
+        banks = selected
     with SessionLocal() as session:
         runs = [_sync_one_bank(session, bank, from_date, to_date) for bank in banks]
         # Recategoriza según las reglas del usuario tras incorporar lo nuevo de todos los bancos.
