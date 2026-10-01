@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
+from finmcp.analytics import tagging
 from finmcp.analytics.anomalies import detect_unusual_charges
 from finmcp.analytics.categories import category_of, spend_by_category
 from finmcp.analytics.subscriptions import detect_subscriptions
@@ -24,6 +25,7 @@ def _tx_dict(t: models.Transaction) -> dict:
         "type": t.type,
         "merchant": t.merchant_name,
         "category": category_of(t),
+        "tags": t.tag_names,
     }
 
 
@@ -67,9 +69,10 @@ def get_transactions(
     start: str | None = None,
     end: str | None = None,
     type: str | None = None,
+    tag: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
-    """Movimientos filtrados por cuenta, banco, fechas (YYYY-MM-DD) y tipo (debit/credit)."""
+    """Movimientos filtrados por cuenta, banco, fechas (YYYY-MM-DD), tipo (debit/credit) y etiqueta."""
     with SessionLocal() as s:
         txs = queries.query_transactions(
             s,
@@ -78,6 +81,7 @@ def get_transactions(
             start=parse_date(start),
             end=parse_date(end),
             type=type,
+            tag=tag,
             limit=limit,
         )
         return [_tx_dict(t) for t in txs]
@@ -85,11 +89,13 @@ def get_transactions(
 
 @mcp.tool()
 def search_transactions(
-    query: str, bank_id: str | None = None, limit: int = 50
+    query: str, bank_id: str | None = None, tag: str | None = None, limit: int = 50
 ) -> list[dict]:
-    """Busca movimientos por texto en el comercio o el concepto."""
+    """Busca movimientos por texto en el comercio o el concepto (opcionalmente por etiqueta)."""
     with SessionLocal() as s:
-        txs = queries.query_transactions(s, bank_id=bank_id, text=query, limit=limit)
+        txs = queries.query_transactions(
+            s, bank_id=bank_id, text=query, tag=tag, limit=limit
+        )
         return [_tx_dict(t) for t in txs]
 
 
@@ -229,12 +235,17 @@ def categorize(only_new: bool = False) -> dict:
 
 @mcp.tool()
 def add_category_rule(
-    pattern: str, category: str, field: str = "any", priority: int = 100
+    pattern: str,
+    category: str,
+    field: str = "any",
+    priority: int = 100,
+    tags: list[str] | None = None,
 ) -> dict:
     """Añade una regla de categorización y la aplica a los movimientos existentes.
 
     `pattern` es una subcadena (case-insensitive); `field` es merchant | description | any;
-    menor `priority` se evalúa antes.
+    menor `priority` se evalúa antes. `tags` se añaden a los movimientos que casen
+    (se crean en el catálogo si no existen).
     """
     from finmcp.analytics.categorization import apply_rules
 
@@ -244,11 +255,34 @@ def add_category_rule(
         rule = models.CategoryRule(
             pattern=pattern, category=category, field=field, priority=priority
         )
+        rule.tags = [tagging.get_or_create_tag(s, t) for t in tagging.unique_tag_names(tags or [])]
         s.add(rule)
         s.commit()
         rule_id = rule.id
         changed = apply_rules(s)
     return {"id": rule_id, "recategorized": changed}
+
+
+@mcp.tool()
+def add_rule_tags(rule_id: int, tags: list[str]) -> dict:
+    """Añade etiquetas a una regla de categoría y reaplica las reglas."""
+    from finmcp.analytics.categorization import apply_rules
+
+    with SessionLocal() as s:
+        names = tagging.add_rule_tags(s, rule_id, tags)
+        apply_rules(s)
+    return {"id": rule_id, "tags": names}
+
+
+@mcp.tool()
+def remove_rule_tags(rule_id: int, tags: list[str]) -> dict:
+    """Quita etiquetas de una regla de categoría y reaplica las reglas."""
+    from finmcp.analytics.categorization import apply_rules
+
+    with SessionLocal() as s:
+        names = tagging.remove_rule_tags(s, rule_id, tags)
+        apply_rules(s)
+    return {"id": rule_id, "tags": names}
 
 
 @mcp.tool()
@@ -267,9 +301,53 @@ def list_category_rules() -> list[dict]:
                 "category": r.category,
                 "field": r.field,
                 "priority": r.priority,
+                "tags": sorted(t.name for t in r.tags),
             }
             for r in rows
         ]
+
+
+@mcp.tool()
+def list_tags() -> list[dict]:
+    """Catálogo de etiquetas con cuántos movimientos y reglas las usan."""
+    with SessionLocal() as s:
+        return tagging.list_tags(s)
+
+
+@mcp.tool()
+def create_tag(name: str) -> dict:
+    """Crea una etiqueta en el catálogo (se normaliza a minúsculas)."""
+    with SessionLocal() as s:
+        return {"name": tagging.create_tag(s, name)}
+
+
+@mcp.tool()
+def delete_tag(name: str) -> dict:
+    """Borra una etiqueta del catálogo. Falla si algún movimiento o regla la usa."""
+    with SessionLocal() as s:
+        tagging.delete_tag(s, name)
+    return {"deleted": name}
+
+
+@mcp.tool()
+def tag_transactions(transaction_ids: list[str], tags: list[str]) -> dict:
+    """Etiqueta movimientos a mano (crea las etiquetas que no existan)."""
+    with SessionLocal() as s:
+        return {"changed": tagging.tag_transactions(s, transaction_ids, tags)}
+
+
+@mcp.tool()
+def untag_transactions(transaction_ids: list[str], tags: list[str]) -> dict:
+    """Quita etiquetas a movimientos; las reglas no volverán a ponerlas."""
+    with SessionLocal() as s:
+        return {"changed": tagging.untag_transactions(s, transaction_ids, tags)}
+
+
+@mcp.tool()
+def spend_by_tag_tool(start: str | None = None, end: str | None = None) -> list[dict]:
+    """Gasto por etiqueta en un periodo (YYYY-MM-DD). Un movimiento con varias etiquetas suma en todas."""
+    with SessionLocal() as s:
+        return tagging.spend_by_tag(s, parse_date(start), parse_date(end))
 
 
 def _wrap_bearer_auth(app, token: str):

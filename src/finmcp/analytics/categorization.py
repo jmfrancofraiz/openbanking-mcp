@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
+from finmcp.analytics.tagging import sync_rule_tags
 from finmcp.db import models
 
 
@@ -21,25 +22,33 @@ def _match(tx: models.Transaction, rule: models.CategoryRule) -> bool:
 def apply_rules(session: Session, only_uncategorized: bool = False) -> int:
     """Asigna `my_category` según las reglas. Gana la de menor `priority`.
 
+    Las etiquetas son la unión de las de todas las reglas que casan.
     Devuelve cuántas transacciones cambiaron de categoría.
     """
     rules = (
         session.query(models.CategoryRule)
+        .options(selectinload(models.CategoryRule.tags))
         .order_by(models.CategoryRule.priority.asc(), models.CategoryRule.id.asc())
         .all()
     )
     if not rules:
         return 0
 
-    q = session.query(models.Transaction)
+    q = session.query(models.Transaction).options(
+        selectinload(models.Transaction.tag_links).selectinload(
+            models.TransactionTag.tag
+        )
+    )
     if only_uncategorized:
         q = q.filter(models.Transaction.my_category.is_(None))
 
     changed = 0
     for tx in q.all():
-        new_cat = next((r.category for r in rules if _match(tx, r)), None)
+        matched = [r for r in rules if _match(tx, r)]
+        new_cat = matched[0].category if matched else None
         if new_cat is not None and new_cat != tx.my_category:
             tx.my_category = new_cat
             changed += 1
+        sync_rule_tags(tx, (t for r in matched for t in r.tags))
     session.commit()
     return changed

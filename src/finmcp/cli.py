@@ -7,6 +7,8 @@ app = typer.Typer(
 )
 rules_app = typer.Typer(help="Reglas de categorización personalizadas.")
 app.add_typer(rules_app, name="rules")
+tags_app = typer.Typer(help="Catálogo de etiquetas y etiquetado de movimientos.")
+app.add_typer(tags_app, name="tags")
 banks_app = typer.Typer(help="Bancos configurados (multi-banco vía Enable Banking).")
 app.add_typer(banks_app, name="banks")
 
@@ -140,10 +142,11 @@ def _echo_txs(rows: list[dict]) -> None:
         raise typer.Exit()
     for t in rows:
         sign = "-" if t["type"] == "debit" else "+"
+        tags = "".join(f" #{n}" for n in t["tags"])
         typer.echo(
             f"{t['date']}  {sign}{t['amount']:>10.2f} {t['currency']}  "
-            f"{t['merchant'] or t['description'] or ''}  [{t['category'] or 's/cat'}]  "
-            f"(cuenta={t['account_id']})"
+            f"{t['merchant'] or t['description'] or ''}  [{t['category'] or 's/cat'}]{tags}  "
+            f"(id={t['id']}, cuenta={t['account_id']})"
         )
 
 
@@ -170,9 +173,10 @@ def transactions(
     start: str = typer.Option(None, "--from", help="Fecha inicio YYYY-MM-DD"),
     end: str = typer.Option(None, "--to", help="Fecha fin YYYY-MM-DD"),
     type: str = typer.Option(None, "--type", help="debit | credit"),
+    tag: str = typer.Option(None, "--tag", help="Etiqueta"),
     limit: int = typer.Option(100, help="Máximo de movimientos"),
 ) -> None:
-    """Movimientos filtrados por cuenta, banco, fechas y tipo."""
+    """Movimientos filtrados por cuenta, banco, fechas, tipo y etiqueta."""
     from finmcp.mcp.server import get_transactions
 
     _echo_txs(
@@ -183,6 +187,7 @@ def transactions(
             start=start,
             end=end,
             type=type,
+            tag=tag,
             limit=limit,
         )
     )
@@ -192,12 +197,13 @@ def transactions(
 def search(
     query: str = typer.Argument(..., help="Texto a buscar en comercio o concepto"),
     bank: str = typer.Option(None, "--bank", help="Id del banco"),
+    tag: str = typer.Option(None, "--tag", help="Etiqueta"),
     limit: int = typer.Option(50, help="Máximo de movimientos"),
 ) -> None:
     """Busca movimientos por texto en el comercio o el concepto."""
     from finmcp.mcp.server import search_transactions
 
-    _echo_txs(_query(search_transactions, query, bank_id=bank, limit=limit))
+    _echo_txs(_query(search_transactions, query, bank_id=bank, tag=tag, limit=limit))
 
 
 @app.command()
@@ -299,46 +305,128 @@ def rules_add(
     category: str = typer.Argument(..., help="Categoría a asignar"),
     field: str = typer.Option("any", help="merchant | description | any"),
     priority: int = typer.Option(100, help="Menor = se evalúa antes"),
+    tag: list[str] = typer.Option(None, "--tag", help="Etiqueta a añadir (repetible)"),
 ) -> None:
     """Añade una regla y la aplica a los movimientos existentes."""
-    from finmcp.analytics.categorization import apply_rules
-    from finmcp.db.models import CategoryRule
-    from finmcp.db.session import SessionLocal, init_db
+    from finmcp.mcp.server import add_category_rule
 
-    init_db()
-    with SessionLocal() as s:
-        s.add(
-            CategoryRule(
-                pattern=pattern, category=category, field=field, priority=priority
-            )
-        )
-        s.commit()
-        changed = apply_rules(s)
+    r = _query(add_category_rule, pattern, category, field, priority, tag or [])
+    tags = "".join(f" #{t}" for t in tag or [])
     typer.echo(
-        f"Regla añadida: '{pattern}' -> {category} · recategorizadas {changed} tx"
+        f"Regla añadida (id={r['id']}): '{pattern}' -> {category}{tags} · "
+        f"recategorizadas {r['recategorized']} tx"
     )
+
+
+@rules_app.command("tag")
+def rules_tag(
+    rule_id: int = typer.Argument(..., help="Id de la regla"),
+    tags: list[str] = typer.Argument(..., help="Etiquetas a añadir"),
+) -> None:
+    """Añade etiquetas a una regla y reaplica las reglas."""
+    from finmcp.mcp.server import add_rule_tags
+
+    r = _query(add_rule_tags, rule_id, tags)
+    typer.echo(f"Regla {rule_id}: {' '.join('#' + t for t in r['tags']) or 'sin etiquetas'}")
+
+
+@rules_app.command("untag")
+def rules_untag(
+    rule_id: int = typer.Argument(..., help="Id de la regla"),
+    tags: list[str] = typer.Argument(..., help="Etiquetas a quitar"),
+) -> None:
+    """Quita etiquetas de una regla y reaplica las reglas."""
+    from finmcp.mcp.server import remove_rule_tags
+
+    r = _query(remove_rule_tags, rule_id, tags)
+    typer.echo(f"Regla {rule_id}: {' '.join('#' + t for t in r['tags']) or 'sin etiquetas'}")
 
 
 @rules_app.command("list")
 def rules_list() -> None:
     """Lista las reglas de categorización."""
-    from finmcp.db.models import CategoryRule
-    from finmcp.db.session import SessionLocal, init_db
+    from finmcp.mcp.server import list_category_rules
 
-    init_db()
-    with SessionLocal() as s:
-        rows = (
-            s.query(CategoryRule)
-            .order_by(CategoryRule.priority.asc(), CategoryRule.id.asc())
-            .all()
+    rows = _query(list_category_rules)
+    if not rows:
+        typer.echo("Sin reglas. Añade una con `finmcp rules add`.")
+        raise typer.Exit()
+    for r in rows:
+        tags = "".join(f" #{t}" for t in r["tags"])
+        typer.echo(
+            f"[{r['priority']}] '{r['pattern']}' ({r['field']}) -> {r['category']}{tags}"
+            f"  (id={r['id']})"
         )
-        if not rows:
-            typer.echo("Sin reglas. Añade una con `finmcp rules add`.")
-            raise typer.Exit()
-        for r in rows:
-            typer.echo(
-                f"[{r.priority}] '{r.pattern}' ({r.field}) -> {r.category}  (id={r.id})"
-            )
+
+
+@tags_app.command("list")
+def tags_list() -> None:
+    """Lista el catálogo de etiquetas y su uso."""
+    from finmcp.mcp.server import list_tags
+
+    rows = _query(list_tags)
+    if not rows:
+        typer.echo("Sin etiquetas. Crea una con `finmcp tags add`.")
+        raise typer.Exit()
+    for t in rows:
+        typer.echo(f"#{t['name']}  ({t['transactions']} tx, {t['rules']} reglas)")
+
+
+@tags_app.command("add")
+def tags_add(name: str = typer.Argument(..., help="Nombre de la etiqueta")) -> None:
+    """Crea una etiqueta en el catálogo."""
+    from finmcp.mcp.server import create_tag
+
+    typer.echo(f"Etiqueta #{_query(create_tag, name)['name']} lista.")
+
+
+@tags_app.command("delete")
+def tags_delete(name: str = typer.Argument(..., help="Nombre de la etiqueta")) -> None:
+    """Borra una etiqueta del catálogo (falla si está en uso)."""
+    from finmcp.mcp.server import delete_tag
+
+    _query(delete_tag, name)
+    typer.echo(f"Etiqueta '{name}' borrada.")
+
+
+@tags_app.command("assign")
+def tags_assign(
+    tag: str = typer.Argument(..., help="Etiqueta"),
+    tx_ids: list[str] = typer.Argument(..., help="Ids de los movimientos"),
+) -> None:
+    """Etiqueta movimientos a mano."""
+    from finmcp.mcp.server import tag_transactions
+
+    r = _query(tag_transactions, tx_ids, [tag])
+    typer.echo(f"Etiquetados {r['changed']} movimientos.")
+
+
+@tags_app.command("remove")
+def tags_remove(
+    tag: str = typer.Argument(..., help="Etiqueta"),
+    tx_ids: list[str] = typer.Argument(..., help="Ids de los movimientos"),
+) -> None:
+    """Quita una etiqueta a movimientos (las reglas no la volverán a poner)."""
+    from finmcp.mcp.server import untag_transactions
+
+    r = _query(untag_transactions, tx_ids, [tag])
+    typer.echo(f"Desetiquetados {r['changed']} movimientos.")
+
+
+@tags_app.command("spend")
+def tags_spend(
+    start: str = typer.Option(None, "--from", help="Fecha inicio YYYY-MM-DD"),
+    end: str = typer.Option(None, "--to", help="Fecha fin YYYY-MM-DD"),
+) -> None:
+    """Gasto por etiqueta en un periodo (un movimiento suma en todas sus etiquetas)."""
+    from finmcp.mcp.server import spend_by_tag_tool
+
+    rows = _query(spend_by_tag_tool, start, end)
+    if not rows:
+        typer.echo("Sin gasto en el periodo.")
+        raise typer.Exit()
+    for r in rows:
+        typer.echo(f"{r['total']:>10.2f}  {r['tag']}  ({r['count']} tx)")
 
 
 @app.command("import-csv")

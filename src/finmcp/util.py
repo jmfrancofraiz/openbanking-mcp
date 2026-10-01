@@ -13,6 +13,13 @@ def parse_date(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def normalize_tag(name: str | None) -> str:
+    norm = (name or "").strip().lower()
+    if not norm:
+        raise ValueError("El nombre de la etiqueta no puede estar vacío.")
+    return norm
+
+
 def month_bounds(year: int, month: int) -> tuple[datetime, datetime]:
     """Primer y último instante (UTC) de un mes."""
     last_day = calendar.monthrange(year, month)[1]

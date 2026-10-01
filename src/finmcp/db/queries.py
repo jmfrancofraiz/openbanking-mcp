@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, func, or_
+from sqlalchemy.orm import Session, selectinload
 
 from finmcp.db import models
+from finmcp.util import normalize_tag
 
 
 def list_accounts(session: Session) -> list[models.Account]:
@@ -62,9 +63,14 @@ def query_transactions(
     end: datetime | None = None,
     type: str | None = None,
     text: str | None = None,
+    tag: str | None = None,
     limit: int | None = None,
 ) -> list[models.Transaction]:
-    q = session.query(models.Transaction)
+    q = session.query(models.Transaction).options(
+        selectinload(models.Transaction.tag_links).selectinload(
+            models.TransactionTag.tag
+        )
+    )
     if account_id:
         q = q.filter(models.Transaction.account_id == account_id)
     if bank_id:
@@ -83,6 +89,17 @@ def query_transactions(
                 func.lower(func.coalesce(models.Transaction.merchant_name, "")).like(
                     like
                 ),
+            )
+        )
+    if tag:
+        q = q.filter(
+            models.Transaction.tag_links.any(
+                and_(
+                    models.TransactionTag.source != models.TAG_EXCLUDED,
+                    models.TransactionTag.tag.has(
+                        models.Tag.name == normalize_tag(tag)
+                    ),
+                )
             )
         )
     q = q.order_by(models.Transaction.booked_at.desc())

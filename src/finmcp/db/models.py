@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -14,6 +14,19 @@ from sqlalchemy.types import JSON
 
 class Base(DeclarativeBase):
     pass
+
+
+TAG_MANUAL = "manual"
+TAG_RULE = "rule"
+# Quitada a mano: se conserva para que las reglas no la vuelvan a poner.
+TAG_EXCLUDED = "excluded"
+
+category_rule_tags = Table(
+    "category_rule_tags",
+    Base.metadata,
+    Column("rule_id", ForeignKey("category_rules.id"), primary_key=True),
+    Column("tag_id", ForeignKey("tags.id"), primary_key=True),
+)
 
 
 class Account(Base):
@@ -59,6 +72,38 @@ class Transaction(Base):
     raw_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
     account: Mapped["Account"] = relationship(back_populates="transactions")
+    tag_links: Mapped[list["TransactionTag"]] = relationship(
+        back_populates="transaction", cascade="all, delete-orphan"
+    )
+
+    @property
+    def tag_names(self) -> list[str]:
+        return sorted(l.tag.name for l in self.tag_links if l.source != TAG_EXCLUDED)
+
+
+class Tag(Base):
+    __tablename__ = "tags"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, unique=True)  # normalizado (strip+lower)
+
+    links: Mapped[list["TransactionTag"]] = relationship(back_populates="tag")
+    rules: Mapped[list["CategoryRule"]] = relationship(
+        secondary=category_rule_tags, back_populates="tags"
+    )
+
+
+class TransactionTag(Base):
+    __tablename__ = "transaction_tags"
+
+    transaction_id: Mapped[str] = mapped_column(
+        ForeignKey("transactions.id"), primary_key=True
+    )
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"), primary_key=True)
+    source: Mapped[str] = mapped_column(String, default=TAG_MANUAL)  # manual|rule|excluded
+
+    transaction: Mapped["Transaction"] = relationship(back_populates="tag_links")
+    tag: Mapped["Tag"] = relationship(back_populates="links")
 
 
 class CategoryRule(Base):
@@ -69,6 +114,10 @@ class CategoryRule(Base):
     category: Mapped[str] = mapped_column(String)
     field: Mapped[str] = mapped_column(String, default="any")  # merchant|description|any
     priority: Mapped[int] = mapped_column(Integer, default=100)  # menor = antes
+
+    tags: Mapped[list["Tag"]] = relationship(
+        secondary=category_rule_tags, back_populates="rules"
+    )
 
 
 class SyncRun(Base):

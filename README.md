@@ -136,8 +136,8 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp sync` | Trae cuentas/saldos/movimientos a SQLite (por banco) |
 | `finmcp accounts` | Lista las cuentas locales |
 | `finmcp balances` | Saldo más reciente de cada cuenta |
-| `finmcp transactions` | Movimientos (`--account`, `--bank`, `--from`, `--to`, `--type`, `--limit`) |
-| `finmcp search TEXTO` | Busca movimientos por comercio o concepto |
+| `finmcp transactions` | Movimientos (`--account`, `--bank`, `--from`, `--to`, `--type`, `--tag`, `--limit`) |
+| `finmcp search TEXTO` | Busca movimientos por comercio o concepto (`--tag`) |
 | `finmcp spend` | Gasto por categoría (`--from`, `--to`) |
 | `finmcp subscriptions` | Cargos recurrentes detectados (`--months`) |
 | `finmcp unusual` | Cargos atípicos (`--from`, `--to`) |
@@ -145,7 +145,8 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp status` | Estado de la última sincronización por banco |
 | `finmcp import-csv` | Importa movimientos desde un CSV (histórico anterior a 90 días) |
 | `finmcp categorize` | Reaplica tus reglas de categorización |
-| `finmcp rules add/list` | Gestiona reglas de categorización |
+| `finmcp rules add/list/tag/untag` | Gestiona reglas de categorización y sus etiquetas |
+| `finmcp tags list/add/delete/assign/remove/spend` | Catálogo de etiquetas y etiquetado manual |
 | `finmcp serve` | Arranca el servidor MCP (stdio; `--http` para remoto) |
 
 ## Herramientas MCP
@@ -155,7 +156,9 @@ Equivalentes a los comandos del CLI, salvo `auth` (solo CLI, requiere navegador)
 `list_accounts` · `get_balances` · `get_transactions` · `search_transactions` ·
 `spend_by_category_tool` · `list_subscriptions` · `unusual_charges` ·
 `monthly_summary_tool` · `sync_status` · `sync` · `list_banks` · `list_institutions` ·
-`import_csv` · `categorize` · `add_category_rule` · `list_category_rules`
+`import_csv` · `categorize` · `add_category_rule` · `list_category_rules` ·
+`add_rule_tags` · `remove_rule_tags` · `list_tags` · `create_tag` · `delete_tag` ·
+`tag_transactions` · `untag_transactions` · `spend_by_tag_tool`
 
 > `import_csv` lee rutas del disco del servidor y `add_category_rule`/`categorize`
 > escriben en SQLite: en modo `--http` define siempre `FINMCP_HTTP_TOKEN`.
@@ -211,6 +214,27 @@ finmcp categorize            # reaplica todas las reglas
 
 Las reglas se reaplican automáticamente al final de cada `finmcp sync`.
 `my_category` (manual/regla) tiene prioridad sobre cualquier categoría del proveedor.
+
+## Etiquetas
+
+Un movimiento puede tener varias etiquetas (catálogo canónico en `tags`, relación N:M).
+Las reglas de categoría pueden llevar etiquetas: al aplicarse, cada movimiento recibe
+la unión de las etiquetas de **todas** las reglas que casan (la categoría sigue siendo
+la de la regla ganadora).
+
+```bash
+finmcp rules add "comercializadora baser" "Suministros - Electricidad" --tag Tomiño
+finmcp rules list                # muestra el id de cada regla: ... (id=3)
+finmcp rules tag RULE_ID casa    # añade etiquetas a una regla existente
+finmcp rules untag RULE_ID casa  # y las quita (se reaplican las reglas)
+finmcp tags assign viaje TX_ID1 TX_ID2   # etiquetado manual
+finmcp tags remove tomiño TX_ID          # las reglas no la volverán a poner
+finmcp transactions --tag tomiño
+finmcp tags spend --from 2026-01-01
+```
+
+Los nombres se normalizan (minúsculas, sin espacios extremos) y se crean al usarlos.
+`finmcp tags delete` falla si la etiqueta está en uso por movimientos o reglas.
 
 ## Importar histórico antiguo (CSV)
 
