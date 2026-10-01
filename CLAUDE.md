@@ -69,6 +69,12 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   this precedence. Rules are case-insensitive substring matches on merchant/description/any,
   lowest `priority` wins. `repo.upsert_transaction` deliberately does not touch `my_category` so
   re-syncs preserve manual categorization.
+- **Tags** (`analytics/tagging.py`): canonical `tags` table, N:M with transactions via
+  `transaction_tags` (`source` = `manual` | `rule` | `excluded`) and with `CategoryRule` via
+  `category_rule_tags`. `apply_rules` gives each tx the union of tags of *all* matching rules,
+  only touching `rule` links; `excluded` is a tombstone left by manual untag so rules don't
+  re-add it. `delete_tag` refuses to delete tags in use (no cascades). Names are normalized by
+  `util.normalize_tag`.
 - **Analytics** (`analytics/`): pure functions taking a SQLAlchemy `Session`, all reading through
   `db/queries.query_transactions`. Unusual charges use median + MAD (not mean/stddev) so a single
   spike does not contaminate its own baseline; when MAD is 0 it falls back to a 50%-over-median
