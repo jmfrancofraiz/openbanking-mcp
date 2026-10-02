@@ -299,6 +299,17 @@ def status() -> None:
         )
 
 
+def _amount_range(amount_min: float | None, amount_max: float | None) -> str:
+    """Texto legible de la condición de importe de una regla ('' si no la tiene)."""
+    if amount_min is not None and amount_max is not None:
+        return f"importe {amount_min:g}-{amount_max:g}"
+    if amount_min is not None:
+        return f"importe >={amount_min:g}"
+    if amount_max is not None:
+        return f"importe <={amount_max:g}"
+    return ""
+
+
 @rules_app.command("add")
 def rules_add(
     pattern: str = typer.Argument(..., help="Subcadena a buscar (case-insensitive)"),
@@ -306,14 +317,31 @@ def rules_add(
     field: str = typer.Option("any", help="merchant | description | any"),
     priority: int = typer.Option(100, help="Menor = se evalúa antes"),
     tag: list[str] = typer.Option(None, "--tag", help="Etiqueta a añadir (repetible)"),
+    amount_min: float | None = typer.Option(
+        None, "--amount-min", help="Solo movimientos con importe >= el valor"
+    ),
+    amount_max: float | None = typer.Option(
+        None, "--amount-max", help="Solo movimientos con importe <= el valor"
+    ),
 ) -> None:
-    """Añade una regla y la aplica a los movimientos existentes."""
+    """Añade una regla (opcionalmente con rango de importe) y la aplica a lo existente."""
     from finmcp.mcp.server import add_category_rule
 
-    r = _query(add_category_rule, pattern, category, field, priority, tag or [])
+    r = _query(
+        add_category_rule,
+        pattern,
+        category,
+        field,
+        priority,
+        tag or [],
+        amount_min,
+        amount_max,
+    )
     tags = "".join(f" #{t}" for t in tag or [])
+    cond = _amount_range(amount_min, amount_max)
+    cond_txt = f" [{cond}]" if cond else ""
     typer.echo(
-        f"Regla añadida (id={r['id']}): '{pattern}' -> {category}{tags} · "
+        f"Regla añadida (id={r['id']}): '{pattern}' -> {category}{tags}{cond_txt} · "
         f"recategorizadas {r['recategorized']} tx"
     )
 
@@ -353,8 +381,10 @@ def rules_list() -> None:
         raise typer.Exit()
     for r in rows:
         tags = "".join(f" #{t}" for t in r["tags"])
+        cond = _amount_range(r.get("amount_min"), r.get("amount_max"))
+        cond_txt = f" [{cond}]" if cond else ""
         typer.echo(
-            f"[{r['priority']}] '{r['pattern']}' ({r['field']}) -> {r['category']}{tags}"
+            f"[{r['priority']}] '{r['pattern']}' ({r['field']}) -> {r['category']}{tags}{cond_txt}"
             f"  (id={r['id']})"
         )
 
