@@ -166,3 +166,25 @@ def test_import_dedups_against_existing_api_tx(session, make_tx):
     # La de Mercadona (28/03, -23,45) se salta por dedup; entran las otras 2
     assert added == 2 and skipped == 1
     assert session.query(Transaction).count() == 3
+
+
+# Formato real de BBVA (export «Últimos movimientos»): "Concepto" y "Movimiento"
+# separados; la descripción debe componerse "Concepto - Movimiento".
+BBVA_SAMPLE = (
+    "F.Valor,Fecha,Concepto,Movimiento,Importe,Divisa,Disponible,Divisa,Observaciones\n"
+    "28/08/2026,28/08/2026,Abono de nómina,Crapd vigo,1805.8,EUR,9332.46,EUR,CRAPD VIGO\n"
+    "27/08/2026,27/08/2026,Bizum,Enviado: corte,-16,EUR,7557.39,EUR,ENVIADO: corte\n"
+    "23/08/2026,25/08/2026,Shein.com,Pago con tarjeta,-6.93,EUR,7540.46,EUR,"
+    "4188202147682619 SHEIN.COM\n"
+)
+
+
+def test_parse_rows_bbva_composite_description():
+    rows = parse_rows(BBVA_SAMPLE)
+    assert len(rows) == 3
+    assert rows[0]["description"] == "Abono de nómina - Crapd vigo"
+    assert rows[0]["amount"] == 1805.8
+    assert rows[1]["description"] == "Bizum - Enviado: corte"
+    assert rows[1]["amount"] == -16.0
+    assert rows[2]["description"] == "Shein.com - Pago con tarjeta"
+    assert rows[2]["date"].day == 25  # se usa la columna «Fecha»
