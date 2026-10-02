@@ -371,6 +371,50 @@ def update_category_rule(
 
 
 @mcp.tool()
+def remove_category_rules(rule_ids: list[int]) -> dict:
+    """Elimina reglas de categorización y reaplica las reglas.
+
+    Los movimientos que solo casaban con la regla eliminada conservan su
+    categoría actual (`apply_rules` no la borra); los que casen con otra regla
+    se recategorizan. Las etiquetas que la regla aportaba (origen `rule`) se
+    retiran al reaplicar; el catálogo de etiquetas no se toca.
+    Debe existir cada id indicado: si falta alguno, no se elimina nada.
+    """
+    from finmcp.analytics.categorization import apply_rules
+
+    ids = list(dict.fromkeys(rule_ids))
+    if not ids:
+        raise ValueError("Indica al menos un id de regla.")
+    with SessionLocal() as s:
+        rules = (
+            s.query(models.CategoryRule)
+            .filter(models.CategoryRule.id.in_(ids))
+            .order_by(models.CategoryRule.id.asc())
+            .all()
+        )
+        missing = set(ids) - {r.id for r in rules}
+        if missing:
+            raise ValueError(
+                "No existen las reglas: " + ", ".join(str(m) for m in sorted(missing))
+            )
+        removed = [
+            {
+                "id": r.id,
+                "pattern": r.pattern,
+                "field": r.field,
+                "category": r.category,
+            }
+            for r in rules
+        ]
+        for r in rules:
+            r.tags.clear()
+            s.delete(r)
+        s.commit()
+        changed = apply_rules(s)
+    return {"removed": removed, "recategorized": changed}
+
+
+@mcp.tool()
 def set_rule_neutral(rule_id: int, neutral: bool = True) -> dict:
     """Marca (o desmarca) una regla como neutral y reaplica las reglas."""
     from finmcp.analytics.categorization import apply_rules

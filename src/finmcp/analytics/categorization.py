@@ -31,6 +31,8 @@ def apply_rules(session: Session, only_uncategorized: bool = False) -> int:
     Las transacciones con `skip_category_rules=True` (categoría fijada a mano, p.ej.
     vía `finmcp recategorize`) se saltan por completo: no se toca su categoría,
     ni su `neutral`, ni sus etiquetas de reglas.
+    Sin reglas configuradas no se asigna nada, pero las etiquetas de origen `rule`
+    se retiran igualmente.
     Devuelve cuántas transacciones cambiaron de categoría o de `neutral`.
     """
     rules = (
@@ -39,8 +41,6 @@ def apply_rules(session: Session, only_uncategorized: bool = False) -> int:
         .order_by(models.CategoryRule.priority.asc(), models.CategoryRule.id.asc())
         .all()
     )
-    if not rules:
-        return 0
 
     q = session.query(models.Transaction).options(
         selectinload(models.Transaction.tag_links).selectinload(
