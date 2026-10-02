@@ -419,6 +419,60 @@ def rules_add(
     )
 
 
+@rules_app.command("update")
+def rules_update(
+    rule_id: int = typer.Argument(..., help="Id de la regla (ver `finmcp rules list`)"),
+    pattern: str | None = typer.Option(None, help="Nuevo patrón (subcadena, case-insensitive)"),
+    category: str | None = typer.Option(None, help="Nueva categoría"),
+    field: str | None = typer.Option(None, help="merchant | description | any"),
+    priority: int | None = typer.Option(None, help="Nueva prioridad (menor = se evalúa antes)"),
+    amount_min: float | None = typer.Option(
+        None, "--amount-min", help="Nuevo importe mínimo (>=)"
+    ),
+    amount_max: float | None = typer.Option(
+        None, "--amount-max", help="Nuevo importe máximo (<=)"
+    ),
+    clear_amount_min: bool = typer.Option(
+        False, "--clear-amount-min", help="Quita la condición de importe mínimo"
+    ),
+    clear_amount_max: bool = typer.Option(
+        False, "--clear-amount-max", help="Quita la condición de importe máximo"
+    ),
+    neutral: bool | None = typer.Option(
+        None,
+        "--neutral/--no-neutral",
+        help="Marca o desmarca la regla como neutral (si se omite, no se toca)",
+    ),
+) -> None:
+    """Edita una regla existente y reaplica las reglas.
+
+    Solo cambia los campos indicados; los omitidos se conservan. Con
+    `--clear-amount-min`/`--clear-amount-max` se retira la condición de importe.
+    """
+    from finmcp.mcp.server import update_category_rule
+
+    r = _query(
+        update_category_rule,
+        rule_id,
+        pattern,
+        category,
+        field,
+        priority,
+        amount_min,
+        amount_max,
+        clear_amount_min,
+        clear_amount_max,
+        neutral,
+    )
+    cond = _amount_range(r.get("amount_min"), r.get("amount_max"))
+    cond_txt = f" [{cond}]" if cond else ""
+    neutral_txt = " (neutral)" if r.get("neutral") else ""
+    typer.echo(
+        f"Regla {r['id']} actualizada: '{r['pattern']}' ({r['field']}) -> "
+        f"{r['category']}{cond_txt}{neutral_txt} · recategorizadas {r['recategorized']} tx"
+    )
+
+
 @rules_app.command("neutral")
 def rules_neutral(
     rule_id: int = typer.Argument(..., help="Id de la regla"),
