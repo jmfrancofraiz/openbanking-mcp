@@ -114,6 +114,9 @@ class CategoryRule(Base):
     category: Mapped[str] = mapped_column(String)
     field: Mapped[str] = mapped_column(String, default="any")  # merchant|description|any
     priority: Mapped[int] = mapped_column(Integer, default=100)  # menor = antes
+    # Condición opcional de importe; None = sin límite (el importe siempre es positivo).
+    amount_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    amount_max: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     tags: Mapped[list["Tag"]] = relationship(
         secondary=category_rule_tags, back_populates="rules"

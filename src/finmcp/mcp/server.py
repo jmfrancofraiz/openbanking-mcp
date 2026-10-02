@@ -240,12 +240,15 @@ def add_category_rule(
     field: str = "any",
     priority: int = 100,
     tags: list[str] | None = None,
+    amount_min: float | None = None,
+    amount_max: float | None = None,
 ) -> dict:
     """Añade una regla de categorización y la aplica a los movimientos existentes.
 
     `pattern` es una subcadena (case-insensitive); `field` es merchant | description | any;
     menor `priority` se evalúa antes. `tags` se añaden a los movimientos que casen
-    (se crean en el catálogo si no existen).
+    (se crean en el catálogo si no existen). `amount_min`/`amount_max` limitan la regla
+    a movimientos dentro de ese rango de importe (ambos opcionales).
     """
     from finmcp.analytics.categorization import apply_rules
 
@@ -253,7 +256,12 @@ def add_category_rule(
         raise ValueError("field debe ser merchant, description o any.")
     with SessionLocal() as s:
         rule = models.CategoryRule(
-            pattern=pattern, category=category, field=field, priority=priority
+            pattern=pattern,
+            category=category,
+            field=field,
+            priority=priority,
+            amount_min=amount_min,
+            amount_max=amount_max,
         )
         rule.tags = [tagging.get_or_create_tag(s, t) for t in tagging.unique_tag_names(tags or [])]
         s.add(rule)
@@ -301,6 +309,8 @@ def list_category_rules() -> list[dict]:
                 "category": r.category,
                 "field": r.field,
                 "priority": r.priority,
+                "amount_min": r.amount_min,
+                "amount_max": r.amount_max,
                 "tags": sorted(t.name for t in r.tags),
             }
             for r in rows

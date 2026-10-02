@@ -53,3 +53,42 @@ def test_apply_rules_field_merchant_ignores_description(make_tx, session):
 def test_apply_rules_no_rules_returns_zero(make_tx, session):
     make_tx(10.0, merchant="Mercadona")
     assert apply_rules(session) == 0
+
+
+def test_apply_rules_amount_min_filters(make_tx, session):
+    make_tx(60.0, description="Transferencia emitida periódica")
+    make_tx(120.0, description="Transferencia emitida periódica")
+
+    session.add(
+        CategoryRule(pattern="transferencia emitida periódica", category="Garaje", priority=50)
+    )
+    session.add(
+        CategoryRule(
+            pattern="transferencia emitida periódica",
+            category="Supermercado",
+            priority=40,
+            amount_min=100,
+        )
+    )
+    session.commit()
+
+    changed = apply_rules(session)
+
+    assert changed == 2
+    cats = {t.amount: t.my_category for t in session.query(Transaction).all()}
+    assert cats[60.0] == "Garaje"
+    assert cats[120.0] == "Supermercado"
+
+
+def test_apply_rules_amount_max_filters(make_tx, session):
+    make_tx(30.0, merchant="Tienda", description="compra pequeña")
+    make_tx(80.0, merchant="Tienda", description="compra grande")
+
+    session.add(CategoryRule(pattern="tienda", category="Compras", amount_max=50))
+    session.commit()
+
+    apply_rules(session)
+
+    cats = {t.amount: t.my_category for t in session.query(Transaction).all()}
+    assert cats[30.0] == "Compras"
+    assert cats[80.0] is None

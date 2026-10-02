@@ -16,12 +16,17 @@ def _haystack(tx: models.Transaction, field: str) -> str:
 
 
 def _match(tx: models.Transaction, rule: models.CategoryRule) -> bool:
+    if rule.amount_min is not None and tx.amount < rule.amount_min:
+        return False
+    if rule.amount_max is not None and tx.amount > rule.amount_max:
+        return False
     return rule.pattern.lower() in _haystack(tx, rule.field)
 
 
 def apply_rules(session: Session, only_uncategorized: bool = False) -> int:
     """Asigna `my_category` según las reglas. Gana la de menor `priority`.
 
+    Cada regla puede limitar además por importe (amount_min/amount_max, opcionales).
     Las etiquetas son la unión de las de todas las reglas que casan.
     Devuelve cuántas transacciones cambiaron de categoría.
     """
