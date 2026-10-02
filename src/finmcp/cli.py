@@ -86,12 +86,21 @@ def sync(
     bank: str = typer.Option(
         None, "--bank", help="Id del banco (ver `finmcp banks list`). Por defecto, todos."
     ),
+    strategy: str = typer.Option(
+        None,
+        "--strategy",
+        help=(
+            "Estrategia de Enable Banking: 'longest' busca todo lo disponible "
+            "desde --from (útil para histórico; evita el 422 de periodo fuera "
+            "de rango). Por defecto, la estándar."
+        ),
+    ),
 ) -> None:
     """Sincroniza cuentas, saldos y movimientos a la base de datos local (por banco)."""
     from finmcp.sync.service import run_sync
 
     try:
-        runs = run_sync(from_date, to_date, bank_id=bank)
+        runs = run_sync(from_date, to_date, bank_id=bank, strategy=strategy)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
     any_error = False

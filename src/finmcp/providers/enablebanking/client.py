@@ -42,12 +42,15 @@ class EnableBankingClient:
         account_id: str,
         from_date: str | None = None,
         to_date: str | None = None,
+        strategy: str | None = None,
     ) -> list[Transaction]:
         params: dict[str, str] = {}
         if from_date:
             params["date_from"] = from_date
         if to_date:
             params["date_to"] = to_date
+        if strategy:
+            params["strategy"] = strategy
 
         raw: list[dict] = []
         cont: str | None = None
