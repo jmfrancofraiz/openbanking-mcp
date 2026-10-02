@@ -153,9 +153,11 @@ def _echo_txs(rows: list[dict]) -> None:
         sign = "-" if t["type"] == "debit" else "+"
         tags = "".join(f" #{n}" for n in t["tags"])
         neutral_txt = " (neutral)" if t.get("neutral") else ""
+        manual_txt = " (manual)" if t.get("skip_category_rules") else ""
         typer.echo(
             f"{t['date']}  {sign}{t['amount']:>10.2f} {t['currency']}  "
-            f"{t['merchant'] or t['description'] or ''}  [{t['category'] or 's/cat'}]{tags}{neutral_txt}  "
+            f"{t['merchant'] or t['description'] or ''}  "
+            f"[{t['category'] or 's/cat'}]{tags}{neutral_txt}{manual_txt}  "
             f"(id={t['id']}, cuenta={t['account_id']})"
         )
 
@@ -329,6 +331,39 @@ def neutral(
     from finmcp.mcp.server import set_transactions_neutral
 
     r = _query(set_transactions_neutral, tx_ids, not off)
+    typer.echo(f"Actualizados {r['changed']} movimientos.")
+
+
+@app.command()
+def recategorize(
+    tx_id: str = typer.Argument(..., help="Id del movimiento"),
+    category: str = typer.Argument(..., help="Categoría a asignar (texto libre)"),
+) -> None:
+    """Recategoriza a mano un movimiento y desactiva las reglas para él."""
+    from finmcp.mcp.server import recategorize_transaction
+
+    r = _query(recategorize_transaction, tx_id, category)
+    typer.echo(
+        f"Movimiento {r['id']}: «{r['category']}» · reglas desactivadas "
+        "(skip_category_rules)"
+    )
+
+
+@app.command("skip-rules")
+def skip_rules(
+    tx_ids: list[str] = typer.Argument(..., help="Ids de los movimientos"),
+    off: bool = typer.Option(
+        False, "--off", help="Reactivar las reglas en vez de desactivarlas"
+    ),
+) -> None:
+    """Activa `skip_category_rules`: las reglas no tocarán estos movimientos (--off reactiva).
+
+    Con el flag activo, reaplicar reglas (sync, categorize…) no los toca; con
+    --off vuelven a quedar sujetos a las reglas.
+    """
+    from finmcp.mcp.server import set_transactions_skip_rules
+
+    r = _query(set_transactions_skip_rules, tx_ids, not off)
     typer.echo(f"Actualizados {r['changed']} movimientos.")
 
 
