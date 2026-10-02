@@ -19,7 +19,7 @@ def spend_by_category(
     end: datetime | None = None,
 ) -> list[dict]:
     """Gasto (débitos) agregado por categoría, de mayor a menor."""
-    txs = query_transactions(session, start=start, end=end, type="debit")
+    txs = query_transactions(session, start=start, end=end, type="debit", neutral=False)
     totals: dict[str, float] = {}
     counts: dict[str, int] = {}
     for t in txs:

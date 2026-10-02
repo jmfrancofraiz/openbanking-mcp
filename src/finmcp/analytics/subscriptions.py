@@ -37,7 +37,7 @@ def detect_subscriptions(
     relativa < amount_tolerance) y una cadencia regular.
     """
     start = datetime.now(timezone.utc) - timedelta(days=30 * lookback_months)
-    txs = query_transactions(session, start=start, type="debit")
+    txs = query_transactions(session, start=start, type="debit", neutral=False)
 
     groups: dict[str, list] = {}
     for t in txs:

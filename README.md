@@ -141,11 +141,12 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp spend` | Gasto por categoría (`--from`, `--to`) |
 | `finmcp subscriptions` | Cargos recurrentes detectados (`--months`) |
 | `finmcp unusual` | Cargos atípicos (`--from`, `--to`) |
-| `finmcp summary AÑO MES` | Resumen mensual |
+| `finmcp summary AÑO MES` | Resumen mensual (con sección aparte de movimientos no computables) |
 | `finmcp status` | Estado de la última sincronización por banco |
 | `finmcp import-csv` | Importa movimientos desde un CSV (histórico anterior a 90 días) |
 | `finmcp categorize` | Reaplica tus reglas de categorización |
-| `finmcp rules add/list/tag/untag` | Gestiona reglas de categorización y sus etiquetas |
+| `finmcp rules add/list/tag/untag/neutral` | Gestiona reglas de categorización, sus etiquetas y si son neutrales |
+| `finmcp neutral TX_ID...` | Marca movimientos como no computables (`--off` para desmarcar) |
 | `finmcp tags list/add/delete/assign/remove/spend` | Catálogo de etiquetas y etiquetado manual |
 | `finmcp serve` | Arranca el servidor MCP (stdio; `--http` para remoto) |
 
@@ -157,8 +158,9 @@ Equivalentes a los comandos del CLI, salvo `auth` (solo CLI, requiere navegador)
 `spend_by_category_tool` · `list_subscriptions` · `unusual_charges` ·
 `monthly_summary_tool` · `sync_status` · `sync` · `list_banks` · `list_institutions` ·
 `import_csv` · `categorize` · `add_category_rule` · `list_category_rules` ·
-`add_rule_tags` · `remove_rule_tags` · `list_tags` · `create_tag` · `delete_tag` ·
-`tag_transactions` · `untag_transactions` · `spend_by_tag_tool`
+`add_rule_tags` · `remove_rule_tags` · `set_rule_neutral` · `list_tags` · `create_tag` ·
+`delete_tag` · `tag_transactions` · `untag_transactions` · `set_transactions_neutral` ·
+`spend_by_tag_tool`
 
 > `import_csv` lee rutas del disco del servidor y `add_category_rule`/`categorize`
 > escriben en SQLite: en modo `--http` define siempre `FINMCP_HTTP_TOKEN`.
@@ -214,6 +216,22 @@ finmcp categorize            # reaplica todas las reglas
 
 Las reglas se reaplican automáticamente al final de cada `finmcp sync`.
 `my_category` (manual/regla) tiene prioridad sobre cualquier categoría del proveedor.
+
+## Movimientos no computables (neutrales)
+
+Traspasos entre cuentas propias, liquidaciones de tarjeta cuyas compras ya están
+sincronizadas, aportaciones a ahorro… no son ingreso ni gasto. Márcalos como
+**neutrales** y quedarán fuera de ingresos/gastos, gasto por categoría/etiqueta,
+suscripciones y cargos atípicos. `summary` los lista en una sección aparte.
+
+```bash
+finmcp rules add "traspaso" "Traspasos internos" --neutral
+finmcp rules neutral RULE_ID         # marca una regla existente (--off para desmarcar)
+finmcp neutral TX_ID1 TX_ID2         # marca movimientos sueltos
+```
+
+Los movimientos heredan `neutral` de la regla ganadora; si una regla casa, al
+reaplicar reglas su valor prevalece sobre el marcado manual.
 
 ## Etiquetas
 

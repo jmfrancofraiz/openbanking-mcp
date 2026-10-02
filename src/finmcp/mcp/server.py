@@ -25,6 +25,7 @@ def _tx_dict(t: models.Transaction) -> dict:
         "type": t.type,
         "merchant": t.merchant_name,
         "category": category_of(t),
+        "neutral": t.neutral,
         "tags": t.tag_names,
     }
 
@@ -126,7 +127,10 @@ def unusual_charges(
 
 @mcp.tool()
 def monthly_summary_tool(year: int, month: int) -> dict:
-    """Resumen mensual: ingresos, gastos, neto, top comercios y categorías."""
+    """Resumen mensual: ingresos, gastos, neto, top comercios y categorías.
+
+    Los movimientos neutrales (traspasos, etc.) no computan y se listan en `neutral`.
+    """
     with SessionLocal() as s:
         return monthly_summary(s, year, month)
 
@@ -242,13 +246,15 @@ def add_category_rule(
     tags: list[str] | None = None,
     amount_min: float | None = None,
     amount_max: float | None = None,
+    neutral: bool = False,
 ) -> dict:
     """Añade una regla de categorización y la aplica a los movimientos existentes.
 
     `pattern` es una subcadena (case-insensitive); `field` es merchant | description | any;
     menor `priority` se evalúa antes. `tags` se añaden a los movimientos que casen
     (se crean en el catálogo si no existen). `amount_min`/`amount_max` limitan la regla
-    a movimientos dentro de ese rango de importe (ambos opcionales).
+    a movimientos dentro de ese rango de importe (ambos opcionales). Con `neutral` los
+    movimientos que casen no computan como ingreso/gasto (traspasos, liquidaciones de tarjeta).
     """
     from finmcp.analytics.categorization import apply_rules
 
@@ -262,6 +268,7 @@ def add_category_rule(
             priority=priority,
             amount_min=amount_min,
             amount_max=amount_max,
+            neutral=neutral,
         )
         rule.tags = [tagging.get_or_create_tag(s, t) for t in tagging.unique_tag_names(tags or [])]
         s.add(rule)
@@ -269,6 +276,21 @@ def add_category_rule(
         rule_id = rule.id
         changed = apply_rules(s)
     return {"id": rule_id, "recategorized": changed}
+
+
+@mcp.tool()
+def set_rule_neutral(rule_id: int, neutral: bool = True) -> dict:
+    """Marca (o desmarca) una regla como neutral y reaplica las reglas."""
+    from finmcp.analytics.categorization import apply_rules
+
+    with SessionLocal() as s:
+        rule = s.get(models.CategoryRule, rule_id)
+        if rule is None:
+            raise ValueError(f"No existe la regla {rule_id}.")
+        rule.neutral = neutral
+        s.commit()
+        changed = apply_rules(s)
+    return {"id": rule_id, "neutral": neutral, "recategorized": changed}
 
 
 @mcp.tool()
@@ -311,6 +333,7 @@ def list_category_rules() -> list[dict]:
                 "priority": r.priority,
                 "amount_min": r.amount_min,
                 "amount_max": r.amount_max,
+                "neutral": r.neutral,
                 "tags": sorted(t.name for t in r.tags),
             }
             for r in rows
@@ -351,6 +374,30 @@ def untag_transactions(transaction_ids: list[str], tags: list[str]) -> dict:
     """Quita etiquetas a movimientos; las reglas no volverán a ponerlas."""
     with SessionLocal() as s:
         return {"changed": tagging.untag_transactions(s, transaction_ids, tags)}
+
+
+@mcp.tool()
+def set_transactions_neutral(transaction_ids: list[str], neutral: bool = True) -> dict:
+    """Marca (o desmarca) movimientos como neutrales: no computan como ingreso/gasto.
+
+    Si una regla casa con el movimiento, al reaplicar reglas prevalece la de la regla.
+    """
+    with SessionLocal() as s:
+        txs = (
+            s.query(models.Transaction)
+            .filter(models.Transaction.id.in_(transaction_ids))
+            .all()
+        )
+        missing = set(transaction_ids) - {t.id for t in txs}
+        if missing:
+            raise ValueError(f"No existen los movimientos: {', '.join(sorted(missing))}")
+        changed = 0
+        for t in txs:
+            if t.neutral != neutral:
+                t.neutral = neutral
+                changed += 1
+        s.commit()
+    return {"changed": changed}
 
 
 @mcp.tool()

@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+)
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -69,6 +78,8 @@ class Transaction(Base):
     merchant_name: Mapped[str | None] = mapped_column(String, nullable=True)
     provider_category: Mapped[str | None] = mapped_column(String, nullable=True)
     my_category: Mapped[str | None] = mapped_column(String, nullable=True)
+    # No computa como ingreso/gasto (traspasos, liquidaciones de tarjeta...).
+    neutral: Mapped[bool] = mapped_column(Boolean, default=False)
     raw_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
     account: Mapped["Account"] = relationship(back_populates="transactions")
@@ -117,6 +128,7 @@ class CategoryRule(Base):
     # Condición opcional de importe; None = sin límite (el importe siempre es positivo).
     amount_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     amount_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    neutral: Mapped[bool] = mapped_column(Boolean, default=False)
 
     tags: Mapped[list["Tag"]] = relationship(
         secondary=category_rule_tags, back_populates="rules"

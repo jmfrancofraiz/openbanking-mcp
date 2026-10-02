@@ -64,6 +64,7 @@ def query_transactions(
     type: str | None = None,
     text: str | None = None,
     tag: str | None = None,
+    neutral: bool | None = None,
     limit: int | None = None,
 ) -> list[models.Transaction]:
     q = session.query(models.Transaction).options(
@@ -81,6 +82,8 @@ def query_transactions(
         q = q.filter(models.Transaction.booked_at <= end)
     if type:
         q = q.filter(models.Transaction.type == type)
+    if neutral is not None:
+        q = q.filter(models.Transaction.neutral.is_(neutral))
     if text:
         like = f"%{text.lower()}%"
         q = q.filter(

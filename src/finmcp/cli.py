@@ -152,9 +152,10 @@ def _echo_txs(rows: list[dict]) -> None:
     for t in rows:
         sign = "-" if t["type"] == "debit" else "+"
         tags = "".join(f" #{n}" for n in t["tags"])
+        neutral_txt = " (neutral)" if t.get("neutral") else ""
         typer.echo(
             f"{t['date']}  {sign}{t['amount']:>10.2f} {t['currency']}  "
-            f"{t['merchant'] or t['description'] or ''}  [{t['category'] or 's/cat'}]{tags}  "
+            f"{t['merchant'] or t['description'] or ''}  [{t['category'] or 's/cat'}]{tags}{neutral_txt}  "
             f"(id={t['id']}, cuenta={t['account_id']})"
         )
 
@@ -290,6 +291,17 @@ def summary(
         typer.echo("Top comercios:")
         for m in r["top_merchants"]:
             typer.echo(f"  {m['total']:>10.2f}  {m['merchant']}")
+    neutral = r["neutral"]
+    if neutral["transactions"]:
+        typer.echo(
+            f"No computables (entradas {neutral['in']:.2f} · salidas {neutral['out']:.2f}):"
+        )
+        for t in neutral["transactions"]:
+            sign = "-" if t["type"] == "debit" else "+"
+            typer.echo(
+                f"  {t['date']}  {sign}{t['amount']:>10.2f} {t['currency']}  "
+                f"{t['merchant'] or ''}  [{t['category']}]"
+            )
 
 
 @app.command()
@@ -306,6 +318,18 @@ def status() -> None:
             f"fin {r['finished_at'] or '-'} · cuentas {r['accounts_synced']} · "
             f"nuevas tx {r['tx_added']}"
         )
+
+
+@app.command()
+def neutral(
+    tx_ids: list[str] = typer.Argument(..., help="Ids de los movimientos"),
+    off: bool = typer.Option(False, "--off", help="Desmarcar en vez de marcar"),
+) -> None:
+    """Marca movimientos como neutrales (no computan como ingreso/gasto)."""
+    from finmcp.mcp.server import set_transactions_neutral
+
+    r = _query(set_transactions_neutral, tx_ids, not off)
+    typer.echo(f"Actualizados {r['changed']} movimientos.")
 
 
 def _amount_range(amount_min: float | None, amount_max: float | None) -> str:
@@ -332,6 +356,9 @@ def rules_add(
     amount_max: float | None = typer.Option(
         None, "--amount-max", help="Solo movimientos con importe <= el valor"
     ),
+    neutral: bool = typer.Option(
+        False, "--neutral", help="Los movimientos que casen no computan como ingreso/gasto"
+    ),
 ) -> None:
     """Añade una regla (opcionalmente con rango de importe) y la aplica a lo existente."""
     from finmcp.mcp.server import add_category_rule
@@ -345,14 +372,29 @@ def rules_add(
         tag or [],
         amount_min,
         amount_max,
+        neutral,
     )
     tags = "".join(f" #{t}" for t in tag or [])
     cond = _amount_range(amount_min, amount_max)
     cond_txt = f" [{cond}]" if cond else ""
+    neutral_txt = " (neutral)" if neutral else ""
     typer.echo(
-        f"Regla añadida (id={r['id']}): '{pattern}' -> {category}{tags}{cond_txt} · "
+        f"Regla añadida (id={r['id']}): '{pattern}' -> {category}{tags}{cond_txt}{neutral_txt} · "
         f"recategorizadas {r['recategorized']} tx"
     )
+
+
+@rules_app.command("neutral")
+def rules_neutral(
+    rule_id: int = typer.Argument(..., help="Id de la regla"),
+    off: bool = typer.Option(False, "--off", help="Desmarcar en vez de marcar"),
+) -> None:
+    """Marca una regla como neutral (no computa como ingreso/gasto) y reaplica las reglas."""
+    from finmcp.mcp.server import set_rule_neutral
+
+    r = _query(set_rule_neutral, rule_id, not off)
+    estado = "neutral" if r["neutral"] else "computable"
+    typer.echo(f"Regla {rule_id}: {estado} · actualizadas {r['recategorized']} tx")
 
 
 @rules_app.command("tag")
@@ -392,9 +434,10 @@ def rules_list() -> None:
         tags = "".join(f" #{t}" for t in r["tags"])
         cond = _amount_range(r.get("amount_min"), r.get("amount_max"))
         cond_txt = f" [{cond}]" if cond else ""
+        neutral_txt = " (neutral)" if r.get("neutral") else ""
         typer.echo(
             f"[{r['priority']}] '{r['pattern']}' ({r['field']}) -> {r['category']}{tags}{cond_txt}"
-            f"  (id={r['id']})"
+            f"{neutral_txt}  (id={r['id']})"
         )
 
 
