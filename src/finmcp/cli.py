@@ -473,6 +473,25 @@ def rules_update(
     )
 
 
+@rules_app.command("remove")
+def rules_remove(
+    rule_ids: list[int] = typer.Argument(..., help="Ids de las reglas a eliminar"),
+) -> None:
+    """Elimina reglas y reaplica las reglas.
+
+    Los movimientos que solo casaban con la regla eliminada conservan su
+    categoría; los que casen con otra regla se recategorizan.
+    """
+    from finmcp.mcp.server import remove_category_rules
+
+    r = _query(remove_category_rules, rule_ids)
+    for d in r["removed"]:
+        typer.echo(
+            f"Regla {d['id']} eliminada: '{d['pattern']}' ({d['field']}) -> {d['category']}"
+        )
+    typer.echo(f"recategorizadas {r['recategorized']} tx")
+
+
 @rules_app.command("neutral")
 def rules_neutral(
     rule_id: int = typer.Argument(..., help="Id de la regla"),
