@@ -11,7 +11,11 @@ from finmcp.providers.factory import get_provider
 
 
 def _sync_one_bank(
-    session, bank: BankConfig, from_date: str | None, to_date: str | None
+    session,
+    bank: BankConfig,
+    from_date: str | None,
+    to_date: str | None,
+    strategy: str | None = None,
 ) -> SyncRun:
     """Sincroniza un banco; nunca relanza, deja el resultado (ok/error) en el SyncRun."""
     # Persistimos el inicio antes de tocar el banco: así, si el pull falla,
@@ -32,7 +36,7 @@ def _sync_one_bank(
             except Exception:  # noqa: BLE001 -- el saldo no debe romper el sync
                 pass
             for tx in client.get_transactions(
-                acc.provider_account_id, from_date, to_date
+                acc.provider_account_id, from_date, to_date, strategy=strategy
             ):
                 if repo.upsert_transaction(session, acc.provider_account_id, tx):
                     tx_added += 1
@@ -58,11 +62,14 @@ def run_sync(
     from_date: str | None = None,
     to_date: str | None = None,
     bank_id: str | None = None,
+    strategy: str | None = None,
 ) -> list[SyncRun]:
     """Pull idempotente de cuentas, saldos y movimientos a SQLite, banco a banco.
 
     Si se indica `bank_id` solo se sincroniza ese banco; si no, todos los configurados.
     Un fallo en un banco no aborta los demás: cada uno reporta su propio SyncRun.
+    `strategy` se reenvía al proveedor (Enable Banking): con 'longest' busca todo lo
+    disponible desde `from_date` sin devolver error de periodo fuera de rango.
     """
     init_db()
     banks = settings.banks
@@ -78,7 +85,10 @@ def run_sync(
             raise ValueError(f"Banco '{bank_id}' no encontrado. Disponibles: {ids}")
         banks = selected
     with SessionLocal() as session:
-        runs = [_sync_one_bank(session, bank, from_date, to_date) for bank in banks]
+        runs = [
+            _sync_one_bank(session, bank, from_date, to_date, strategy)
+            for bank in banks
+        ]
         # Recategoriza según las reglas del usuario tras incorporar lo nuevo de todos los bancos.
         apply_rules(session)
         # Un rollback de un banco posterior expira los SyncRun anteriores: recargamos antes de cerrar.

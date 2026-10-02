@@ -20,4 +20,5 @@ class BankDataProvider(Protocol):
         account_id: str,
         from_date: str | None = None,
         to_date: str | None = None,
+        strategy: str | None = None,
     ) -> list[Transaction]: ...
