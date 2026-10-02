@@ -157,6 +157,11 @@ def _rows_from_table(table: list[list[str]]) -> list[dict]:
     h = table[header_idx]
     di = _find_col(h, _DATE_KEYS)
     ci = _find_col(h, _DESC_KEYS)
+    # Columna aparte de detalle (p. ej. BBVA: "Concepto" + "Movimiento");
+    # cuando existe, la descripción se compone "Concepto - Movimiento".
+    mi = _find_col(h, ("movimiento",))
+    if mi == ci:
+        mi = None
     ai = _find_col(h, _AMOUNT_KEYS)
     ii = _find_col(h, _INGRESO_KEYS)
     gi = _find_col(h, _GASTO_KEYS)
@@ -164,6 +169,13 @@ def _rows_from_table(table: list[list[str]]) -> list[dict]:
 
     def cell(row: list[str], idx: int | None) -> str:
         return row[idx].strip() if (idx is not None and idx < len(row)) else ""
+
+    def desc_of(row: list[str]) -> str:
+        base = cell(row, ci)
+        mov = cell(row, mi)
+        if mov and mov.lower() != base.lower():
+            return f"{base} - {mov}" if base else mov
+        return base
 
     out: list[dict] = []
     for row in table[header_idx + 1 :]:
@@ -182,7 +194,7 @@ def _rows_from_table(table: list[list[str]]) -> list[dict]:
             {
                 "date": d,
                 "amount": amount,
-                "description": cell(row, ci),
+                "description": desc_of(row),
                 "account": cell(row, acci) or None,
             }
         )
