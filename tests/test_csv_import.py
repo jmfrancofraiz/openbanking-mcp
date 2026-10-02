@@ -188,3 +188,47 @@ def test_parse_rows_bbva_composite_description():
     assert rows[1]["amount"] == -16.0
     assert rows[2]["description"] == "Shein.com - Pago con tarjeta"
     assert rows[2]["date"].day == 25  # se usa la columna «Fecha»
+
+
+def test_import_respects_multiplicity_same_day_same_amount(session):
+    from finmcp.db.models import Account, Transaction
+
+    sample = (
+        "Fecha;Concepto;Importe\n"
+        "03/01/2025;PENSION CHE O PINO;-10,00\n"
+        "03/01/2025;LA PEDRERA VIGO;-10,00\n"
+        "03/01/2025;LA PEDRERA VIGO;-10,00\n"
+    )
+    acc = session.get(Account, "acc1")
+    rows = parse_rows(sample)
+
+    added, skipped = import_transactions(session, rows, account=acc)
+    assert added == 3 and skipped == 0
+    assert session.query(Transaction).count() == 3
+    ids = [t.id for t in session.query(Transaction).all()]
+    assert len(set(ids)) == 3  # los dos idénticos llevan ids distintos
+
+    # Reimportar no duplica
+    added2, skipped2 = import_transactions(session, rows, account=acc)
+    assert added2 == 0 and skipped2 == 3
+    assert session.query(Transaction).count() == 3
+
+
+def test_import_multiplicity_with_existing_skips_only_ratio(session, make_tx):
+    from datetime import datetime, timezone
+
+    from finmcp.db.models import Account, Transaction
+
+    # Ya existe UN apunte de 10 € ese día; el fichero trae DOS → entra solo 1
+    make_tx(
+        10.0,
+        type="debit",
+        merchant="PENSION CHE O PINO",
+        booked_at=datetime(2025, 1, 3, tzinfo=timezone.utc),
+    )
+    acc = session.get(Account, "acc1")
+    rows = parse_rows("Fecha;Concepto;Importe\n03/01/2025;A;-10,00\n03/01/2025;B;-10,00\n")
+
+    added, skipped = import_transactions(session, rows, account=acc)
+    assert added == 1 and skipped == 1
+    assert session.query(Transaction).count() == 2

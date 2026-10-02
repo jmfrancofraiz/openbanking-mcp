@@ -211,23 +211,27 @@ def import_transactions(
     """Inserta movimientos deduplicando por (cuenta, día, importe, tipo).
 
     Cada fila se asigna a su cuenta: por el número de cuenta del fichero si lo
-    trae (multi-cuenta), o a `account` en su defecto. Devuelve (importadas, saltadas).
+    trae (multi-cuenta), o a `account` en su defecto. Respeta multiplicidades:
+    si el fichero trae N cargos iguales del mismo día y E ya constan, importa
+    N-E. Devuelve (importadas, saltadas).
     """
+    from collections import Counter
+
     accounts = session.query(models.Account).all()
 
-    seen: dict[str, set] = {}
+    seen: dict[str, Counter] = {}
 
-    def seen_for(acc: models.Account) -> set:
+    def seen_for(acc: models.Account) -> Counter:
         if acc.id not in seen:
             existing = (
                 session.query(models.Transaction)
                 .filter(models.Transaction.account_id == acc.id)
                 .all()
             )
-            seen[acc.id] = {
-                (t.booked_at.date().isoformat(), round(t.amount, 2), t.type)
-                for t in existing
-            }
+            counter: Counter = Counter()
+            for t in existing:
+                counter[(t.booked_at.date().isoformat(), round(t.amount, 2), t.type)] += 1
+            seen[acc.id] = counter
         return seen[acc.id]
 
     def resolve(hint: str | None) -> models.Account | None:
@@ -242,6 +246,8 @@ def import_transactions(
         return account
 
     added = skipped = 0
+    file_seen: dict[str, Counter] = {}
+    id_seq: Counter = Counter()
     for r in rows:
         acc = resolve(r.get("account"))
         if acc is None:
@@ -250,13 +256,17 @@ def import_transactions(
         side = "debit" if r["amount"] < 0 else "credit"
         amount = abs(r["amount"])
         key = (r["date"].date().isoformat(), round(amount, 2), side)
-        bucket = seen_for(acc)
-        if key in bucket:
+        fs = file_seen.setdefault(acc.id, Counter())
+        fs[key] += 1
+        # Solo se salta mientras queden ocurrencias por cubrir por las ya existentes.
+        if fs[key] <= seen_for(acc).get(key, 0):
             skipped += 1
             continue
-        tid = "csv_" + hashlib.sha1(
-            f"{acc.id}|{key}|{r['description']}".encode()
-        ).hexdigest()[:24]
+        # Desambiguador de ids para ocurrencias repetidas (mismo día/importe/descripción).
+        n = id_seq[(acc.id, key, r["description"])]
+        id_seq[(acc.id, key, r["description"])] += 1
+        raw = f"{acc.id}|{key}|{r['description']}" + (f"|{n}" if n else "")
+        tid = "csv_" + hashlib.sha1(raw.encode()).hexdigest()[:24]
         if session.get(models.Transaction, tid) is not None:
             skipped += 1
             continue
@@ -274,7 +284,6 @@ def import_transactions(
                 raw_json={"source": "csv"},
             )
         )
-        bucket.add(key)
         added += 1
     session.commit()
     return added, skipped
