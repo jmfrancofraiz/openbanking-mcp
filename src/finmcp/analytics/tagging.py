@@ -175,7 +175,7 @@ def spend_by_tag(
     end: datetime | None = None,
 ) -> list[dict]:
     """Gasto (débitos) por etiqueta. Un movimiento con varias etiquetas suma en todas."""
-    txs = query_transactions(session, start=start, end=end, type="debit")
+    txs = query_transactions(session, start=start, end=end, type="debit", neutral=False)
     totals: dict[str, float] = {}
     counts: dict[str, int] = {}
     for t in txs:

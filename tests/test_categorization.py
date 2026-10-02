@@ -92,3 +92,27 @@ def test_apply_rules_amount_max_filters(make_tx, session):
     cats = {t.amount: t.my_category for t in session.query(Transaction).all()}
     assert cats[30.0] == "Compras"
     assert cats[80.0] is None
+
+
+def test_apply_rules_inherits_neutral(make_tx, session):
+    make_tx(500.0, description="Traspaso a cuenta ahorro")
+    make_tx(20.0, merchant="Mercadona")
+
+    session.add(CategoryRule(pattern="traspaso", category="Traspaso", neutral=True))
+    session.add(CategoryRule(pattern="mercadona", category="Supermercado"))
+    session.commit()
+
+    apply_rules(session)
+
+    flags = {t.amount: t.neutral for t in session.query(Transaction).all()}
+    assert flags[500.0] is True
+    assert flags[20.0] is False
+
+
+def test_apply_rules_neutral_change_counts(make_tx, session):
+    make_tx(500.0, description="Traspaso", my_category="Traspaso")
+    session.add(CategoryRule(pattern="traspaso", category="Traspaso", neutral=True))
+    session.commit()
+
+    assert apply_rules(session) == 1  # misma categoría, pero pasa a neutral
+    assert session.query(Transaction).one().neutral is True

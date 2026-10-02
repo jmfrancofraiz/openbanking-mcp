@@ -24,11 +24,11 @@ def _match(tx: models.Transaction, rule: models.CategoryRule) -> bool:
 
 
 def apply_rules(session: Session, only_uncategorized: bool = False) -> int:
-    """Asigna `my_category` según las reglas. Gana la de menor `priority`.
+    """Asigna `my_category` y `neutral` según las reglas. Gana la de menor `priority`.
 
     Cada regla puede limitar además por importe (amount_min/amount_max, opcionales).
     Las etiquetas son la unión de las de todas las reglas que casan.
-    Devuelve cuántas transacciones cambiaron de categoría.
+    Devuelve cuántas transacciones cambiaron de categoría o de `neutral`.
     """
     rules = (
         session.query(models.CategoryRule)
@@ -50,10 +50,12 @@ def apply_rules(session: Session, only_uncategorized: bool = False) -> int:
     changed = 0
     for tx in q.all():
         matched = [r for r in rules if _match(tx, r)]
-        new_cat = matched[0].category if matched else None
-        if new_cat is not None and new_cat != tx.my_category:
-            tx.my_category = new_cat
-            changed += 1
+        if matched:
+            winner = matched[0]
+            if winner.category != tx.my_category or winner.neutral != tx.neutral:
+                tx.my_category = winner.category
+                tx.neutral = winner.neutral
+                changed += 1
         sync_rule_tags(tx, (t for r in matched for t in r.tags))
     session.commit()
     return changed

@@ -12,18 +12,26 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
 def _ensure_schema_upgrades() -> None:
     """Añade columnas nuevas a tablas existentes (create_all no las migra)."""
-    inspector = inspect(engine)
-    if "category_rules" not in inspector.get_table_names():
-        return
-    columns = {c["name"] for c in inspector.get_columns("category_rules")}
     additions = {
-        "amount_min": "ALTER TABLE category_rules ADD COLUMN amount_min FLOAT",
-        "amount_max": "ALTER TABLE category_rules ADD COLUMN amount_max FLOAT",
+        "category_rules": {
+            "amount_min": "FLOAT",
+            "amount_max": "FLOAT",
+            "neutral": "BOOLEAN NOT NULL DEFAULT 0",
+        },
+        "transactions": {
+            "neutral": "BOOLEAN NOT NULL DEFAULT 0",
+        },
     }
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
     with engine.begin() as conn:
-        for name, ddl in additions.items():
-            if name not in columns:
-                conn.execute(text(ddl))
+        for table, cols in additions.items():
+            if table not in tables:
+                continue
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            for name, ddl in cols.items():
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
 
 
 def init_db() -> None:

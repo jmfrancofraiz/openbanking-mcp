@@ -31,7 +31,7 @@ def detect_unusual_charges(
     sí se detecta. Si el MAD es 0 (importes idénticos, p.ej. suscripciones),
     cae a un umbral relativo del 50% sobre la mediana.
     """
-    history = query_transactions(session, type="debit")
+    history = query_transactions(session, type="debit", neutral=False)
     by_merchant: dict[str, list[float]] = {}
     for t in history:
         by_merchant.setdefault(_merchant_key(t), []).append(t.amount)
@@ -42,7 +42,9 @@ def detect_unusual_charges(
             med = statistics.median(amounts)
             stats[key] = (med, _mad(amounts, med))
 
-    window = query_transactions(session, start=start, end=end, type="debit")
+    window = query_transactions(
+        session, start=start, end=end, type="debit", neutral=False
+    )
     flagged: list[dict] = []
     for t in window:
         key = _merchant_key(t)

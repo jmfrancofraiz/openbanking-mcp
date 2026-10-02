@@ -69,6 +69,9 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   this precedence. Rules are case-insensitive substring matches on merchant/description/any,
   lowest `priority` wins. `repo.upsert_transaction` deliberately does not touch `my_category` so
   re-syncs preserve manual categorization.
+- **Neutral transactions**: `Transaction.neutral` marks transfers/card settlements that are
+  neither income nor expense. `apply_rules` copies `neutral` from the winning rule (like the
+  category); expense analytics query with `neutral=False`, and `monthly_summary` lists them apart.
 - **Tags** (`analytics/tagging.py`): canonical `tags` table, N:M with transactions via
   `transaction_tags` (`source` = `manual` | `rule` | `excluded`) and with `CategoryRule` via
   `category_rule_tags`. `apply_rules` gives each tx the union of tags of *all* matching rules,

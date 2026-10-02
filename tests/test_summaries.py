@@ -29,3 +29,29 @@ def test_monthly_summary_totals_and_top(make_tx, session):
     assert top[0] == {"merchant": "Zara", "total": 100.0}
     assert top[1] == {"merchant": "Mercadona", "total": 80.0}
     assert all(m["merchant"] != "Nómina" for m in top)
+    assert s["neutral"] == {"in": 0.0, "out": 0.0, "transactions": []}
+
+
+def test_monthly_summary_excludes_neutral(make_tx, session):
+    make_tx(2000.0, type="credit", merchant="Nómina", booked_at=_d(1))
+    make_tx(50.0, type="debit", merchant="Mercadona", booked_at=_d(5))
+    make_tx(
+        300.0, type="debit", description="Liquidación tarjeta",
+        my_category="Tarjeta", booked_at=_d(6), neutral=True,
+    )
+    make_tx(100.0, type="credit", description="Traspaso", booked_at=_d(7), neutral=True)
+
+    s = monthly_summary(session, 2026, 3)
+
+    assert s["income"] == 2000.0
+    assert s["expense"] == 50.0
+    assert s["transactions"] == 2
+    assert all(c["category"] != "Tarjeta" for c in s["by_category"])
+    assert all(m["merchant"] != "Liquidación tarjeta" for m in s["top_merchants"])
+    neutral = s["neutral"]
+    assert neutral["in"] == 100.0
+    assert neutral["out"] == 300.0
+    assert [t["merchant"] for t in neutral["transactions"]] == [
+        "Liquidación tarjeta",
+        "Traspaso",
+    ]

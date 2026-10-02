@@ -50,6 +50,7 @@ def make_tx(session):
         provider_category: str | None = None,
         my_category: str | None = None,
         currency: str = "EUR",
+        neutral: bool = False,
     ) -> Transaction:
         counter["n"] += 1
         tx = Transaction(
@@ -63,6 +64,7 @@ def make_tx(session):
             merchant_name=merchant,
             provider_category=provider_category,
             my_category=my_category,
+            neutral=neutral,
         )
         session.add(tx)
         session.commit()
