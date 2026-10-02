@@ -147,6 +147,8 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp categorize` | Reaplica tus reglas de categorización |
 | `finmcp rules add/list/tag/untag/neutral` | Gestiona reglas de categorización, sus etiquetas y si son neutrales |
 | `finmcp neutral TX_ID...` | Marca movimientos como no computables (`--off` para desmarcar) |
+| `finmcp recategorize TX_ID CATEGORÍA` | Fija a mano la categoría de un movimiento; las reglas no lo volverán a tocar |
+| `finmcp skip-rules TX_ID...` | Desactiva las reglas para esos movimientos (`--off` para reactivarlas) |
 | `finmcp tags list/add/delete/assign/remove/spend` | Catálogo de etiquetas y etiquetado manual |
 | `finmcp serve` | Arranca el servidor MCP (stdio; `--http` para remoto) |
 
@@ -160,7 +162,7 @@ Equivalentes a los comandos del CLI, salvo `auth` (solo CLI, requiere navegador)
 `import_csv` · `categorize` · `add_category_rule` · `list_category_rules` ·
 `add_rule_tags` · `remove_rule_tags` · `set_rule_neutral` · `list_tags` · `create_tag` ·
 `delete_tag` · `tag_transactions` · `untag_transactions` · `set_transactions_neutral` ·
-`spend_by_tag_tool`
+`recategorize_transaction` · `set_transactions_skip_rules` · `spend_by_tag_tool`
 
 > `import_csv` lee rutas del disco del servidor y `add_category_rule`/`categorize`
 > escriben en SQLite: en modo `--http` define siempre `FINMCP_HTTP_TOKEN`.
@@ -232,6 +234,27 @@ finmcp neutral TX_ID1 TX_ID2         # marca movimientos sueltos
 
 Los movimientos heredan `neutral` de la regla ganadora; si una regla casa, al
 reaplicar reglas su valor prevalece sobre el marcado manual.
+
+## Recategorización manual (override de reglas)
+
+Para corregir la categoría de un movimiento concreto sin crear una regla:
+
+```bash
+finmcp recategorize TX_ID "Categoría correcta"
+```
+
+Fija `my_category` y activa `skip_category_rules`: mientras esté activo, reaplicar
+las reglas (sync, `categorize`, cambios de reglas…) **no tocará** ese movimiento
+—ni su categoría, ni su `neutral`, ni sus etiquetas de reglas—. En `transactions`
+y `search` aparece con ` (manual)`.
+
+```bash
+finmcp skip-rules TX_ID1 TX_ID2     # activa el flag sin tocar la categoría
+finmcp skip-rules TX_ID --off       # devuelve el movimiento a las reglas
+```
+
+Con `--off` el movimiento vuelve a quedar sujeto a las reglas: en el siguiente
+`categorize` (o sync) recupera la categoría que le asigne la regla ganadora.
 
 ## Etiquetas
 

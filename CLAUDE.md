@@ -72,6 +72,9 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
 - **Neutral transactions**: `Transaction.neutral` marks transfers/card settlements that are
   neither income nor expense. `apply_rules` copies `neutral` from the winning rule (like the
   category); expense analytics query with `neutral=False`, and `monthly_summary` lists them apart.
+- **Manual override**: `Transaction.skip_category_rules` (set by `finmcp recategorize` /
+  `set_transactions_skip_rules`) freezes a hand-picked category; `apply_rules` skips those
+  transactions entirely — category, neutral and rule tags untouched.
 - **Tags** (`analytics/tagging.py`): canonical `tags` table, N:M with transactions via
   `transaction_tags` (`source` = `manual` | `rule` | `excluded`) and with `CategoryRule` via
   `category_rule_tags`. `apply_rules` gives each tx the union of tags of *all* matching rules,

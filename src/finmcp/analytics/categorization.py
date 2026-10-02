@@ -28,6 +28,9 @@ def apply_rules(session: Session, only_uncategorized: bool = False) -> int:
 
     Cada regla puede limitar además por importe (amount_min/amount_max, opcionales).
     Las etiquetas son la unión de las de todas las reglas que casan.
+    Las transacciones con `skip_category_rules=True` (categoría fijada a mano, p.ej.
+    vía `finmcp recategorize`) se saltan por completo: no se toca su categoría,
+    ni su `neutral`, ni sus etiquetas de reglas.
     Devuelve cuántas transacciones cambiaron de categoría o de `neutral`.
     """
     rules = (
@@ -49,6 +52,9 @@ def apply_rules(session: Session, only_uncategorized: bool = False) -> int:
 
     changed = 0
     for tx in q.all():
+        if tx.skip_category_rules:
+            # Override manual (`finmcp recategorize`): las reglas no tocan esta tx.
+            continue
         matched = [r for r in rules if _match(tx, r)]
         if matched:
             winner = matched[0]

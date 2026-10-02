@@ -20,6 +20,7 @@ def _ensure_schema_upgrades() -> None:
         },
         "transactions": {
             "neutral": "BOOLEAN NOT NULL DEFAULT 0",
+            "skip_category_rules": "BOOLEAN NOT NULL DEFAULT 0",
         },
     }
     inspector = inspect(engine)

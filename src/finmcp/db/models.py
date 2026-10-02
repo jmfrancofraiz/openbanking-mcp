@@ -80,6 +80,8 @@ class Transaction(Base):
     my_category: Mapped[str | None] = mapped_column(String, nullable=True)
     # No computa como ingreso/gasto (traspasos, liquidaciones de tarjeta...).
     neutral: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Categoría fijada a mano (`finmcp recategorize`): las reglas no la recategorizan.
+    skip_category_rules: Mapped[bool] = mapped_column(Boolean, default=False)
     raw_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
     account: Mapped["Account"] = relationship(back_populates="transactions")

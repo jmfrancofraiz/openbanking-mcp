@@ -26,6 +26,7 @@ def _tx_dict(t: models.Transaction) -> dict:
         "merchant": t.merchant_name,
         "category": category_of(t),
         "neutral": t.neutral,
+        "skip_category_rules": t.skip_category_rules,
         "tags": t.tag_names,
     }
 
@@ -395,6 +396,48 @@ def set_transactions_neutral(transaction_ids: list[str], neutral: bool = True) -
         for t in txs:
             if t.neutral != neutral:
                 t.neutral = neutral
+                changed += 1
+        s.commit()
+    return {"changed": changed}
+
+
+@mcp.tool()
+def recategorize_transaction(transaction_id: str, category: str) -> dict:
+    """Recategoriza a mano un movimiento: fija `my_category` y activa `skip_category_rules`.
+
+    Mientras `skip_category_rules` esté activo, reaplicar las reglas (sync,
+    categorize, cambios en reglas…) no volverá a tocar esta transacción.
+    """
+    with SessionLocal() as s:
+        tx = s.get(models.Transaction, transaction_id)
+        if tx is None:
+            raise ValueError(f"No existe el movimiento {transaction_id}.")
+        tx.my_category = category
+        tx.skip_category_rules = True
+        s.commit()
+    return {"id": transaction_id, "category": category, "skip_category_rules": True}
+
+
+@mcp.tool()
+def set_transactions_skip_rules(transaction_ids: list[str], skip: bool = True) -> dict:
+    """Activa (o desactiva con `skip=False`) `skip_category_rules` en movimientos.
+
+    Con el flag activo, `apply_rules` no toca esos movimientos; al desactivarlo,
+    las reglas vuelven a aplicárseles en el siguiente ciclo.
+    """
+    with SessionLocal() as s:
+        txs = (
+            s.query(models.Transaction)
+            .filter(models.Transaction.id.in_(transaction_ids))
+            .all()
+        )
+        missing = set(transaction_ids) - {t.id for t in txs}
+        if missing:
+            raise ValueError(f"No existen los movimientos: {', '.join(sorted(missing))}")
+        changed = 0
+        for t in txs:
+            if t.skip_category_rules != skip:
+                t.skip_category_rules = skip
                 changed += 1
         s.commit()
     return {"changed": changed}
