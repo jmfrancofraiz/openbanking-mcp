@@ -280,6 +280,97 @@ def add_category_rule(
 
 
 @mcp.tool()
+def update_category_rule(
+    rule_id: int,
+    pattern: str | None = None,
+    category: str | None = None,
+    field: str | None = None,
+    priority: int | None = None,
+    amount_min: float | None = None,
+    amount_max: float | None = None,
+    clear_amount_min: bool = False,
+    clear_amount_max: bool = False,
+    neutral: bool | None = None,
+) -> dict:
+    """Edita una regla de categorización existente y reaplica las reglas.
+
+    Solo se cambian los campos indicados (los omitidos se conservan).
+    `clear_amount_min`/`clear_amount_max` retiran la condición de importe;
+    `neutral=None` (por defecto) no altera la condición de neutral.
+    Devuelve el estado final de la regla y cuántas tx se recategorizaron.
+    """
+    from finmcp.analytics.categorization import apply_rules
+
+    if (
+        pattern is None
+        and category is None
+        and field is None
+        and priority is None
+        and amount_min is None
+        and amount_max is None
+        and not clear_amount_min
+        and not clear_amount_max
+        and neutral is None
+    ):
+        raise ValueError("Nada que actualizar: indica al menos un campo.")
+    if pattern is not None and not pattern.strip():
+        raise ValueError("El patrón no puede estar vacío.")
+    if category is not None and not category.strip():
+        raise ValueError("La categoría no puede estar vacía.")
+    if field is not None and field not in ("merchant", "description", "any"):
+        raise ValueError("field debe ser merchant, description o any.")
+    if amount_min is not None and clear_amount_min:
+        raise ValueError("No combines --amount-min con --clear-amount-min.")
+    if amount_max is not None and clear_amount_max:
+        raise ValueError("No combines --amount-max con --clear-amount-max.")
+
+    with SessionLocal() as s:
+        rule = s.get(models.CategoryRule, rule_id)
+        if rule is None:
+            raise ValueError(f"No existe la regla {rule_id}.")
+        if pattern is not None:
+            rule.pattern = pattern
+        if category is not None:
+            rule.category = category
+        if field is not None:
+            rule.field = field
+        if priority is not None:
+            rule.priority = priority
+        if amount_min is not None:
+            rule.amount_min = amount_min
+        if amount_max is not None:
+            rule.amount_max = amount_max
+        if clear_amount_min:
+            rule.amount_min = None
+        if clear_amount_max:
+            rule.amount_max = None
+        if neutral is not None:
+            rule.neutral = neutral
+        if (
+            rule.amount_min is not None
+            and rule.amount_max is not None
+            and rule.amount_min > rule.amount_max
+        ):
+            raise ValueError(
+                f"Rango de importe inválido: mínimo {rule.amount_min:g} > "
+                f"máximo {rule.amount_max:g}."
+            )
+        s.commit()
+        changed = apply_rules(s)
+        return {
+            "id": rule.id,
+            "pattern": rule.pattern,
+            "category": rule.category,
+            "field": rule.field,
+            "priority": rule.priority,
+            "amount_min": rule.amount_min,
+            "amount_max": rule.amount_max,
+            "neutral": rule.neutral,
+            "recategorized": changed,
+        }
+
+
+@mcp.tool()
 def set_rule_neutral(rule_id: int, neutral: bool = True) -> dict:
     """Marca (o desmarca) una regla como neutral y reaplica las reglas."""
     from finmcp.analytics.categorization import apply_rules

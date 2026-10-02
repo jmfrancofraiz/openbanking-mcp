@@ -145,7 +145,7 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp status` | Estado de la última sincronización por banco |
 | `finmcp import-csv` | Importa movimientos desde un CSV (histórico anterior a 90 días) |
 | `finmcp categorize` | Reaplica tus reglas de categorización |
-| `finmcp rules add/list/tag/untag/neutral` | Gestiona reglas de categorización, sus etiquetas y si son neutrales |
+| `finmcp rules add/update/list/tag/untag/neutral` | Añade, edita y lista reglas de categorización, sus etiquetas y su condición de neutral |
 | `finmcp neutral TX_ID...` | Marca movimientos como no computables (`--off` para desmarcar) |
 | `finmcp recategorize TX_ID CATEGORÍA` | Fija a mano la categoría de un movimiento; las reglas no lo volverán a tocar |
 | `finmcp skip-rules TX_ID...` | Desactiva las reglas para esos movimientos (`--off` para reactivarlas) |
@@ -159,7 +159,7 @@ Equivalentes a los comandos del CLI, salvo `auth` (solo CLI, requiere navegador)
 `list_accounts` · `get_balances` · `get_transactions` · `search_transactions` ·
 `spend_by_category_tool` · `list_subscriptions` · `unusual_charges` ·
 `monthly_summary_tool` · `sync_status` · `sync` · `list_banks` · `list_institutions` ·
-`import_csv` · `categorize` · `add_category_rule` · `list_category_rules` ·
+`import_csv` · `categorize` · `add_category_rule` · `update_category_rule` · `list_category_rules` ·
 `add_rule_tags` · `remove_rule_tags` · `set_rule_neutral` · `list_tags` · `create_tag` ·
 `delete_tag` · `tag_transactions` · `untag_transactions` · `set_transactions_neutral` ·
 `recategorize_transaction` · `set_transactions_skip_rules` · `spend_by_tag_tool`
@@ -218,6 +218,19 @@ finmcp categorize            # reaplica todas las reglas
 
 Las reglas se reaplican automáticamente al final de cada `finmcp sync`.
 `my_category` (manual/regla) tiene prioridad sobre cualquier categoría del proveedor.
+
+Para **corregir una regla existente** (patrón, categoría, campo, prioridad, importes o
+neutral) sin crear duplicados, `rules update` edita solo los campos indicados y reaplica
+las reglas al momento:
+
+```bash
+finmcp rules update 42 --category "Nueva categoría"       # renombra la categoría
+finmcp rules update 42 --pattern "otro texto"             # corrige el patrón
+finmcp rules update 42 --amount-min 100 --amount-max 150  # ajusta el rango de importe
+finmcp rules update 42 --clear-amount-min                 # quita el mínimo
+finmcp rules update 42 --priority 50                      # prioridad (menor = se evalúa antes)
+finmcp rules update 42 --neutral                          # marca neutral (--no-neutral para desmarcar)
+```
 
 ## Movimientos no computables (neutrales)
 
