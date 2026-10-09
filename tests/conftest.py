@@ -52,6 +52,7 @@ def make_tx(session):
         currency: str = "EUR",
         neutral: bool = False,
         skip_category_rules: bool = False,
+        is_bill: bool = False,
     ) -> Transaction:
         counter["n"] += 1
         tx = Transaction(
@@ -67,6 +68,7 @@ def make_tx(session):
             my_category=my_category,
             neutral=neutral,
             skip_category_rules=skip_category_rules,
+            is_bill=is_bill,
         )
         session.add(tx)
         session.commit()

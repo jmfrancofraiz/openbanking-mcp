@@ -3,8 +3,8 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from finmcp.analytics.categories import category_of, spend_by_category
-from finmcp.analytics.subscriptions import _merchant_key
 from finmcp.db.queries import query_transactions
+from finmcp.util import merchant_key as _merchant_key
 from finmcp.util import month_bounds
 
 

@@ -154,10 +154,11 @@ def _echo_txs(rows: list[dict]) -> None:
         tags = "".join(f" #{n}" for n in t["tags"])
         neutral_txt = " (neutral)" if t.get("neutral") else ""
         manual_txt = " (manual)" if t.get("skip_category_rules") else ""
+        bill_txt = " (recibo)" if t.get("is_bill") else ""
         typer.echo(
             f"{t['date']}  {sign}{t['amount']:>10.2f} {t['currency']}  "
             f"{t['merchant'] or t['description'] or ''}  "
-            f"[{t['category'] or 's/cat'}]{tags}{neutral_txt}{manual_txt}  "
+            f"[{t['category'] or 's/cat'}]{tags}{neutral_txt}{manual_txt}{bill_txt}  "
             f"(id={t['id']}, cuenta={t['account_id']})"
         )
 
@@ -235,15 +236,15 @@ def spend(
 
 
 @app.command()
-def subscriptions(
+def bills(
     months: int = typer.Option(6, "--months", help="Meses hacia atrás a analizar"),
 ) -> None:
-    """Cargos recurrentes detectados (suscripciones / domiciliaciones)."""
-    from finmcp.mcp.server import list_subscriptions
+    """Recibos / pagos recurrentes marcados vía reglas (campo `is_bill`)."""
+    from finmcp.mcp.server import list_bills
 
-    rows = _query(list_subscriptions, lookback_months=months)
+    rows = _query(list_bills, lookback_months=months)
     if not rows:
-        typer.echo("No se detectan cargos recurrentes.")
+        typer.echo("No hay recibos marcados en el periodo.")
         raise typer.Exit()
     for r in rows:
         typer.echo(
@@ -394,6 +395,9 @@ def rules_add(
     neutral: bool = typer.Option(
         False, "--neutral", help="Los movimientos que casen no computan como ingreso/gasto"
     ),
+    is_bill: bool = typer.Option(
+        False, "--is-bill", help="Los movimientos que casen quedan marcados como recibo"
+    ),
 ) -> None:
     """Añade una regla (opcionalmente con rango de importe) y la aplica a lo existente."""
     from finmcp.mcp.server import add_category_rule
@@ -408,13 +412,15 @@ def rules_add(
         amount_min,
         amount_max,
         neutral,
+        is_bill,
     )
     tags = "".join(f" #{t}" for t in tag or [])
     cond = _amount_range(amount_min, amount_max)
     cond_txt = f" [{cond}]" if cond else ""
     neutral_txt = " (neutral)" if neutral else ""
+    bill_txt = " (recibo)" if is_bill else ""
     typer.echo(
-        f"Regla añadida (id={r['id']}): '{pattern}' -> {category}{tags}{cond_txt}{neutral_txt} · "
+        f"Regla añadida (id={r['id']}): '{pattern}' -> {category}{tags}{cond_txt}{neutral_txt}{bill_txt} · "
         f"recategorizadas {r['recategorized']} tx"
     )
 
@@ -443,6 +449,11 @@ def rules_update(
         "--neutral/--no-neutral",
         help="Marca o desmarca la regla como neutral (si se omite, no se toca)",
     ),
+    is_bill: bool | None = typer.Option(
+        None,
+        "--is-bill/--no-is-bill",
+        help="Marca o desmarca la regla como recibo (si se omite, no se toca)",
+    ),
 ) -> None:
     """Edita una regla existente y reaplica las reglas.
 
@@ -463,13 +474,15 @@ def rules_update(
         clear_amount_min,
         clear_amount_max,
         neutral,
+        is_bill,
     )
     cond = _amount_range(r.get("amount_min"), r.get("amount_max"))
     cond_txt = f" [{cond}]" if cond else ""
     neutral_txt = " (neutral)" if r.get("neutral") else ""
+    bill_txt = " (recibo)" if r.get("is_bill") else ""
     typer.echo(
         f"Regla {r['id']} actualizada: '{r['pattern']}' ({r['field']}) -> "
-        f"{r['category']}{cond_txt}{neutral_txt} · recategorizadas {r['recategorized']} tx"
+        f"{r['category']}{cond_txt}{neutral_txt}{bill_txt} · recategorizadas {r['recategorized']} tx"
     )
 
 
@@ -502,6 +515,19 @@ def rules_neutral(
 
     r = _query(set_rule_neutral, rule_id, not off)
     estado = "neutral" if r["neutral"] else "computable"
+    typer.echo(f"Regla {rule_id}: {estado} · actualizadas {r['recategorized']} tx")
+
+
+@rules_app.command("bill")
+def rules_bill(
+    rule_id: int = typer.Argument(..., help="Id de la regla"),
+    off: bool = typer.Option(False, "--off", help="Desmarcar en vez de marcar"),
+) -> None:
+    """Marca una regla como recibo / pago recurrente y reaplica las reglas."""
+    from finmcp.mcp.server import set_rule_is_bill
+
+    r = _query(set_rule_is_bill, rule_id, not off)
+    estado = "recibo" if r["is_bill"] else "no recibo"
     typer.echo(f"Regla {rule_id}: {estado} · actualizadas {r['recategorized']} tx")
 
 
@@ -543,9 +569,10 @@ def rules_list() -> None:
         cond = _amount_range(r.get("amount_min"), r.get("amount_max"))
         cond_txt = f" [{cond}]" if cond else ""
         neutral_txt = " (neutral)" if r.get("neutral") else ""
+        bill_txt = " (recibo)" if r.get("is_bill") else ""
         typer.echo(
             f"[{r['priority']}] '{r['pattern']}' ({r['field']}) -> {r['category']}{tags}{cond_txt}"
-            f"{neutral_txt}  (id={r['id']})"
+            f"{neutral_txt}{bill_txt}  (id={r['id']})"
         )
 
 

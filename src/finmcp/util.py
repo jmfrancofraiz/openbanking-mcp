@@ -26,3 +26,8 @@ def month_bounds(year: int, month: int) -> tuple[datetime, datetime]:
     start = datetime(year, month, 1, tzinfo=timezone.utc)
     end = datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc)
     return start, end
+
+
+def merchant_key(tx) -> str:
+    """Clave de agrupación por comercio: nombre de comercio o, en su defecto, descripción."""
+    return (tx.merchant_name or tx.description or "Desconocido").strip().lower()

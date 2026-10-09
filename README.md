@@ -139,13 +139,13 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp transactions` | Movimientos (`--account`, `--bank`, `--from`, `--to`, `--type`, `--tag`, `--limit`) |
 | `finmcp search TEXTO` | Busca movimientos por comercio o concepto (`--tag`) |
 | `finmcp spend` | Gasto por categoría (`--from`, `--to`) |
-| `finmcp subscriptions` | Cargos recurrentes detectados (`--months`) |
+| `finmcp bills` | Recibos / pagos recurrentes marcados vía reglas (`--months`) |
 | `finmcp unusual` | Cargos atípicos (`--from`, `--to`) |
 | `finmcp summary AÑO MES` | Resumen mensual (con sección aparte de movimientos no computables) |
 | `finmcp status` | Estado de la última sincronización por banco |
 | `finmcp import-csv` | Importa movimientos desde un CSV (histórico anterior a 90 días) |
 | `finmcp categorize` | Reaplica tus reglas de categorización |
-| `finmcp rules add/update/remove/list/tag/untag/neutral` | Añade, edita, elimina y lista reglas de categorización, sus etiquetas y su condición de neutral |
+| `finmcp rules add/update/remove/list/tag/untag/neutral/bill` | Añade, edita, elimina y lista reglas de categorización, sus etiquetas y sus condiciones de neutral/recibo |
 | `finmcp neutral TX_ID...` | Marca movimientos como no computables (`--off` para desmarcar) |
 | `finmcp recategorize TX_ID CATEGORÍA` | Fija a mano la categoría de un movimiento; las reglas no lo volverán a tocar |
 | `finmcp skip-rules TX_ID...` | Desactiva las reglas para esos movimientos (`--off` para reactivarlas) |
@@ -157,10 +157,10 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 Equivalentes a los comandos del CLI, salvo `auth` (solo CLI, requiere navegador) y `serve`:
 
 `list_accounts` · `get_balances` · `get_transactions` · `search_transactions` ·
-`spend_by_category_tool` · `list_subscriptions` · `unusual_charges` ·
+`spend_by_category_tool` · `list_bills` · `unusual_charges` ·
 `monthly_summary_tool` · `sync_status` · `sync` · `list_banks` · `list_institutions` ·
 `import_csv` · `categorize` · `add_category_rule` · `update_category_rule` · `remove_category_rules` · `list_category_rules` ·
-`add_rule_tags` · `remove_rule_tags` · `set_rule_neutral` · `list_tags` · `create_tag` ·
+`add_rule_tags` · `remove_rule_tags` · `set_rule_neutral` · `set_rule_is_bill` · `list_tags` · `create_tag` ·
 `delete_tag` · `tag_transactions` · `untag_transactions` · `set_transactions_neutral` ·
 `recategorize_transaction` · `set_transactions_skip_rules` · `spend_by_tag_tool`
 

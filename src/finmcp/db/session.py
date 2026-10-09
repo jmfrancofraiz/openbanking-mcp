@@ -17,10 +17,12 @@ def _ensure_schema_upgrades() -> None:
             "amount_min": "FLOAT",
             "amount_max": "FLOAT",
             "neutral": "BOOLEAN NOT NULL DEFAULT 0",
+            "is_bill": "BOOLEAN NOT NULL DEFAULT 0",
         },
         "transactions": {
             "neutral": "BOOLEAN NOT NULL DEFAULT 0",
             "skip_category_rules": "BOOLEAN NOT NULL DEFAULT 0",
+            "is_bill": "BOOLEAN NOT NULL DEFAULT 0",
         },
     }
     inspector = inspect(engine)

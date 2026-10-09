@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Read-only personal-finance MCP server over Open Banking (PSD2). Pulls accounts, balances and
 transactions from a bank via an aggregator (Enable Banking by default), stores them in a local
-SQLite database, and exposes analytics (spend by category, subscriptions, unusual charges,
+SQLite database, and exposes analytics (spend by category, bills/recurring payments, unusual charges,
 monthly summaries) as MCP tools. Code comments, docstrings, CLI output and README are in Spanish;
 keep new user-facing strings and comments in Spanish for consistency.
 
@@ -76,7 +76,14 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   category); expense analytics query with `neutral=False`, and `monthly_summary` lists them apart.
 - **Manual override**: `Transaction.skip_category_rules` (set by `finmcp recategorize` /
   `set_transactions_skip_rules`) freezes a hand-picked category; `apply_rules` skips those
-  transactions entirely — category, neutral and rule tags untouched.
+  transactions entirely — category, neutral, is_bill and rule tags untouched.
+- **Bills / recurring payments**: `Transaction.is_bill` and `CategoryRule.is_bill` mark a
+  transaction/rule as a recibo (direct debit, subscription...). `apply_rules` copies `is_bill`
+  from the winning rule, exactly like `neutral`. There is no heuristic detector any more
+  (the old `analytics/subscriptions.py` amount-stability/cadence guesswork was removed);
+  `analytics/bills.list_bills` / `finmcp bills` / MCP tool `list_bills` simply query
+  `is_bill=True` and group by merchant for display. Managed via `finmcp rules add --is-bill`,
+  `finmcp rules update --is-bill/--no-is-bill`, `finmcp rules bill RULE_ID [--off]`.
 - **Tags** (`analytics/tagging.py`): canonical `tags` table, N:M with transactions via
   `transaction_tags` (`source` = `manual` | `rule` | `excluded`) and with `CategoryRule` via
   `category_rule_tags`. `apply_rules` gives each tx the union of tags of *all* matching rules,
@@ -86,7 +93,8 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
 - **Analytics** (`analytics/`): pure functions taking a SQLAlchemy `Session`, all reading through
   `db/queries.query_transactions`. Unusual charges use median + MAD (not mean/stddev) so a single
   spike does not contaminate its own baseline; when MAD is 0 it falls back to a 50%-over-median
-  rule. Subscriptions group by `_merchant_key` (merchant, else description, lowercased).
+  rule. Both `anomalies.py` and `bills.py` group by `util.merchant_key` (merchant, else
+  description, lowercased).
 - **CSV/Excel importer** (`importers/csv_import.py`): for history older than the ~90 days PSD2
   allows. Header detection is heuristic (Spanish/English key lists at the top of the file),each
   bank's link (session id + account list) is stored via `save_secret(name, ...)` where `name` is

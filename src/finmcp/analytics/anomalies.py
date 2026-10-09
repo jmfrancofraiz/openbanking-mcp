@@ -5,8 +5,8 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from finmcp.analytics.subscriptions import _merchant_key
 from finmcp.db.queries import query_transactions
+from finmcp.util import merchant_key as _merchant_key
 
 # Factor de consistencia para convertir MAD en un estimador robusto de sigma
 # bajo normalidad: 1 / Phi^-1(0.75) ≈ 1.4826.

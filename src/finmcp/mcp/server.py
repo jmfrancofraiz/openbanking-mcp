@@ -4,8 +4,8 @@ from mcp.server.fastmcp import FastMCP
 
 from finmcp.analytics import tagging
 from finmcp.analytics.anomalies import detect_unusual_charges
+from finmcp.analytics.bills import list_bills as _list_bills
 from finmcp.analytics.categories import category_of, spend_by_category
-from finmcp.analytics.subscriptions import detect_subscriptions
 from finmcp.analytics.summaries import monthly_summary
 from finmcp.db import models, queries
 from finmcp.db.session import SessionLocal, init_db
@@ -27,6 +27,7 @@ def _tx_dict(t: models.Transaction) -> dict:
         "category": category_of(t),
         "neutral": t.neutral,
         "skip_category_rules": t.skip_category_rules,
+        "is_bill": t.is_bill,
         "tags": t.tag_names,
     }
 
@@ -111,10 +112,14 @@ def spend_by_category_tool(
 
 
 @mcp.tool()
-def list_subscriptions(lookback_months: int = 6) -> list[dict]:
-    """Cargos recurrentes detectados (suscripciones / domiciliaciones)."""
+def list_bills(lookback_months: int = 6) -> list[dict]:
+    """Recibos / pagos recurrentes (domiciliaciones, suscripciones) marcados vía reglas.
+
+    Consulta `Transaction.is_bill`, heredado de la regla de categorización
+    ganadora (`CategoryRule.is_bill`); no hay heurística de detección.
+    """
     with SessionLocal() as s:
-        return detect_subscriptions(s, lookback_months=lookback_months)
+        return _list_bills(s, lookback_months=lookback_months)
 
 
 @mcp.tool()
@@ -248,6 +253,7 @@ def add_category_rule(
     amount_min: float | None = None,
     amount_max: float | None = None,
     neutral: bool = False,
+    is_bill: bool = False,
 ) -> dict:
     """Añade una regla de categorización y la aplica a los movimientos existentes.
 
@@ -256,6 +262,7 @@ def add_category_rule(
     (se crean en el catálogo si no existen). `amount_min`/`amount_max` limitan la regla
     a movimientos dentro de ese rango de importe (ambos opcionales). Con `neutral` los
     movimientos que casen no computan como ingreso/gasto (traspasos, liquidaciones de tarjeta).
+    Con `is_bill` los movimientos que casen quedan marcados como recibo / pago recurrente.
     """
     from finmcp.analytics.categorization import apply_rules
 
@@ -270,6 +277,7 @@ def add_category_rule(
             amount_min=amount_min,
             amount_max=amount_max,
             neutral=neutral,
+            is_bill=is_bill,
         )
         rule.tags = [tagging.get_or_create_tag(s, t) for t in tagging.unique_tag_names(tags or [])]
         s.add(rule)
@@ -291,12 +299,13 @@ def update_category_rule(
     clear_amount_min: bool = False,
     clear_amount_max: bool = False,
     neutral: bool | None = None,
+    is_bill: bool | None = None,
 ) -> dict:
     """Edita una regla de categorización existente y reaplica las reglas.
 
     Solo se cambian los campos indicados (los omitidos se conservan).
     `clear_amount_min`/`clear_amount_max` retiran la condición de importe;
-    `neutral=None` (por defecto) no altera la condición de neutral.
+    `neutral=None`/`is_bill=None` (por defecto) no alteran esas condiciones.
     Devuelve el estado final de la regla y cuántas tx se recategorizaron.
     """
     from finmcp.analytics.categorization import apply_rules
@@ -311,6 +320,7 @@ def update_category_rule(
         and not clear_amount_min
         and not clear_amount_max
         and neutral is None
+        and is_bill is None
     ):
         raise ValueError("Nada que actualizar: indica al menos un campo.")
     if pattern is not None and not pattern.strip():
@@ -346,6 +356,8 @@ def update_category_rule(
             rule.amount_max = None
         if neutral is not None:
             rule.neutral = neutral
+        if is_bill is not None:
+            rule.is_bill = is_bill
         if (
             rule.amount_min is not None
             and rule.amount_max is not None
@@ -366,6 +378,7 @@ def update_category_rule(
             "amount_min": rule.amount_min,
             "amount_max": rule.amount_max,
             "neutral": rule.neutral,
+            "is_bill": rule.is_bill,
             "recategorized": changed,
         }
 
@@ -430,6 +443,21 @@ def set_rule_neutral(rule_id: int, neutral: bool = True) -> dict:
 
 
 @mcp.tool()
+def set_rule_is_bill(rule_id: int, is_bill: bool = True) -> dict:
+    """Marca (o desmarca) una regla como recibo / pago recurrente y reaplica las reglas."""
+    from finmcp.analytics.categorization import apply_rules
+
+    with SessionLocal() as s:
+        rule = s.get(models.CategoryRule, rule_id)
+        if rule is None:
+            raise ValueError(f"No existe la regla {rule_id}.")
+        rule.is_bill = is_bill
+        s.commit()
+        changed = apply_rules(s)
+    return {"id": rule_id, "is_bill": is_bill, "recategorized": changed}
+
+
+@mcp.tool()
 def add_rule_tags(rule_id: int, tags: list[str]) -> dict:
     """Añade etiquetas a una regla de categoría y reaplica las reglas."""
     from finmcp.analytics.categorization import apply_rules
@@ -470,6 +498,7 @@ def list_category_rules() -> list[dict]:
                 "amount_min": r.amount_min,
                 "amount_max": r.amount_max,
                 "neutral": r.neutral,
+                "is_bill": r.is_bill,
                 "tags": sorted(t.name for t in r.tags),
             }
             for r in rows

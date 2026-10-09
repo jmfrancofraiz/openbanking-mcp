@@ -82,6 +82,9 @@ class Transaction(Base):
     neutral: Mapped[bool] = mapped_column(Boolean, default=False)
     # Categoría fijada a mano (`finmcp recategorize`): las reglas no la recategorizan.
     skip_category_rules: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Recibo / pago recurrente (domiciliación, suscripción...). Heredado de la
+    # regla ganadora en `apply_rules`, igual que `neutral`.
+    is_bill: Mapped[bool] = mapped_column(Boolean, default=False)
     raw_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
     account: Mapped["Account"] = relationship(back_populates="transactions")
@@ -131,6 +134,8 @@ class CategoryRule(Base):
     amount_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     amount_max: Mapped[float | None] = mapped_column(Float, nullable=True)
     neutral: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Marca la regla como recibo / pago recurrente (domiciliación, suscripción...).
+    is_bill: Mapped[bool] = mapped_column(Boolean, default=False)
 
     tags: Mapped[list["Tag"]] = relationship(
         secondary=category_rule_tags, back_populates="rules"
