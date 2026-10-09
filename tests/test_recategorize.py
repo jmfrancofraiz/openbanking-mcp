@@ -18,11 +18,44 @@ def test_recategorize_transaction(tools, make_tx, session):
 
     r = tools.recategorize_transaction(tx.id, "Ahorro")
 
-    assert r == {"id": tx.id, "category": "Ahorro", "skip_category_rules": True}
+    assert r == {
+        "id": tx.id,
+        "category": "Ahorro",
+        "skip_category_rules": True,
+        "is_bill": False,
+    }
     session.expire_all()
     got = session.get(Transaction, tx.id)
     assert got.my_category == "Ahorro"
     assert got.skip_category_rules is True
+    assert got.is_bill is False
+
+
+def test_recategorize_transaction_with_is_bill(tools, make_tx, session):
+    tx = make_tx(45.0, description="Bizum enviado: Sin concepto")
+
+    r = tools.recategorize_transaction(tx.id, "Transferencias personales", is_bill=True)
+
+    assert r == {
+        "id": tx.id,
+        "category": "Transferencias personales",
+        "skip_category_rules": True,
+        "is_bill": True,
+    }
+    session.expire_all()
+    got = session.get(Transaction, tx.id)
+    assert got.my_category == "Transferencias personales"
+    assert got.is_bill is True
+
+
+def test_recategorize_transaction_is_bill_none_preserves_existing(tools, make_tx, session):
+    tx = make_tx(45.0, description="Recibo luz", is_bill=True)
+
+    r = tools.recategorize_transaction(tx.id, "Suministros - Electricidad")
+
+    assert r["is_bill"] is True  # no se pasó is_bill -> se conserva el existente
+    session.expire_all()
+    assert session.get(Transaction, tx.id).is_bill is True
 
 
 def test_recategorize_unknown_id_raises(tools):

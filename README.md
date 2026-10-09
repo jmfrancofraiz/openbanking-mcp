@@ -147,7 +147,7 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp categorize` | Reaplica tus reglas de categorización |
 | `finmcp rules add/update/remove/list/tag/untag/neutral/bill` | Añade, edita, elimina y lista reglas de categorización, sus etiquetas y sus condiciones de neutral/recibo |
 | `finmcp neutral TX_ID...` | Marca movimientos como no computables (`--off` para desmarcar) |
-| `finmcp recategorize TX_ID CATEGORÍA` | Fija a mano la categoría de un movimiento; las reglas no lo volverán a tocar |
+| `finmcp recategorize TX_ID CATEGORÍA [--is-bill/--no-is-bill]` | Fija a mano la categoría de un movimiento (y opcionalmente su condición de recibo); las reglas no lo volverán a tocar |
 | `finmcp skip-rules TX_ID...` | Desactiva las reglas para esos movimientos (`--off` para reactivarlas) |
 | `finmcp tags list/add/delete/assign/remove/spend` | Catálogo de etiquetas y etiquetado manual |
 | `finmcp serve` | Arranca el servidor MCP (stdio; `--http` para remoto) |

@@ -566,11 +566,16 @@ def set_transactions_neutral(transaction_ids: list[str], neutral: bool = True) -
 
 
 @mcp.tool()
-def recategorize_transaction(transaction_id: str, category: str) -> dict:
+def recategorize_transaction(
+    transaction_id: str, category: str, is_bill: bool | None = None
+) -> dict:
     """Recategoriza a mano un movimiento: fija `my_category` y activa `skip_category_rules`.
 
     Mientras `skip_category_rules` esté activo, reaplicar las reglas (sync,
     categorize, cambios en reglas…) no volverá a tocar esta transacción.
+    `is_bill` es opcional: si se omite (`None`), no se toca el flag de recibo
+    / pago recurrente ya existente en la transacción; si se indica (`True`/
+    `False`), lo fija explícitamente.
     """
     with SessionLocal() as s:
         tx = s.get(models.Transaction, transaction_id)
@@ -578,8 +583,16 @@ def recategorize_transaction(transaction_id: str, category: str) -> dict:
             raise ValueError(f"No existe el movimiento {transaction_id}.")
         tx.my_category = category
         tx.skip_category_rules = True
+        if is_bill is not None:
+            tx.is_bill = is_bill
         s.commit()
-    return {"id": transaction_id, "category": category, "skip_category_rules": True}
+        result_is_bill = tx.is_bill
+    return {
+        "id": transaction_id,
+        "category": category,
+        "skip_category_rules": True,
+        "is_bill": result_is_bill,
+    }
 
 
 @mcp.tool()

@@ -339,13 +339,19 @@ def neutral(
 def recategorize(
     tx_id: str = typer.Argument(..., help="Id del movimiento"),
     category: str = typer.Argument(..., help="Categoría a asignar (texto libre)"),
+    is_bill: bool | None = typer.Option(
+        None,
+        "--is-bill/--no-is-bill",
+        help="Marca o desmarca el movimiento como recibo (si se omite, no se toca)",
+    ),
 ) -> None:
     """Recategoriza a mano un movimiento y desactiva las reglas para él."""
     from finmcp.mcp.server import recategorize_transaction
 
-    r = _query(recategorize_transaction, tx_id, category)
+    r = _query(recategorize_transaction, tx_id, category, is_bill)
+    bill_txt = " (recibo)" if r.get("is_bill") else ""
     typer.echo(
-        f"Movimiento {r['id']}: «{r['category']}» · reglas desactivadas "
+        f"Movimiento {r['id']}: «{r['category']}»{bill_txt} · reglas desactivadas "
         "(skip_category_rules)"
     )
 
