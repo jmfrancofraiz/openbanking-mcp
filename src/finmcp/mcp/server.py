@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
+from sqlalchemy.orm import selectinload
 
 from finmcp.analytics import tagging
 from finmcp.analytics.anomalies import detect_unusual_charges
@@ -243,6 +244,14 @@ def categorize(only_new: bool = False) -> dict:
         return {"recategorized": apply_rules(s, only_uncategorized=only_new)}
 
 
+def _account_label(account: models.Account | None, account_id: str) -> str:
+    """Etiqueta legible de una cuenta para mostrar en reglas: `BANCO·…1234`."""
+    if account is None:
+        return account_id
+    tail = (account.iban or "")[-4:]
+    return f"{account.bank_id}·…{tail}" if tail else account.bank_id
+
+
 @mcp.tool()
 def add_category_rule(
     pattern: str,
@@ -254,6 +263,7 @@ def add_category_rule(
     amount_max: float | None = None,
     neutral: bool = False,
     is_bill: bool = False,
+    account_id: str | None = None,
 ) -> dict:
     """Añade una regla de categorización y la aplica a los movimientos existentes.
 
@@ -263,12 +273,20 @@ def add_category_rule(
     a movimientos dentro de ese rango de importe (ambos opcionales). Con `neutral` los
     movimientos que casen no computan como ingreso/gasto (traspasos, liquidaciones de tarjeta).
     Con `is_bill` los movimientos que casen quedan marcados como recibo / pago recurrente.
+    `account_id` (opcional) restringe la regla a una cuenta concreta (ver `finmcp accounts`);
+    si se omite, la regla se evalúa contra movimientos de cualquier cuenta (comportamiento
+    por defecto, igual que antes de esta opción).
     """
     from finmcp.analytics.categorization import apply_rules
 
     if field not in ("merchant", "description", "any"):
         raise ValueError("field debe ser merchant, description o any.")
     with SessionLocal() as s:
+        account = None
+        if account_id is not None:
+            account = s.get(models.Account, account_id)
+            if account is None:
+                raise ValueError(f"No existe la cuenta {account_id}.")
         rule = models.CategoryRule(
             pattern=pattern,
             category=category,
@@ -278,13 +296,20 @@ def add_category_rule(
             amount_max=amount_max,
             neutral=neutral,
             is_bill=is_bill,
+            account_id=account_id,
         )
         rule.tags = [tagging.get_or_create_tag(s, t) for t in tagging.unique_tag_names(tags or [])]
         s.add(rule)
         s.commit()
         rule_id = rule.id
         changed = apply_rules(s)
-    return {"id": rule_id, "recategorized": changed}
+        account_label = None if account_id is None else _account_label(account, account_id)
+    return {
+        "id": rule_id,
+        "account_id": account_id,
+        "account_label": account_label,
+        "recategorized": changed,
+    }
 
 
 @mcp.tool()
@@ -300,12 +325,17 @@ def update_category_rule(
     clear_amount_max: bool = False,
     neutral: bool | None = None,
     is_bill: bool | None = None,
+    account_id: str | None = None,
+    clear_account: bool = False,
 ) -> dict:
     """Edita una regla de categorización existente y reaplica las reglas.
 
     Solo se cambian los campos indicados (los omitidos se conservan).
     `clear_amount_min`/`clear_amount_max` retiran la condición de importe;
     `neutral=None`/`is_bill=None` (por defecto) no alteran esas condiciones.
+    `account_id` fija o cambia la cuenta a la que queda restringida la regla
+    (ver `finmcp accounts`); `clear_account` la retira para que vuelva a aplicar
+    a todas las cuentas.
     Devuelve el estado final de la regla y cuántas tx se recategorizaron.
     """
     from finmcp.analytics.categorization import apply_rules
@@ -321,6 +351,8 @@ def update_category_rule(
         and not clear_amount_max
         and neutral is None
         and is_bill is None
+        and account_id is None
+        and not clear_account
     ):
         raise ValueError("Nada que actualizar: indica al menos un campo.")
     if pattern is not None and not pattern.strip():
@@ -333,6 +365,8 @@ def update_category_rule(
         raise ValueError("No combines --amount-min con --clear-amount-min.")
     if amount_max is not None and clear_amount_max:
         raise ValueError("No combines --amount-max con --clear-amount-max.")
+    if account_id is not None and clear_account:
+        raise ValueError("No combines --account con --clear-account.")
 
     with SessionLocal() as s:
         rule = s.get(models.CategoryRule, rule_id)
@@ -358,6 +392,12 @@ def update_category_rule(
             rule.neutral = neutral
         if is_bill is not None:
             rule.is_bill = is_bill
+        if account_id is not None:
+            if s.get(models.Account, account_id) is None:
+                raise ValueError(f"No existe la cuenta {account_id}.")
+            rule.account_id = account_id
+        if clear_account:
+            rule.account_id = None
         if (
             rule.amount_min is not None
             and rule.amount_max is not None
@@ -379,6 +419,12 @@ def update_category_rule(
             "amount_max": rule.amount_max,
             "neutral": rule.neutral,
             "is_bill": rule.is_bill,
+            "account_id": rule.account_id,
+            "account_label": (
+                None
+                if rule.account_id is None
+                else _account_label(rule.account, rule.account_id)
+            ),
             "recategorized": changed,
         }
 
@@ -485,6 +531,7 @@ def list_category_rules() -> list[dict]:
     with SessionLocal() as s:
         rows = (
             s.query(models.CategoryRule)
+            .options(selectinload(models.CategoryRule.account))
             .order_by(models.CategoryRule.priority.asc(), models.CategoryRule.id.asc())
             .all()
         )
@@ -499,6 +546,10 @@ def list_category_rules() -> list[dict]:
                 "amount_max": r.amount_max,
                 "neutral": r.neutral,
                 "is_bill": r.is_bill,
+                "account_id": r.account_id,
+                "account_label": (
+                    None if r.account_id is None else _account_label(r.account, r.account_id)
+                ),
                 "tags": sorted(t.name for t in r.tags),
             }
             for r in rows

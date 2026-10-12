@@ -18,6 +18,7 @@ def _ensure_schema_upgrades() -> None:
             "amount_max": "FLOAT",
             "neutral": "BOOLEAN NOT NULL DEFAULT 0",
             "is_bill": "BOOLEAN NOT NULL DEFAULT 0",
+            "account_id": "VARCHAR",
         },
         "transactions": {
             "neutral": "BOOLEAN NOT NULL DEFAULT 0",

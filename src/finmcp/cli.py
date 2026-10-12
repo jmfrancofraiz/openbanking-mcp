@@ -130,7 +130,8 @@ def accounts() -> None:
             raise typer.Exit()
         for a in rows:
             typer.echo(
-                f"- [{a.bank_id}] {a.name} ({a.type}) · {a.currency} · {a.iban or 's/IBAN'}"
+                f"- [{a.bank_id}] {a.name} ({a.type}) · {a.currency} · "
+                f"{a.iban or 's/IBAN'} · id={a.id}"
             )
 
 
@@ -385,6 +386,36 @@ def _amount_range(amount_min: float | None, amount_max: float | None) -> str:
     return ""
 
 
+def _resolve_account(account: str | None, bank: str | None) -> str | None:
+    """Resuelve --account/--bank (mutuamente excluyentes) al id de cuenta a usar.
+
+    --account toma el id tal cual (ver `finmcp accounts`); --bank busca la cuenta
+    de ese banco y solo vale si el banco tiene exactamente una cuenta local.
+    """
+    if account and bank:
+        raise typer.BadParameter("No combines --account con --bank; usa solo uno.")
+    if account:
+        return account
+    if not bank:
+        return None
+    from finmcp.db.models import Account
+    from finmcp.db.session import SessionLocal, init_db
+
+    init_db()
+    with SessionLocal() as s:
+        matches = s.query(Account).filter(Account.bank_id == bank).all()
+    if not matches:
+        raise typer.BadParameter(
+            f"No hay cuentas del banco '{bank}' (ver `finmcp accounts`)."
+        )
+    if len(matches) > 1:
+        ids = ", ".join(a.id for a in matches)
+        raise typer.BadParameter(
+            f"El banco '{bank}' tiene varias cuentas ({ids}); usa --account con el id exacto."
+        )
+    return matches[0].id
+
+
 @rules_app.command("add")
 def rules_add(
     pattern: str = typer.Argument(..., help="Subcadena a buscar (case-insensitive)"),
@@ -404,10 +435,17 @@ def rules_add(
     is_bill: bool = typer.Option(
         False, "--is-bill", help="Los movimientos que casen quedan marcados como recibo"
     ),
+    account: str | None = typer.Option(
+        None, "--account", help="Restringe la regla a esta cuenta (id; ver `finmcp accounts`)"
+    ),
+    bank: str | None = typer.Option(
+        None, "--bank", help="Restringe la regla al banco indicado (alternativa a --account)"
+    ),
 ) -> None:
-    """Añade una regla (opcionalmente con rango de importe) y la aplica a lo existente."""
+    """Añade una regla (opcionalmente con rango de importe y/o cuenta) y la aplica a lo existente."""
     from finmcp.mcp.server import add_category_rule
 
+    account_id = _resolve_account(account, bank)
     r = _query(
         add_category_rule,
         pattern,
@@ -419,15 +457,17 @@ def rules_add(
         amount_max,
         neutral,
         is_bill,
+        account_id,
     )
     tags = "".join(f" #{t}" for t in tag or [])
     cond = _amount_range(amount_min, amount_max)
     cond_txt = f" [{cond}]" if cond else ""
     neutral_txt = " (neutral)" if neutral else ""
     bill_txt = " (recibo)" if is_bill else ""
+    account_txt = f" [cuenta={r.get('account_label')}]" if r.get("account_label") else ""
     typer.echo(
-        f"Regla añadida (id={r['id']}): '{pattern}' -> {category}{tags}{cond_txt}{neutral_txt}{bill_txt} · "
-        f"recategorizadas {r['recategorized']} tx"
+        f"Regla añadida (id={r['id']}): '{pattern}' -> {category}{tags}{cond_txt}{neutral_txt}"
+        f"{bill_txt}{account_txt} · recategorizadas {r['recategorized']} tx"
     )
 
 
@@ -460,14 +500,27 @@ def rules_update(
         "--is-bill/--no-is-bill",
         help="Marca o desmarca la regla como recibo (si se omite, no se toca)",
     ),
+    account: str | None = typer.Option(
+        None, "--account", help="Restringe la regla a esta cuenta (id; ver `finmcp accounts`)"
+    ),
+    bank: str | None = typer.Option(
+        None, "--bank", help="Restringe la regla al banco indicado (alternativa a --account)"
+    ),
+    clear_account: bool = typer.Option(
+        False, "--clear-account", help="Quita la restricción de cuenta (vuelve a aplicar a todas)"
+    ),
 ) -> None:
     """Edita una regla existente y reaplica las reglas.
 
     Solo cambia los campos indicados; los omitidos se conservan. Con
-    `--clear-amount-min`/`--clear-amount-max` se retira la condición de importe.
+    `--clear-amount-min`/`--clear-amount-max` se retira la condición de importe;
+    con `--clear-account` se retira la restricción de cuenta.
     """
     from finmcp.mcp.server import update_category_rule
 
+    if (account or bank) and clear_account:
+        raise typer.BadParameter("No combines --account/--bank con --clear-account.")
+    account_id = _resolve_account(account, bank)
     r = _query(
         update_category_rule,
         rule_id,
@@ -481,14 +534,18 @@ def rules_update(
         clear_amount_max,
         neutral,
         is_bill,
+        account_id,
+        clear_account,
     )
     cond = _amount_range(r.get("amount_min"), r.get("amount_max"))
     cond_txt = f" [{cond}]" if cond else ""
     neutral_txt = " (neutral)" if r.get("neutral") else ""
     bill_txt = " (recibo)" if r.get("is_bill") else ""
+    account_txt = f" [cuenta={r.get('account_label')}]" if r.get("account_label") else ""
     typer.echo(
         f"Regla {r['id']} actualizada: '{r['pattern']}' ({r['field']}) -> "
-        f"{r['category']}{cond_txt}{neutral_txt}{bill_txt} · recategorizadas {r['recategorized']} tx"
+        f"{r['category']}{cond_txt}{neutral_txt}{bill_txt}{account_txt} · "
+        f"recategorizadas {r['recategorized']} tx"
     )
 
 
@@ -576,9 +633,10 @@ def rules_list() -> None:
         cond_txt = f" [{cond}]" if cond else ""
         neutral_txt = " (neutral)" if r.get("neutral") else ""
         bill_txt = " (recibo)" if r.get("is_bill") else ""
+        account_txt = f" [cuenta={r.get('account_label')}]" if r.get("account_label") else ""
         typer.echo(
             f"[{r['priority']}] '{r['pattern']}' ({r['field']}) -> {r['category']}{tags}{cond_txt}"
-            f"{neutral_txt}{bill_txt}  (id={r['id']})"
+            f"{neutral_txt}{bill_txt}{account_txt}  (id={r['id']})"
         )
 
 

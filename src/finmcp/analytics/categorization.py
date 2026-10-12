@@ -16,6 +16,8 @@ def _haystack(tx: models.Transaction, field: str) -> str:
 
 
 def _match(tx: models.Transaction, rule: models.CategoryRule) -> bool:
+    if rule.account_id is not None and tx.account_id != rule.account_id:
+        return False
     if rule.amount_min is not None and tx.amount < rule.amount_min:
         return False
     if rule.amount_max is not None and tx.amount > rule.amount_max:
@@ -26,7 +28,8 @@ def _match(tx: models.Transaction, rule: models.CategoryRule) -> bool:
 def apply_rules(session: Session, only_uncategorized: bool = False) -> int:
     """Asigna `my_category`, `neutral` e `is_bill` según las reglas. Gana la de menor `priority`.
 
-    Cada regla puede limitar además por importe (amount_min/amount_max, opcionales).
+    Cada regla puede limitar además por importe (amount_min/amount_max, opcionales)
+    y por cuenta (account_id, opcional; None = aplica a todas las cuentas).
     Las etiquetas son la unión de las de todas las reglas que casan.
     Las transacciones con `skip_category_rules=True` (categoría fijada a mano, p.ej.
     vía `finmcp recategorize`) se saltan por completo: no se toca su categoría,

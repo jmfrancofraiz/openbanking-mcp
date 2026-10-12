@@ -136,10 +136,15 @@ class CategoryRule(Base):
     neutral: Mapped[bool] = mapped_column(Boolean, default=False)
     # Marca la regla como recibo / pago recurrente (domiciliación, suscripción...).
     is_bill: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Restringe la regla a una cuenta concreta (opcional); NULL = aplica a todas las cuentas.
+    account_id: Mapped[str | None] = mapped_column(
+        ForeignKey("accounts.id"), nullable=True
+    )
 
     tags: Mapped[list["Tag"]] = relationship(
         secondary=category_rule_tags, back_populates="rules"
     )
+    account: Mapped["Account | None"] = relationship(foreign_keys=[account_id])
 
 
 class SyncRun(Base):
