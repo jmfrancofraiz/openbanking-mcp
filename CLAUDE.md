@@ -67,9 +67,13 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
 - **Categorization**: `Transaction.my_category` (user rules, `CategoryRule` table) always wins
   over `provider_category`; `analytics/categories.category_of` is the single place that encodes
   this precedence. Rules are case-insensitive substring matches on merchant/description/any,
-  lowest `priority` wins; `finmcp rules add`/`update`/`remove` (tools
+  optionally scoped to one account (`CategoryRule.account_id`, nullable — `None` matches any
+  account, the default/backward-compatible behavior), lowest `priority` wins;
+  `finmcp rules add`/`update`/`remove` (tools
   `add_category_rule`/`update_category_rule`/`remove_category_rules`) manage them and every
-  rule mutation reapplies `apply_rules` to the existing data. `repo.upsert_transaction` deliberately does not touch `my_category` so
+  rule mutation reapplies `apply_rules` to the existing data. `--account`/`--bank` (CLI) resolve
+  to `account_id`; `--bank` only resolves when that bank has exactly one local account.
+  `repo.upsert_transaction` deliberately does not touch `my_category` so
   re-syncs preserve manual categorization.
 - **Neutral transactions**: `Transaction.neutral` marks transfers/card settlements that are
   neither income nor expense. `apply_rules` copies `neutral` from the winning rule (like the

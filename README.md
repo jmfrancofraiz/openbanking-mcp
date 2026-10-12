@@ -145,7 +145,7 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp status` | Estado de la última sincronización por banco |
 | `finmcp import-csv` | Importa movimientos desde un CSV (histórico anterior a 90 días) |
 | `finmcp categorize` | Reaplica tus reglas de categorización |
-| `finmcp rules add/update/remove/list/tag/untag/neutral/bill` | Añade, edita, elimina y lista reglas de categorización, sus etiquetas y sus condiciones de neutral/recibo |
+| `finmcp rules add/update/remove/list/tag/untag/neutral/bill` | Añade, edita, elimina y lista reglas de categorización, sus etiquetas, sus condiciones de neutral/recibo y su cuenta (`--account`/`--bank`, opcional) |
 | `finmcp neutral TX_ID...` | Marca movimientos como no computables (`--off` para desmarcar) |
 | `finmcp recategorize TX_ID CATEGORÍA [--is-bill/--no-is-bill]` | Fija a mano la categoría de un movimiento (y opcionalmente su condición de recibo); las reglas no lo volverán a tocar |
 | `finmcp skip-rules TX_ID...` | Desactiva las reglas para esos movimientos (`--off` para reactivarlas) |
@@ -232,6 +232,26 @@ finmcp rules update 42 --priority 50                      # prioridad (menor = s
 finmcp rules update 42 --neutral                          # marca neutral (--no-neutral para desmarcar)
 finmcp rules remove 42                                    # elimina la regla (varias: rules remove 42 43)
 ```
+
+### Reglas por cuenta (opcional)
+
+Una regla puede restringirse a una única cuenta — útil cuando el mismo texto (p. ej.
+"Transferencia emitida periódica") significa cosas distintas según el banco. Por
+defecto (sin `--account`/`--bank`) una regla sigue aplicando a todas las cuentas,
+igual que antes de esta opción.
+
+```bash
+finmcp accounts                                           # lista cuentas con su id
+finmcp rules add "cuota club" "Ocio" --account 2131bb2d-...   # por id exacto
+finmcp rules add "cuota club" "Ocio" --bank ING               # por banco (si tiene 1 sola cuenta)
+finmcp rules update 42 --account 2131bb2d-...             # restringe una regla existente
+finmcp rules update 42 --clear-account                    # vuelve a aplicar a todas las cuentas
+```
+
+`--bank` es una comodidad sobre `--account`: solo resuelve si ese banco tiene
+exactamente una cuenta local; si tiene varias (p. ej. tras una reautenticación que
+deja un id antiguo vivo), pide usar `--account` con el id exacto. `rules list`
+muestra la cuenta como `[cuenta=BANCO·…últimos4]` cuando la regla está restringida.
 
 ## Movimientos no computables (neutrales)
 
