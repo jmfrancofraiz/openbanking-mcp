@@ -135,6 +135,103 @@ def accounts() -> None:
             )
 
 
+@app.command("merge-accounts")
+def merge_accounts(
+    old_id: str = typer.Argument(..., help="Id obsoleto de la cuenta (se retira)"),
+    new_id: str = typer.Argument(..., help="Id vigente de la cuenta (se conserva)"),
+    apply: bool = typer.Option(
+        False, "--apply", help="Aplica el cambio. Sin esta opción solo simula."
+    ),
+) -> None:
+    """Reasigna el histórico de una cuenta duplicada a su id vigente.
+
+    Mueve movimientos, saldos y reglas restringidas del id antiguo al nuevo y
+    retira el id antiguo. Exige que sea la misma cuenta (mismo banco e IBAN) y
+    que ningún movimiento tenga el mismo id en ambas. Con --apply hace antes
+    una copia de seguridad de la BD.
+    """
+    import shutil
+    from datetime import datetime
+
+    from sqlalchemy import func
+
+    from finmcp.config import settings
+    from finmcp.db.models import Account, Balance, CategoryRule, Transaction
+    from finmcp.db.session import SessionLocal, init_db
+
+    init_db()
+    with SessionLocal() as s:
+        old = s.get(Account, old_id)
+        new = s.get(Account, new_id)
+        if old is None or new is None:
+            raise typer.BadParameter("Ambos ids deben existir en `finmcp accounts`.")
+        if old.id == new.id:
+            raise typer.BadParameter("Los dos ids son el mismo.")
+        if old.bank_id != new.bank_id or (old.iban or "") != (new.iban or ""):
+            raise typer.BadParameter(
+                "No son la misma cuenta: banco o IBAN distintos. Operación cancelada."
+            )
+
+        n_tx = s.query(func.count(Transaction.id)).filter(
+            Transaction.account_id == old.id
+        ).scalar()
+        n_bal = s.query(func.count(Balance.id)).filter(
+            Balance.account_id == old.id
+        ).scalar()
+        n_rules = s.query(func.count(CategoryRule.id)).filter(
+            CategoryRule.account_id == old.id
+        ).scalar()
+        old_tx_ids = {
+            r[0]
+            for r in s.query(Transaction.id).filter(Transaction.account_id == old.id)
+        }
+        clash = (
+            s.query(Transaction.id)
+            .filter(Transaction.account_id == new.id, Transaction.id.in_(old_tx_ids))
+            .all()
+            if old_tx_ids
+            else []
+        )
+        if clash:
+            raise typer.BadParameter(
+                f"{len(clash)} movimientos tienen el mismo id en ambas cuentas. "
+                "Operación cancelada."
+            )
+
+        typer.echo(
+            f"Cuenta {old.id} ({old.name}, {old.bank_id}) -> {new.id} ({new.name})"
+        )
+        typer.echo(
+            f"  movimientos: {n_tx} · saldos: {n_bal} · reglas restringidas: {n_rules}"
+        )
+        if not apply:
+            typer.echo("Simulación: no se ha modificado nada. Añade --apply para aplicar.")
+            raise typer.Exit()
+
+        backup = settings.db_path.with_name(
+            f"{settings.db_path.stem}.pre-merge-{datetime.now():%Y%m%d-%H%M%S}.db"
+        )
+        shutil.copy2(settings.db_path, backup)
+        typer.echo(f"Copia de seguridad: {backup}")
+
+        s.query(Transaction).filter(Transaction.account_id == old.id).update(
+            {Transaction.account_id: new.id}, synchronize_session=False
+        )
+        s.query(Balance).filter(Balance.account_id == old.id).update(
+            {Balance.account_id: new.id}, synchronize_session=False
+        )
+        s.query(CategoryRule).filter(CategoryRule.account_id == old.id).update(
+            {CategoryRule.account_id: new.id}, synchronize_session=False
+        )
+        s.flush()
+        s.delete(old)
+        s.commit()
+        typer.echo(
+            f"Hecho: {n_tx} movimientos, {n_bal} saldos y {n_rules} reglas "
+            f"reasignados a {new.id}; id {old.id} retirado."
+        )
+
+
 def _query(fn, *args, **kwargs):
     """Ejecuta una tool del servidor MCP sobre SQLite; fechas inválidas -> BadParameter."""
     from finmcp.db.session import init_db
