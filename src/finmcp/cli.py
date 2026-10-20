@@ -886,14 +886,50 @@ def web(
     Servicio independiente del servidor MCP. Solo atiende clientes de la red local
     (y de Tailscale si se le indica su IP con --host). Abre la BD en solo lectura.
     """
+    from finmcp.config import settings
     from finmcp.web import app as webapp
+    from finmcp.web import auth
 
     try:
         hosts, _ = webapp.validate_hosts(host)
     except ValueError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(2)
+    pin_hash = settings.finmcp_web_pin_hash
+    if pin_hash and not auth.valid_hash(pin_hash):
+        typer.echo(f"Error: {auth.PIN_ENV} no es válido; vuelva a fijar el PIN con `finmcp web-pin`.",
+                   err=True)
+        raise typer.Exit(2)
+    if not pin_hash:
+        typer.echo("Aviso: el panel no tiene PIN; cualquiera en la red local podrá verlo "
+                   "(fíjelo con `finmcp web-pin`).", err=True)
     webapp.run(hosts, port)
+
+
+@app.command("web-pin")
+def web_pin(
+    remove: bool = typer.Option(False, "--remove", help="Quita el PIN (el panel queda abierto en la red local)"),
+) -> None:
+    """Fija o quita el PIN del panel web. Guarda solo su huella en .env, nunca el PIN.
+
+    Reinicie el panel después para aplicarlo (p. ej. `systemctl --user restart finmcp-web`).
+    """
+    from pathlib import Path
+
+    from finmcp.config import settings
+    from finmcp.web import auth
+
+    env = settings._env_file_path or Path(".env")
+    if remove:
+        auth.write_env_value(env, auth.PIN_ENV, None)
+        typer.echo("PIN eliminado. Reinicie el panel para aplicarlo.")
+        return
+    pin = typer.prompt("PIN (de 4 a 12 cifras)", hide_input=True, confirmation_prompt="Repita el PIN")
+    if not auth.valid_pin(pin):
+        typer.echo("Error: el PIN debe tener entre 4 y 12 cifras.", err=True)
+        raise typer.Exit(2)
+    auth.write_env_value(env, auth.PIN_ENV, auth.hash_pin(pin))
+    typer.echo(f"PIN guardado (solo su huella) en {env}. Reinicie el panel para aplicarlo.")
 
 
 if __name__ == "__main__":

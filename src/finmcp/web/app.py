@@ -7,13 +7,16 @@ interfaz estática y una API JSON sobre `analytics/dashboard.py`.
 - La base de datos se abre en modo de solo lectura (`mode=ro`): no hay escrituras.
 - Solo atiende clientes de la red local (loopback y rangos privados) y, si escucha
   en su IP, de Tailscale. Nunca escucha en 0.0.0.0.
-- Sin autenticación: el acceso queda limitado a la red de casa.
+- Con PIN (`finmcp web-pin`): la API exige una cookie de sesión obtenida en
+  POST /api/login; la interfaz estática es pública (no contiene datos).
 """
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import re
+import secrets
 from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
@@ -21,15 +24,17 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from starlette.applications import Starlette
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import MutableHeaders
 from starlette.middleware import Middleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, PlainTextResponse
+from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from finmcp.analytics import dashboard
+from finmcp.web import auth
 
 STATIC_DIR = Path(__file__).parent / "static"
 DEFAULT_PORT = 8790
@@ -161,6 +166,26 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_with_headers)
 
 
+class PinMiddleware:
+    """Con PIN, la API (salvo login/logout) exige una cookie de sesión válida; si no, 401."""
+
+    OPEN = frozenset({"/api/login", "/api/logout"})
+
+    def __init__(self, app, sessions: auth.Sessions) -> None:
+        self.app = app
+        self.sessions = sessions
+
+    async def __call__(self, scope, receive, send) -> None:
+        path = scope.get("path", "")
+        if scope["type"] == "http" and path.startswith("/api/") and path not in self.OPEN:
+            token = Request(scope).cookies.get(auth.SESSION_COOKIE)
+            if not self.sessions.valid(token):
+                response = JSONResponse({"error": "Introduzca el PIN.", "auth": "pin"}, status_code=401)
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
 # --- base de datos -----------------------------------------------------------
 
 
@@ -236,16 +261,56 @@ def create_app(
     *,
     today: Callable[[], date] = date.today,
     allow_tailscale: bool = False,
+    pin_hash: str = "",
+    session_secret: bytes | None = None,
+    throttle: auth.Throttle | None = None,
 ) -> Starlette:
-    """Crea la aplicación del panel sobre una factoría de sesiones (de solo lectura)."""
+    """Crea la aplicación del panel sobre una factoría de sesiones (de solo lectura).
+
+    Con `pin_hash`, la API exige sesión (POST /api/login con el PIN). Sin
+    `session_secret`, las sesiones duran lo que dure el proceso.
+    """
     networks = LAN_NETWORKS + ((TAILSCALE_NETWORK,) if allow_tailscale else ())
+    sessions = auth.Sessions(session_secret or secrets.token_bytes(32), pin_hash) if pin_hash else None
+    throttle = throttle or auth.Throttle()
+    login_lock = asyncio.Lock()
 
     def query(fn):
         with session_factory() as session:
             return fn(session)
 
     def api_meta(request: Request) -> JSONResponse:
-        return JSONResponse(query(lambda s: dashboard.meta(s, today())))
+        return JSONResponse({**query(lambda s: dashboard.meta(s, today())), "pin": bool(pin_hash)})
+
+    async def api_login(request: Request) -> Response:
+        if not sessions:
+            return JSONResponse({"error": "El panel no tiene PIN."}, status_code=404)
+        if request.headers.get("content-type", "").split(";")[0].strip() != "application/json":
+            return JSONResponse({"error": "Se esperaba JSON."}, status_code=415)
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        pin = body.get("pin") if isinstance(body, dict) else None
+        async with login_lock:  # intentos de uno en uno: el freno no se puede esquivar en paralelo
+            wait = throttle.retry_after()
+            if wait:
+                return JSONResponse({"error": "Demasiados intentos fallidos.", "retry_after": wait},
+                                    status_code=429, headers={"Retry-After": str(wait)})
+            if not await run_in_threadpool(auth.verify_pin, pin, pin_hash):
+                throttle.failure()
+                return JSONResponse({"error": "PIN incorrecto.", "retry_after": throttle.retry_after()},
+                                    status_code=401)
+            throttle.success()
+        response = Response(status_code=204)
+        response.set_cookie(auth.SESSION_COOKIE, sessions.issue(), max_age=auth.SESSION_TTL,
+                            path="/", httponly=True, samesite="strict")
+        return response
+
+    async def api_logout(request: Request) -> Response:
+        response = Response(status_code=204)
+        response.delete_cookie(auth.SESSION_COOKIE, path="/", httponly=True, samesite="strict")
+        return response
 
     def api_monthly(request: Request) -> JSONResponse:
         day = _day_param(request)
@@ -282,6 +347,8 @@ def create_app(
         routes=[
             Route("/", index),
             Route("/api/meta", api_meta),
+            Route("/api/login", api_login, methods=["POST"]),
+            Route("/api/logout", api_logout, methods=["POST"]),
             Route("/api/monthly", api_monthly),
             Route("/api/breakdown", api_breakdown),
             Route("/api/series", api_series),
@@ -291,6 +358,7 @@ def create_app(
         middleware=[
             Middleware(SecurityHeadersMiddleware),
             Middleware(LanOnlyMiddleware, networks=networks),
+            *([Middleware(PinMiddleware, sessions=sessions)] if sessions else []),
             Middleware(GZipMiddleware, minimum_size=1024),
         ],
         exception_handlers={ParamError: bad_request},
@@ -306,7 +374,13 @@ def run(hosts: list[str], port: int = DEFAULT_PORT) -> None:
     from finmcp.config import settings
 
     hosts, allow_tailscale = validate_hosts(hosts)
-    app = create_app(readonly_session_factory(settings.db_path), allow_tailscale=allow_tailscale)
+    pin_hash = settings.finmcp_web_pin_hash
+    app = create_app(
+        readonly_session_factory(settings.db_path),
+        allow_tailscale=allow_tailscale,
+        pin_hash=pin_hash,
+        session_secret=auth.load_secret(settings.data_dir / "web_session.key") if pin_hash else None,
+    )
     sockets = []
     for host in hosts:
         family = socket.AF_INET6 if ":" in host else socket.AF_INET
@@ -315,7 +389,8 @@ def run(hosts: list[str], port: int = DEFAULT_PORT) -> None:
         sock.bind((host, port))
         sockets.append(sock)
         shown = f"[{host}]" if ":" in host else host
-        print(f"Panel finmcp (solo lectura) en http://{shown}:{port}/", flush=True)
+        print(f"Panel finmcp (solo lectura{', con PIN' if pin_hash else ''}) en http://{shown}:{port}/",
+              flush=True)
     # proxy_headers=False: la IP del cliente es siempre la del socket (filtro de red local).
     config = uvicorn.Config(app, proxy_headers=False, server_header=False, log_level="info")
     uvicorn.Server(config).run(sockets=sockets)

@@ -29,7 +29,8 @@ pytest -k csv                            # by keyword
 finmcp --help                            # CLI entry point (typer), defined in src/finmcp/cli.py
 finmcp serve                             # MCP over stdio (Claude Desktop / Cursor)
 finmcp serve --http --port 8000          # Streamable HTTP on /mcp; set FINMCP_HTTP_TOKEN for bearer auth
-finmcp web --host 192.168.1.10          # web dashboard on :8790 (read-only, LAN-only, no auth)
+finmcp web-pin                          # set the dashboard PIN (stores only a PBKDF2 hash in .env)
+finmcp web --host 192.168.1.10          # web dashboard on :8790 (read-only, LAN-only, PIN)
 node --test tests/js/lib.test.js        # pure JS helpers of the dashboard UI (Node >= 18)
 ```
 
@@ -112,7 +113,10 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   subtracted from their category, `neutral` excluded, `net` equal to `monthly_summary`; panel
   «categoría» = prefix before « - ». `LanOnlyMiddleware` rejects non-private client IPs (Tailscale
   100.64/10 only when bound to it), `validate_hosts` refuses 0.0.0.0/public binds, uvicorn runs with
-  `proxy_headers=False`, strict CSP (no inline scripts/styles: SVG styling via classes; element
+  `proxy_headers=False`. Optional PIN (`web/auth.py`, `FINMCP_WEB_PIN_HASH`): `PinMiddleware` requires
+  a signed session cookie on `/api/*` (login/logout excepted); `POST /api/login` (JSON only,
+  serialized, global exponential lockout after 5 failures) sets it; the session-signing secret lives
+  in `data/web_session.key` (0600). The static UI is public (no data). Strict CSP (no inline scripts/styles: SVG styling via classes; element
   styles only through CSSOM). The UI is dependency-free vanilla JS: `lib.js` (pure, tested with
   `node --test`) and `app.js` (DOM, hash routes such as `#/mes/AAAA-MM/gastos`).
 - **CSV/Excel importer** (`importers/csv_import.py`): for history older than the ~90 days PSD2

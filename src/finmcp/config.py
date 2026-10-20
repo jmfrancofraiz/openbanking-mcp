@@ -82,6 +82,8 @@ class Settings(BaseSettings):
     # --- Seguridad ---
     finmcp_encryption_key: str = ""
     finmcp_callback_port: int = 3000
+    # Huella del PIN del panel web (`finmcp web-pin`); vacío = panel sin PIN.
+    finmcp_web_pin_hash: str = ""
 
     def __init__(self, **kwargs) -> None:
         env_file = kwargs.get("_env_file", _UNSET)

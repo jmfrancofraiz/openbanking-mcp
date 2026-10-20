@@ -158,6 +158,7 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp tags list/add/delete/assign/remove/spend` | Catálogo de etiquetas y etiquetado manual |
 | `finmcp serve` | Arranca el servidor MCP (stdio; `--http` para remoto) |
 | `finmcp web --host IP [--port 8790]` | Arranca el panel web de solo lectura en la red local ([Panel web](#panel-web-dashboard)) |
+| `finmcp web-pin [--remove]` | Fija (o quita) el PIN del panel web; guarda solo su huella en `.env` |
 
 ## Herramientas MCP
 
@@ -219,11 +220,12 @@ pensado primero para el móvil, para analizar ingresos, gastos y ahorro por cate
 con detalle hasta cada movimiento.
 
 ```bash
+finmcp web-pin                                     # fija el PIN (de 4 a 12 cifras); se pide dos veces
 finmcp web --host 192.168.1.10                     # IP del equipo en tu red local; puerto 8790
 finmcp web --host 192.168.1.10 --host 100.x.y.z    # y además en su IP de Tailscale
 ```
 
-Abre `http://<IP>:8790/` en el navegador del móvil o del PC.
+Abre `http://<IP>:8790/` en el navegador del móvil o del PC e introduce el PIN.
 
 - **Mes**: ingresos y gastos del mes por categoría (donut y lista con minigráfica de 6 meses),
   con detalle por subcategoría y movimientos. Se cambia de mes con las flechas, el selector o deslizando.
@@ -240,10 +242,18 @@ en curso se hace **a la misma fecha** (del día 1 al día de hoy de cada mes).
 Seguridad:
 
 - Servicio aparte del servidor MCP, en otro puerto (8790; el MCP `--http` usa el 8000).
-- Abre la base de datos en **solo lectura** (SQLite `mode=ro`) y solo admite `GET`.
-- **Sin autenticación**: solo atiende clientes de la red local (loopback y rangos privados) y de
-  Tailscale si escucha en su IP; al resto responde 403. Se niega a escuchar en `0.0.0.0` o en una
-  IP pública. **No lo publiques en Internet** (ni con Tailscale Funnel ni redirigiendo puertos).
+- Abre la base de datos en **solo lectura** (SQLite `mode=ro`); los datos solo se consultan con
+  `GET` (los únicos `POST` son entrar y salir con el PIN).
+- **Solo red local**: atiende clientes de la red local (loopback y rangos privados) y de Tailscale
+  si escucha en su IP; al resto responde 403. Se niega a escuchar en `0.0.0.0` o en una IP pública.
+  **No lo publiques en Internet** (ni con Tailscale Funnel ni redirigiendo puertos).
+- **PIN** (`finmcp web-pin`): `.env` guarda solo su huella (`FINMCP_WEB_PIN_HASH`, PBKDF2-SHA256
+  con sal). Al acertar, el navegador recibe una cookie de sesión firmada (`HttpOnly`,
+  `SameSite=Strict`) válida 30 días; cambiar el PIN cierra todas las sesiones. Tras 5 fallos
+  seguidos, cada nuevo fallo bloquea el acceso un tiempo creciente (30 s, 1 min, 2 min... hasta
+  1 h); reiniciar el servicio desbloquea. Sin PIN, el panel queda abierto a la red local (avisa al
+  arrancar). Por HTTP en la red local el PIN viaja sin cifrar por la Wi-Fi de casa; por Tailscale
+  va cifrado.
 - CSP estricta y sin recursos externos; la API no se guarda en caché y el navegador solo recuerda
   preferencias, nunca cifras.
 

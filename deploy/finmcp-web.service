@@ -6,6 +6,7 @@
 #   systemctl --user daemon-reload && systemctl --user enable --now finmcp-web
 #   loginctl enable-linger "$USER"   # para que arranque sin sesión abierta
 # Para servirlo también por Tailscale, añade otro --host con la IP 100.x del equipo.
+# PIN: fíjalo antes con `finmcp web-pin` (lo lee del .env de __PROJECT_DIR__) y reinicia el servicio.
 
 [Unit]
 Description=finmcp · panel web de solo lectura (red local)

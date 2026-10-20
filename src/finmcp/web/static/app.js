@@ -19,6 +19,10 @@
   let CUR = "";      // mes en curso
   let CUT = { day: 1, days: 30 };
   let COVERAGE = []; // [{bank, first_month}]
+  let PIN = false;   // ¿el panel está protegido con PIN?
+
+  // La API responde 401 {auth: "pin"} si falta la sesión: se muestra la pantalla del PIN.
+  class PinRequired extends Error {}
 
   /* ---------- DOM ---------- */
 
@@ -64,6 +68,7 @@
     if (!cache.has(url)) {
       const p = fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" }).then(async (r) => {
         const body = await r.json().catch(() => ({}));
+        if (r.status === 401 && body.auth === "pin") throw new PinRequired(body.error);
         if (!r.ok) throw new Error(body.error || `Error ${r.status}`);
         return body;
       });
@@ -375,6 +380,7 @@
           tipo === "gastos" && b.refunds > 0 ? el("p", {}, ["Las devoluciones (", amt(b.refunds), ") se han descontado del gasto de su categoría."]) : null,
           coverageNote(from),
           el("p", { textContent: "Cambie de mes con las flechas, tocando el nombre del mes o deslizando ⇆." }),
+          PIN ? el("button", { className: "lockbtn", type: "button", textContent: "Bloquear el panel", onclick: lockPanel }) : null,
         ]),
       ]),
       nav("mes"),
@@ -840,6 +846,52 @@
     ];
   }
 
+  /* ---------- PIN ---------- */
+
+  const waitText = (s) => (s >= 90 ? `${Math.ceil(s / 60)} min` : `${s} s`);
+
+  function pinView() {
+    const input = el("input", { type: "password", className: "pin-in", inputMode: "numeric", autocomplete: "off",
+      maxLength: 12, required: true, attrs: { pattern: "[0-9]*", "aria-label": "PIN" } });
+    const msg = el("p", { className: "pin-msg", attrs: { role: "alert" } });
+    const btn = el("button", { className: "link", type: "submit", textContent: "Entrar" });
+    const form = el("form", { className: "pin", attrs: { novalidate: "" } }, [
+      el("img", { src: "/static/favicon.svg", width: 52, height: 52, alt: "" }),
+      el("h1", { textContent: "Finanzas" }),
+      el("p", { className: "muted", textContent: "Introduzca el PIN para ver el panel." }),
+      input, btn, msg,
+    ]);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault(); // envío por fetch: el formulario nunca navega
+      if (!input.value) { input.focus(); return; }
+      btn.disabled = true;
+      msg.textContent = "";
+      try {
+        const r = await fetch("/api/login", { method: "POST", credentials: "same-origin",
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: input.value }) });
+        if (r.ok) { cache.clear(); boot(); return; }
+        const body = await r.json().catch(() => ({}));
+        const wait = body.retry_after || 0;
+        msg.textContent = r.status === 429 ? `Demasiados intentos fallidos. Inténtelo de nuevo en ${waitText(wait)}.`
+          : wait ? `PIN incorrecto. Demasiados intentos: espere ${waitText(wait)}.` : body.error || `Error ${r.status}`;
+      } catch {
+        msg.textContent = "No se ha podido conectar con el panel.";
+      }
+      input.value = "";
+      btn.disabled = false;
+      input.focus();
+    });
+    setTimeout(() => input.focus(), 60);
+    return [form];
+  }
+
+  async function lockPanel() {
+    await fetch("/api/logout", { method: "POST", credentials: "same-origin" }).catch(() => null);
+    cache.clear();
+    app.replaceChildren(...pinView());
+    window.scrollTo(0, 0);
+  }
+
   /* ---------- arranque ---------- */
 
   function errorView(err) {
@@ -865,7 +917,7 @@
       else if (top === "rango" && p.length >= 7) view = await rangeView(p);
       else view = await monthView(MONTHS.includes(p[1]) ? p[1] : CUR, tipoOf(p[2]));
     } catch (err) {
-      view = errorView(err);
+      view = err instanceof PinRequired ? pinView() : errorView(err);
     } finally {
       clearTimeout(slow);
     }
@@ -881,6 +933,7 @@
     try {
       meta = await api("meta");
     } catch (err) {
+      if (err instanceof PinRequired) { app.replaceChildren(...pinView()); return; }
       app.replaceChildren(...errorView(err));
       app.querySelector(".error .link").onclick = () => { cache.clear(); boot(); };
       return;
@@ -890,6 +943,7 @@
     CLOSED = MONTHS.filter((m) => m !== CUR);
     CUT = { day: meta.cut_day, days: meta.days_in_month };
     COVERAGE = meta.coverage;
+    PIN = Boolean(meta.pin);
     if (!started) {
       started = true;
       if ("scrollRestoration" in history) history.scrollRestoration = "manual";

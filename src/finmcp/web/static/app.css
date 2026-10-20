@@ -179,4 +179,15 @@ h2 { font-family:Georgia,serif; font-weight:400; font-size:1.2rem; margin:22px 0
 .nav button.on { color:var(--accent); font-weight:600; }
 .nav svg { width:24px; height:24px; }
 
+/* PIN */
+.pin { max-width:320px; margin:16vh auto 0; padding:0 24px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
+.pin h1 { font-family:Georgia,"Iowan Old Style",serif; font-weight:400; font-size:1.7rem; margin:4px 0 0; }
+.pin p { margin:0; }
+.pin-in { width:100%; min-height:58px; margin-top:8px; text-align:center; font-size:1.9rem; letter-spacing:.45em; padding:0 0 0 .45em; border:1px solid var(--line); border-radius:14px; background:var(--card); }
+.pin-in:focus { outline:2px solid var(--accent2); outline-offset:1px; }
+.pin .link { margin-top:4px; }
+.pin .link:disabled { opacity:.6; }
+.pin-msg { min-height:2.8em; color:var(--bad); font-size:.9rem; }
+.lockbtn { margin-top:8px; min-height:44px; padding:0; border:0; background:none; color:var(--muted); font-size:.82rem; text-decoration:underline; cursor:pointer; }
+
 @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
