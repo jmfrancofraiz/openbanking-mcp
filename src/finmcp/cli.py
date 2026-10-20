@@ -871,5 +871,30 @@ def serve(
     main(http=http, host=host, port=port)
 
 
+@app.command()
+def web(
+    host: list[str] = typer.Option(
+        ["127.0.0.1"],
+        "--host",
+        help="IP en la que escuchar (repetible): loopback, IP de la red local o de Tailscale. "
+        "Nunca 0.0.0.0.",
+    ),
+    port: int = typer.Option(8790, help="Puerto del panel (el MCP --http usa el 8000)"),
+) -> None:
+    """Arranca el panel web de análisis (solo lectura), pensado para el móvil.
+
+    Servicio independiente del servidor MCP. Solo atiende clientes de la red local
+    (y de Tailscale si se le indica su IP con --host). Abre la BD en solo lectura.
+    """
+    from finmcp.web import app as webapp
+
+    try:
+        hosts, _ = webapp.validate_hosts(host)
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(2)
+    webapp.run(hosts, port)
+
+
 if __name__ == "__main__":
     app()
