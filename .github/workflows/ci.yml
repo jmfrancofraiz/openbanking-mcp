@@ -27,3 +27,7 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+      - name: Run JS tests (panel web)
+        if: matrix.python-version == '3.12'
+        run: node --test tests/js/lib.test.js

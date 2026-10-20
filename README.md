@@ -4,6 +4,8 @@ Servidor MCP de **finanzas personales de solo lectura** sobre **Open Banking** (
 vía **[Enable Banking](https://enablebanking.com)**. Consulta cuentas, saldos y
 movimientos de tu banco y genera analítica: gasto por categoría, suscripciones,
 cargos inusuales y resúmenes mensuales — desde Claude Desktop, Cursor o ChatGPT.
+Incluye además un **panel web de solo lectura**, pensado para el móvil, para analizar
+ingresos, gastos y ahorro de forma visual ([Panel web](#panel-web-dashboard)).
 
 > **Solo lectura.** No inicia pagos ni transferencias: solo se piden permisos de datos
 > (cuentas, saldos y movimientos).
@@ -27,9 +29,13 @@ Tu banco (PSD2)
    -> Capa de sincronización        (pull idempotente e incremental)
    -> SQLite (SQLAlchemy)
    -> Capa de analítica             (funciones puras)
-   -> Servidor MCP (solo lectura)
-   -> Cliente MCP: Claude Desktop / Cursor / ChatGPT
+   -> Servidor MCP (solo lectura)   -> Cliente MCP: Claude Desktop / Cursor / ChatGPT
+   -> Panel web (solo lectura)      -> Navegador del móvil o del PC, en la red local
 ```
+
+Tres superficies sobre la misma base de datos: el **CLI** (`finmcp ...`), el **servidor MCP**
+(las mismas operaciones que el CLI, salvo `auth`) y el **panel web** (`finmcp web`), un
+servicio aparte en otro puerto.
 
 El servidor MCP **lee de SQLite, nunca llama al banco en caliente**. La sincronización
 es un proceso aparte (`finmcp sync`, manual o por cron).
@@ -151,6 +157,7 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp skip-rules TX_ID...` | Desactiva las reglas para esos movimientos (`--off` para reactivarlas) |
 | `finmcp tags list/add/delete/assign/remove/spend` | Catálogo de etiquetas y etiquetado manual |
 | `finmcp serve` | Arranca el servidor MCP (stdio; `--http` para remoto) |
+| `finmcp web --host IP [--port 8790]` | Arranca el panel web de solo lectura en la red local ([Panel web](#panel-web-dashboard)) |
 
 ## Herramientas MCP
 
@@ -204,6 +211,51 @@ ngrok http 8000                         # túnel HTTPS -> https://xxxx.ngrok.app
 
 En ChatGPT → Connectors → *Add custom connector*: URL `https://xxxx.ngrok.app/mcp`,
 cabecera `Authorization: Bearer <FINMCP_HTTP_TOKEN>`.
+
+## Panel web (dashboard)
+
+Tercera superficie de finmcp, junto al CLI y al servidor MCP: un panel web **de solo lectura**,
+pensado primero para el móvil, para analizar ingresos, gastos y ahorro por categoría y periodo,
+con detalle hasta cada movimiento.
+
+```bash
+finmcp web --host 192.168.1.10                     # IP del equipo en tu red local; puerto 8790
+finmcp web --host 192.168.1.10 --host 100.x.y.z    # y además en su IP de Tailscale
+```
+
+Abre `http://<IP>:8790/` en el navegador del móvil o del PC.
+
+- **Mes**: ingresos y gastos del mes por categoría (donut y lista con minigráfica de 6 meses),
+  con detalle por subcategoría y movimientos. Se cambia de mes con las flechas, el selector o deslizando.
+- **Evolución**: *Mes a mes* (gasto del mes en curso frente al mes anterior y a las medias de 3 y
+  6 meses, a la misma fecha, y el ahorro de cada mes), *Acumulado* (3 meses, 6 meses, 1 año, año
+  actual o todo; solo meses cerrados) y *Periodo contra periodo* (mes, trimestre, semestre o año).
+- **Tendencias**: 12 meses de las categorías de gasto que elijas, con su tendencia.
+
+Criterios de cálculo: los movimientos neutrales no computan; son categorías de ingreso las que
+empiezan por «Ingresos», más «Otros ingresos» e «Intereses»; las devoluciones se restan del gasto
+de su categoría, y el ahorro coincide con el neto de `finmcp summary`. Toda comparación con el mes
+en curso se hace **a la misma fecha** (del día 1 al día de hoy de cada mes).
+
+Seguridad:
+
+- Servicio aparte del servidor MCP, en otro puerto (8790; el MCP `--http` usa el 8000).
+- Abre la base de datos en **solo lectura** (SQLite `mode=ro`) y solo admite `GET`.
+- **Sin autenticación**: solo atiende clientes de la red local (loopback y rangos privados) y de
+  Tailscale si escucha en su IP; al resto responde 403. Se niega a escuchar en `0.0.0.0` o en una
+  IP pública. **No lo publiques en Internet** (ni con Tailscale Funnel ni redirigiendo puertos).
+- CSP estricta y sin recursos externos; la API no se guarda en caché y el navegador solo recuerda
+  preferencias, nunca cifras.
+
+Como servicio de usuario de systemd (Linux), con la plantilla `deploy/finmcp-web.service`:
+
+```bash
+sed -e "s|__PROJECT_DIR__|$PWD|g" -e "s|__LAN_IP__|192.168.1.10|g" \
+  deploy/finmcp-web.service > ~/.config/systemd/user/finmcp-web.service
+systemctl --user daemon-reload && systemctl --user enable --now finmcp-web
+loginctl enable-linger "$USER"     # para que arranque sin sesión abierta
+journalctl --user -u finmcp-web -f # registro
+```
 
 ## Categorías personalizadas
 
@@ -352,7 +404,8 @@ launchctl unload ~/Library/LaunchAgents/com.openbanking-mcp.sync.plist
 
 ```bash
 pip install -e ".[dev]"
-pytest                       # suite de tests (analítica, mapper, sync, config)
+pytest                       # suite de tests (analítica, mapper, sync, config, panel web)
+node --test tests/js/lib.test.js   # funciones puras de la interfaz del panel (Node ≥ 18)
 ```
 
 La analítica son **funciones puras** testeadas contra una SQLite en memoria; el flujo de

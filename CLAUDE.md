@@ -7,7 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Read-only personal-finance MCP server over Open Banking (PSD2). Pulls accounts, balances and
 transactions from a bank via an aggregator (Enable Banking by default), stores them in a local
 SQLite database, and exposes analytics (spend by category, bills/recurring payments, unusual charges,
-monthly summaries) as MCP tools. Code comments, docstrings, CLI output and README are in Spanish;
+monthly summaries) as MCP tools, plus a mobile-first read-only web dashboard (`finmcp web`).
+Three surfaces share the same SQLite: CLI, MCP server (same operations as the CLI except `auth`)
+and the web dashboard (separate service/port). Code comments, docstrings, CLI output and README are in Spanish;
 keep new user-facing strings and comments in Spanish for consistency.
 
 The `data/` directory (SQLite db, encrypted tokens, Fernet key, private key `.pem`) is
@@ -27,10 +29,12 @@ pytest -k csv                            # by keyword
 finmcp --help                            # CLI entry point (typer), defined in src/finmcp/cli.py
 finmcp serve                             # MCP over stdio (Claude Desktop / Cursor)
 finmcp serve --http --port 8000          # Streamable HTTP on /mcp; set FINMCP_HTTP_TOKEN for bearer auth
+finmcp web --host 192.168.1.10          # web dashboard on :8790 (read-only, LAN-only, no auth)
+node --test tests/js/lib.test.js        # pure JS helpers of the dashboard UI (Node >= 18)
 ```
 
-No linter or formatter is configured. CI (`.github/workflows/ci.yml`) only runs `python -m pytest -q`
-on Python 3.11–3.13. `requires-python >= 3.11`; the code uses `X | None` unions and
+No linter or formatter is configured. CI (`.github/workflows/ci.yml`) runs `python -m pytest -q`
+on Python 3.11–3.13 and the dashboard's JS tests with Node. `requires-python >= 3.11`; the code uses `X | None` unions and
 `from __future__ import annotations` everywhere.
 
 ## Architecture
@@ -99,6 +103,18 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   spike does not contaminate its own baseline; when MAD is 0 it falls back to a 50%-over-median
   rule. Both `anomalies.py` and `bills.py` group by `util.merchant_key` (merchant, else
   description, lowercased).
+- **Web dashboard** (`web/app.py`, `analytics/dashboard.py`, `web/static/`): Starlette app served by
+  `finmcp web` on its own port (8790). Opens the DB through a separate read-only engine
+  (`sqlite:///file:...?mode=ro&uri=true`) and exposes only GET JSON endpoints (`/api/meta`,
+  `/api/monthly[?day=D]`, `/api/breakdown`, `/api/series`, `/api/transactions`) plus a static UI.
+  `analytics/dashboard.py` encodes the dashboard semantics: classification by category, not sign
+  (income = categories starting with «Ingresos» plus «Otros ingresos»/«Intereses»), refunds
+  subtracted from their category, `neutral` excluded, `net` equal to `monthly_summary`; panel
+  «categoría» = prefix before « - ». `LanOnlyMiddleware` rejects non-private client IPs (Tailscale
+  100.64/10 only when bound to it), `validate_hosts` refuses 0.0.0.0/public binds, uvicorn runs with
+  `proxy_headers=False`, strict CSP (no inline scripts/styles: SVG styling via classes; element
+  styles only through CSSOM). The UI is dependency-free vanilla JS: `lib.js` (pure, tested with
+  `node --test`) and `app.js` (DOM, hash routes such as `#/mes/AAAA-MM/gastos`).
 - **CSV/Excel importer** (`importers/csv_import.py`): for history older than the ~90 days PSD2
   allows. Header detection is heuristic (Spanish/English key lists at the top of the file),each
   bank's link (session id + account list) is stored via `save_secret(name, ...)` where `name` is

@@ -1,0 +1,24 @@
+# Plantilla de servicio de usuario de systemd (Linux) para el panel web de finmcp.
+# Sustituye __PROJECT_DIR__ por la ruta absoluta del clon y __LAN_IP__ por la IP del equipo
+# en la red local (no uses 0.0.0.0: el panel la rechaza). Ejemplo:
+#   sed -e "s|__PROJECT_DIR__|$PWD|g" -e "s|__LAN_IP__|192.168.1.10|g" \
+#     deploy/finmcp-web.service > ~/.config/systemd/user/finmcp-web.service
+#   systemctl --user daemon-reload && systemctl --user enable --now finmcp-web
+#   loginctl enable-linger "$USER"   # para que arranque sin sesión abierta
+# Para servirlo también por Tailscale, añade otro --host con la IP 100.x del equipo.
+
+[Unit]
+Description=finmcp · panel web de solo lectura (red local)
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_DIR__
+UnsetEnvironment=PYTHONPATH PYTHONHOME VIRTUAL_ENV
+ExecStart=__PROJECT_DIR__/.venv/bin/finmcp web --host __LAN_IP__ --port 8790
+# Si la red aún no está lista al arrancar, la IP no existe: reintenta.
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

@@ -20,6 +20,8 @@ dependencies = [
   "xlrd>=2.0",
   "typer>=0.12",
   "mcp>=1.2,<2",
+  "starlette>=0.40",
+  "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
