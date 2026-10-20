@@ -53,11 +53,12 @@ def make_tx(session):
         neutral: bool = False,
         skip_category_rules: bool = False,
         is_bill: bool = False,
+        account_id: str = "acc1",
     ) -> Transaction:
         counter["n"] += 1
         tx = Transaction(
             id=f"tx{counter['n']}",
-            account_id="acc1",
+            account_id=account_id,
             amount=amount,
             currency=currency,
             booked_at=booked_at or datetime.now(timezone.utc),
