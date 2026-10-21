@@ -256,3 +256,99 @@ def test_cli_web_rechaza_0000():
 
     assert result.exit_code == 2
     assert "0.0.0.0" in result.output
+
+
+# --- pestaña Diario ------------------------------------------------------------
+
+
+@pytest.fixture
+def diario(Session, session, make_tx):
+    from finmcp.db.models import Balance, SyncRun
+
+    make_tx(12.5, merchant="Café", booked_at=at(2026, 4, 9).replace(tzinfo=None), my_category="Restauración")
+    make_tx(500, type="credit", description="Traspaso", booked_at=at(2026, 4, 9).replace(tzinfo=None),
+            my_category="Traspasos internos", neutral=True)
+    make_tx(60, description="Garaje", booked_at=at(2026, 4, 1).replace(tzinfo=None), is_bill=True,
+            my_category="Vivienda - Garaje")
+    session.add(Balance(account_id="acc1", current=1000.0, currency="EUR",
+                        snapshot_at=datetime(2026, 4, 10, 5, 30)))
+    session.add(SyncRun(bank_id="default", started_at=datetime(2026, 4, 10, 5, 30),
+                        finished_at=datetime(2026, 4, 10, 5, 31), status="ok"))
+    session.commit()
+    app = webapp.create_app(Session, today=lambda: TODAY,
+                            now=lambda: datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc))
+    return TestClient(app, client=LAN)
+
+
+def test_api_accounts_y_tags(diario):
+    body = diario.get("/api/accounts").json()
+
+    assert body["now"] == "2026-04-10T12:00:00Z"
+    [acc] = body["accounts"]
+    assert acc["id"] == "acc1" and acc["state"] == "ok"
+    assert acc["balance"] == {"value": 1000.0, "kind": "actual", "at": "2026-04-10T05:30:00Z"}
+    assert diario.get("/api/tags").json() == {"tags": []}
+
+
+def test_api_ledger_lista_plana_con_no_computables(diario):
+    body = diario.get("/api/ledger").json()
+
+    assert [(t["date"], t["amount"], t["neutral"]) for t in body["transactions"]] == [
+        ("2026-04-09", 500.0, True), ("2026-04-09", -12.5, False), ("2026-04-01", -60.0, False)]
+    assert body["next"] is None and body["closing"] is None
+
+
+def test_api_ledger_filtros_cursor_y_saldo_por_cuenta(diario):
+    assert [t["amount"] for t in diario.get("/api/ledger", params={"type": "cargos"}).json()["transactions"]] == [-12.5, -60.0]
+    assert [t["is_bill"] for t in diario.get("/api/ledger", params={"mark": "recibos"}).json()["transactions"]] == [True]
+    assert len(diario.get("/api/ledger", params={"mark": "no-computables"}).json()["transactions"]) == 1
+    assert len(diario.get("/api/ledger", params={"from": "2026-04-02", "to": "2026-04-30"}).json()["transactions"]) == 2
+    assert [t["merchant"] for t in diario.get("/api/ledger", params={"q": "CAFE"}).json()["transactions"]] == ["Café"]
+
+    first = diario.get("/api/ledger", params={"limit": 2}).json()
+    rest = diario.get("/api/ledger", params={"limit": 2, "cursor": first["next"]}).json()
+    assert [t["id"] for t in first["transactions"] + rest["transactions"]] == ["tx2", "tx1", "tx3"]
+    assert rest["next"] is None
+
+    acc = diario.get("/api/ledger", params={"account": "acc1"}).json()
+    assert acc["closing"] == {"2026-04-09": 1000.0, "2026-04-01": 512.5}
+    assert acc["balance"]["check"]["ok"] == 1
+
+
+def test_api_movement(diario):
+    ok = diario.get("/api/movement", params={"id": "tx1"})
+    missing = diario.get("/api/movement", params={"id": "nada"})
+
+    assert ok.status_code == 200 and ok.json()["merchant"] == "Café"
+    assert ok.json()["account_info"]["id"] == "acc1"
+    assert missing.status_code == 404 and missing.json()["error"]
+
+
+@pytest.mark.parametrize(
+    "path, params",
+    [
+        ("/api/ledger", {"type": "gastos"}),
+        ("/api/ledger", {"mark": "otra"}),
+        ("/api/ledger", {"from": "2026-4-1"}),
+        ("/api/ledger", {"from": "2026-04-10", "to": "2026-04-01"}),
+        ("/api/ledger", {"cursor": "ayer"}),
+        ("/api/ledger", {"cursor": "2026-04-09T00:00:00|tx 1"}),
+        ("/api/ledger", {"limit": "0"}),
+        ("/api/ledger", {"limit": "201"}),
+        ("/api/ledger", {"q": "x" * 101}),
+        ("/api/ledger", {"account": "no-existe"}),
+        ("/api/ledger", {"account": "../etc"}),
+        ("/api/movement", {}),
+        ("/api/movement", {"id": "a b"}),
+    ],
+)
+def test_api_diario_parametros_invalidos(diario, path, params):
+    r = diario.get(path, params=params)
+
+    assert r.status_code == 400
+    assert r.json()["error"]
+
+
+@pytest.mark.parametrize("path", ["/api/accounts", "/api/tags", "/api/ledger", "/api/movement"])
+def test_api_diario_solo_lectura(diario, path):
+    assert diario.post(path).status_code == 405

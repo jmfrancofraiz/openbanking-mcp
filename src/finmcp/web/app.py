@@ -18,7 +18,7 @@ import ipaddress
 import re
 import secrets
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import create_engine
@@ -33,7 +33,8 @@ from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, R
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from finmcp.analytics import dashboard
+from finmcp.analytics import dashboard, ledger
+from finmcp.db import models
 from finmcp.web import auth
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -76,8 +77,16 @@ SECURITY_HEADERS = {
 }
 
 KIND_PARAM = {"gastos": dashboard.EXPENSE, "ingresos": dashboard.INCOME}
+# Pestaña Diario: tipo de movimiento y marca.
+TX_TYPE_PARAM = {"cargos": "debit", "abonos": "credit"}
+MARK_PARAM = {"sin-categoria": "uncategorized", "recibos": "bill",
+              "no-computables": "neutral", "manuales": "manual"}
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+_ID_RE = re.compile(r"^[A-Za-z0-9_.:\-]{1,128}$")
+_CURSOR_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\|([A-Za-z0-9_.:\-]{1,128})$")
+LEDGER_LIMIT = 100
+LEDGER_MAX_LIMIT = 200
 
 
 # --- red local ---------------------------------------------------------------
@@ -253,6 +262,48 @@ def _day_param(request: Request) -> int | None:
     return int(value)
 
 
+def _optional_date(request: Request, name: str) -> date | None:
+    return _date_param(request, name) if request.query_params.get(name) else None
+
+
+def _choice_param(request: Request, name: str, choices: dict[str, str]) -> str | None:
+    value = request.query_params.get(name)
+    if not value:
+        return None
+    if value not in choices:
+        raise ParamError(f"«{name}» debe ser {' o '.join(f'«{c}»' for c in choices)}.")
+    return choices[value]
+
+
+def _text_param(request: Request, name: str, max_len: int = 100) -> str | None:
+    value = (request.query_params.get(name) or "").strip()
+    if len(value) > max_len:
+        raise ParamError(f"«{name}» admite como mucho {max_len} caracteres.")
+    return value or None
+
+
+def _cursor_param(request: Request) -> tuple[datetime, str] | None:
+    value = request.query_params.get("cursor")
+    if not value:
+        return None
+    m = _CURSOR_RE.match(value)
+    if not m:
+        raise ParamError("«cursor» no es válido.")
+    try:
+        return datetime.fromisoformat(m.group(1)), m.group(2)
+    except ValueError:
+        raise ParamError("«cursor» no es válido.") from None
+
+
+def _limit_param(request: Request) -> int:
+    value = request.query_params.get("limit")
+    if value is None:
+        return LEDGER_LIMIT
+    if not value.isdigit() or not 1 <= int(value) <= LEDGER_MAX_LIMIT:
+        raise ParamError(f"«limit» debe estar entre 1 y {LEDGER_MAX_LIMIT}.")
+    return int(value)
+
+
 # --- aplicación --------------------------------------------------------------
 
 
@@ -260,6 +311,7 @@ def create_app(
     session_factory: Callable,
     *,
     today: Callable[[], date] = date.today,
+    now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     allow_tailscale: bool = False,
     pin_hash: str = "",
     session_secret: bytes | None = None,
@@ -337,6 +389,51 @@ def create_app(
         return JSONResponse({"from": start.isoformat(), "to": end.isoformat(),
                              "transactions": rows})
 
+    # --- pestaña Diario: el día a día, sin agregaciones -------------------------
+
+    def api_accounts(request: Request) -> JSONResponse:
+        moment = now()
+        return JSONResponse({"now": ledger.iso_utc(moment),
+                             "accounts": query(lambda s: ledger.accounts(s, moment))})
+
+    def api_tags(request: Request) -> JSONResponse:
+        return JSONResponse({"tags": query(ledger.tags_in_use)})
+
+    def api_ledger(request: Request) -> JSONResponse:
+        account = request.query_params.get("account") or None
+        if account is not None and not _ID_RE.match(account):
+            raise ParamError("«account» no es válido.")
+        start, end = _optional_date(request, "from"), _optional_date(request, "to")
+        if start and end and start > end:
+            raise ParamError("«from» no puede ser posterior a «to».")
+        params = {
+            "account": account,
+            "kind": _choice_param(request, "type", TX_TYPE_PARAM),
+            "mark": _choice_param(request, "mark", MARK_PARAM),
+            "tag": _text_param(request, "tag", 64),
+            "start": start,
+            "end": end,
+            "text": _text_param(request, "q"),
+            "cursor": _cursor_param(request),
+            "limit": _limit_param(request),
+        }
+
+        def run(session):
+            if account is not None and session.get(models.Account, account) is None:
+                raise ParamError("«account»: cuenta desconocida.")
+            return ledger.movements(session, **params)
+
+        return JSONResponse(query(run))
+
+    def api_movement(request: Request) -> JSONResponse:
+        tx_id = request.query_params.get("id", "")
+        if not _ID_RE.match(tx_id):
+            raise ParamError("«id» no es válido.")
+        row = query(lambda s: ledger.movement(s, tx_id))
+        if row is None:
+            return JSONResponse({"error": "Movimiento no encontrado."}, status_code=404)
+        return JSONResponse(row)
+
     def index(request: Request) -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
 
@@ -353,6 +450,10 @@ def create_app(
             Route("/api/breakdown", api_breakdown),
             Route("/api/series", api_series),
             Route("/api/transactions", api_transactions),
+            Route("/api/accounts", api_accounts),
+            Route("/api/tags", api_tags),
+            Route("/api/ledger", api_ledger),
+            Route("/api/movement", api_movement),
             Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
         ],
         middleware=[

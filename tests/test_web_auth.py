@@ -165,6 +165,15 @@ def test_sin_sesion_la_api_pide_pin_pero_la_interfaz_es_publica(client):
     assert client.get("/static/app.js").status_code == 200
 
 
+@pytest.mark.parametrize("path", ["/api/accounts", "/api/tags", "/api/ledger", "/api/movement?id=tx1"])
+def test_la_pestana_diario_tambien_exige_pin(client, path):
+    r = client.get(path)
+
+    assert r.status_code == 401 and r.json()["auth"] == "pin"
+    login(client)
+    assert client.get(path).status_code in (200, 404)  # con sesión responde (404: movimiento inexistente)
+
+
 def test_login_correcto_abre_sesion_y_logout_la_cierra(client):
     r = login(client)
 
