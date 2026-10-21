@@ -38,6 +38,43 @@
   };
   const dayShort = (iso) => `${Number(iso.slice(8, 10))} ${monthInitial(iso.slice(0, 7))}`;
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const WDL = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+  const addDays = (iso, n) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    const t = new Date(Date.UTC(y, m - 1, d + n));
+    return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`;
+  };
+  const otherYear = (iso, today) => (iso.slice(0, 4) !== today.slice(0, 4) ? ` ${iso.slice(0, 4)}` : "");
+
+  // Cabecera de día del Diario: «Hoy · mié 21 oct», «Ayer · mar 20 oct», «lun 19 oct» o, de otro año, «mié 31 dic 2025».
+  function dayHeading(iso, today) {
+    const base = dayLabel(iso) + otherYear(iso, today);
+    if (iso === today) return `Hoy · ${base}`;
+    if (iso === addDays(today, -1)) return `Ayer · ${base}`;
+    return base;
+  }
+
+  // «miércoles, 21 de octubre de 2026».
+  function dayLong(iso) {
+    const [y, m, d] = iso.split("-").map(Number);
+    return `${WDL[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}, ${d} de ${MONTHS[m - 1]} de ${y}`;
+  }
+
+  // Fecha y hora en España de una marca UTC de la API («…Z»).
+  const MADRID = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  function localStamp(isoUtc) {
+    const p = Object.fromEntries(MADRID.formatToParts(new Date(isoUtc)).map((x) => [x.type, x.value]));
+    return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
+  }
+
+  // «hoy 07:31», «ayer 07:31», «20 oct 07:31» o, de otro año, «20 oct 2025 07:31».
+  function whenLabel(isoUtc, today) {
+    const { date, time } = localStamp(isoUtc);
+    if (date === today) return `hoy ${time}`;
+    if (date === addDays(today, -1)) return `ayer ${time}`;
+    return `${dayShort(date)}${otherYear(date, today)} ${time}`;
+  }
 
   // «septiembre 2026», «jul – sep 2026», «oct 25 – sep 26», «1–20 oct 2026» o «1 jul – 20 oct 2026».
   function rangeLabel(from, to) {
@@ -64,6 +101,30 @@
   const shown = (name) => name.replace(/^Ingresos - /, "");
   // Título legible: sin el prefijo bancario «Pago en», «Compra en»… (el concepto completo sigue en el detalle).
   const cleanTitle = (m) => (m || "—").replace(/^(pago|compra|cargo|recibo)\s+(en|de)\s+/i, "").replace(/\s+ES$/, "");
+  // Título de un movimiento: el comercio si es un nombre (tiene alguna letra); si no —la cola del
+  // IBAN que ING pone en recibos y transferencias, o los «*****» de BBVA—, el concepto.
+  const titleOf = (t) => cleanTitle(t.merchant && /\p{L}/u.test(t.merchant) ? t.merchant : (t.description || t.merchant));
+  // Importe con signo: «+12,30 €» los abonos, «−12,30 €» los cargos y «0,00 €» sin signo.
+  const signedEur = (v) => {
+    const x = Math.abs(v) < 0.005 ? 0 : v;
+    return (x > 0 ? "+" : x < 0 ? "−" : "") + eur.format(Math.abs(x));
+  };
+
+  /* ---------- filtros del Diario (en la ruta: #/diario/<cuenta=…&tipo=…>) ---------- */
+
+  const DIARY_KEYS = ["cuenta", "tipo", "marca", "etiqueta", "desde", "hasta", "q"];
+  const DIARY_API = { cuenta: "account", tipo: "type", marca: "mark", etiqueta: "tag", desde: "from", hasta: "to", q: "q" };
+  function diaryFilters(seg) {
+    const sp = new URLSearchParams(seg || "");
+    const f = {};
+    for (const k of DIARY_KEYS) {
+      const v = (sp.get(k) || "").trim();
+      if (v) f[k] = v;
+    }
+    return f;
+  }
+  const diaryQuery = (f) => new URLSearchParams(DIARY_KEYS.filter((k) => f[k]).map((k) => [k, f[k]])).toString();
+  const ledgerParams = (f) => Object.fromEntries(DIARY_KEYS.filter((k) => f[k]).map((k) => [DIARY_API[k], f[k]]));
 
   // Sectores del donut: las n−1 mayores con importe positivo y «Resto (N)» si hay más de n.
   function topN(groups, n) {
@@ -208,8 +269,9 @@
   return {
     MONTHS, MS, REST, eur, eur0, pct,
     ymOf, daysIn, monthStart, monthEnd, upTo, monthLabel, monthName, monthShort, monthInitial,
-    dayLabel, dayShort, cap, rangeLabel,
-    colorFor, share, shown, cleanTitle, topN, delta, parseHash,
+    dayLabel, dayShort, cap, rangeLabel, addDays, dayHeading, dayLong, localStamp, whenLabel,
+    colorFor, share, shown, cleanTitle, titleOf, signedEur, topN, delta, parseHash,
+    DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams,
     periodsOf, comparisonCut, periodRange, accumulatedMonths,
     PACE_REFS, paceRefs, verdict, trendOf, diffGroups, diffSubcategories,
   };

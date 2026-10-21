@@ -136,3 +136,52 @@ test("diffGroups y diffSubcategories", () => {
   assert.deepEqual(d.map((x) => [x.k, x.d]), [["Alimentación", -60], ["Restauración", 40]]);
   assert.deepEqual(L.diffSubcategories(A[0], B[0]), [{ label: "Super", va: 60, vb: 120, d: -60 }]);
 });
+
+/* ---------- Diario ---------- */
+
+test("Diario: cabeceras de día con «Hoy», «Ayer» y el año si no es el actual", () => {
+  assert.equal(L.dayHeading("2026-10-21", "2026-10-21"), "Hoy · mié 21 oct");
+  assert.equal(L.dayHeading("2026-10-20", "2026-10-21"), "Ayer · mar 20 oct");
+  assert.equal(L.dayHeading("2026-10-19", "2026-10-21"), "lun 19 oct");
+  assert.equal(L.dayHeading("2025-12-31", "2026-01-01"), "Ayer · mié 31 dic 2025");
+  assert.equal(L.dayHeading("2025-12-30", "2026-10-21"), "mar 30 dic 2025");
+  assert.equal(L.addDays("2026-03-01", -1), "2026-02-28");
+  assert.equal(L.dayLong("2026-10-21"), "miércoles, 21 de octubre de 2026");
+});
+
+test("Diario: hora local de España de las fotos de saldo (UTC en la API)", () => {
+  assert.deepEqual(L.localStamp("2026-10-21T05:31:01.856017Z"), { date: "2026-10-21", time: "07:31" }); // CEST
+  assert.deepEqual(L.localStamp("2026-12-01T23:30:00Z"), { date: "2026-12-02", time: "00:30" });      // CET, cambia de día
+  assert.equal(L.whenLabel("2026-10-21T05:31:01Z", "2026-10-21"), "hoy 07:31");
+  assert.equal(L.whenLabel("2026-10-20T05:31:13Z", "2026-10-21"), "ayer 07:31");
+  assert.equal(L.whenLabel("2026-10-12T20:20:44Z", "2026-10-21"), "12 oct 22:20");
+  assert.equal(L.whenLabel("2025-10-12T10:00:00Z", "2026-10-21"), "12 oct 2025 12:00");
+});
+
+test("Diario: importe con signo y título del movimiento", () => {
+  const nb = (x) => x.replace(" €", "\u00a0€"); // Intl separa la cifra del símbolo con un espacio duro
+  assert.equal(L.signedEur(-8.99), nb("−8,99 €"));
+  assert.equal(L.signedEur(840.48), nb("+840,48 €"));
+  assert.equal(L.signedEur(0), nb("0,00 €"));
+  assert.equal(L.signedEur(-0.001), nb("0,00 €"));
+  // ING pone la cola del IBAN como «comercio» en recibos y transferencias; BBVA enmascara con «*****».
+  assert.equal(L.titleOf({ merchant: "1703280894", description: "Recibo PayPal (Europe) S.a.r.l." }), "Recibo PayPal (Europe) S.a.r.l.");
+  assert.equal(L.titleOf({ merchant: "*****", description: "BIZUM // OTROS // ENVIADO: limpieza" }), "BIZUM // OTROS // ENVIADO: limpieza");
+  assert.equal(L.titleOf({ merchant: "BAZAR GRAN VIA VIGO ES", description: "Pago en BAZAR GRAN VIA VIGO ES" }), "BAZAR GRAN VIA VIGO");
+  assert.equal(L.titleOf({ merchant: null, description: "" }), "—");
+});
+
+test("Diario: filtros en la ruta ↔ parámetros de la API", () => {
+  const f = L.diaryFilters("cuenta=acc1&tipo=cargos&marca=recibos&q=caf%C3%A9+vigo&otro=x&desde=");
+  assert.deepEqual(f, { cuenta: "acc1", tipo: "cargos", marca: "recibos", q: "café vigo" });
+  assert.equal(L.diaryQuery(f), "cuenta=acc1&tipo=cargos&marca=recibos&q=caf%C3%A9+vigo");
+  assert.deepEqual(L.diaryFilters(L.diaryQuery(f)), f); // ida y vuelta
+  assert.deepEqual(L.ledgerParams({ ...f, etiqueta: "tomiño", desde: "2026-10-01", hasta: "2026-10-21" }), {
+    account: "acc1", type: "cargos", mark: "recibos", tag: "tomiño", from: "2026-10-01", to: "2026-10-21", q: "café vigo",
+  });
+  assert.deepEqual(L.diaryFilters(""), {});
+  assert.equal(L.diaryQuery({}), "");
+  // La ruta lleva los filtros en un único segmento codificado: sobrevive a parseHash.
+  const hash = `#/diario/${encodeURIComponent(L.diaryQuery(f))}`;
+  assert.deepEqual(L.diaryFilters(L.parseHash(hash)[1]), f);
+});

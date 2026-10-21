@@ -1,5 +1,6 @@
 "use strict";
 /* Panel finmcp · interfaz (variante B «Relato del mes»).
+   Diario (pestaña de apertura): último saldo de cada cuenta y lista plana de todos los movimientos, sin agregaciones.
    Mes: ingresos y gastos del mes seleccionado, sin comparaciones (solo minigráficas de 6 meses).
    Evolución: «Mes a mes», «Acumulado» y «Periodo contra periodo». Tendencias: una tarjeta por categoría.
    Los importes llegan calculados de la API de solo lectura (/api/*); aquí solo se presentan. */
@@ -17,6 +18,7 @@
   let MONTHS = [];   // meses con datos, ascendentes (AAAA-MM)
   let CLOSED = [];   // los mismos sin el mes en curso
   let CUR = "";      // mes en curso
+  let TODAY = "";    // hoy (AAAA-MM-DD, fecha del servidor)
   let CUT = { day: 1, days: 30 };
   let COVERAGE = []; // [{bank, first_month}]
   let PIN = false;   // ¿el panel está protegido con PIN?
@@ -77,6 +79,10 @@
     }
     return cache.get(url);
   }
+  // Lo ya cargado de la lista del Diario ({key, rows, next, closing, balance}): al volver de un
+  // movimiento se repinta tal cual, sin perder lo desplazado.
+  let diary = null;
+  const resetData = () => { cache.clear(); diary = null; };
   const aggsOf = (b) => ({ ingresos: b.income, gastos: b.expense });
   const breakdownOf = (from, to) => api("breakdown", { from, to });
   const monthlyRows = (day) => api("monthly", day ? { day } : {}).then((b) => b.months);
@@ -98,7 +104,10 @@
     }
     render({ keep });
   }
-  const back = () => (history.state && history.state.depth > 0 ? history.back() : go(H("mes", CUR, "gastos"), { replace: true }));
+  const back = () => {
+    if (history.state && history.state.depth > 0) { history.back(); return; }
+    go(L.parseHash(location.hash)[0] === "diario" ? "#/diario" : H("mes", CUR, "gastos"), { replace: true });
+  };
 
   function swipe(node, onStep) {
     let s = null;
@@ -126,6 +135,7 @@
     }, [svg("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 2, "aria-hidden": "true" }, [svg("path", { d })]),
       el("span", { textContent: label })]);
     return el("nav", { className: "nav" }, [
+      item("diario", "Diario", "M9 6h12M9 12h12M9 18h12M3.5 5.5h1v1h-1zM3.5 11.5h1v1h-1zM3.5 17.5h1v1h-1z", "#/diario"),
       item("mes", "Mes", "M12 3a9 9 0 1 0 9 9h-9zM15 3.5A9 9 0 0 1 20.5 9H15z", H("mes", CUR, "gastos")),
       item("evolucion", "Evolución", "M5 20V11M11 20V5M17 20v-7M3 20h18", "#/evolucion"),
       item("tendencias", "Tendencias", "M3 16l5-5 4 4 8-8M3 20h18", "#/tendencias"),
@@ -358,6 +368,312 @@
     input.addEventListener("input", paint);
     paint();
     return [input, chips, list, total];
+  }
+
+  /* ---------- Diario: el día a día, sin agregaciones ---------- */
+  // #/diario[/<filtros>] · #/diario/mov/<id>. Los filtros viajan en la ruta (L.diaryFilters).
+
+  const TIPOS = [["todos", "Todos"], ["cargos", "Cargos"], ["abonos", "Abonos"]];
+  // Una marca a la vez; tocar la marca activa la quita.
+  const MARCAS = [["sin-categoria", "Sin categoría"], ["recibos", "Recibos"], ["no-computables", "No computables"], ["manuales", "Manuales"]];
+  let diaryExtra = false; // ¿desplegado «Más filtros»?
+  const diaryHash = (f) => { const qs = L.diaryQuery(f); return qs ? H("diario", qs) : "#/diario"; };
+  const ledgerPage = (f, cursor) => api("ledger", { ...L.ledgerParams(f), ...(cursor ? { cursor } : {}) });
+  const tailOf = (a) => (a.iban_tail ? `··${a.iban_tail}` : a.name);
+  const dshort = (iso) => L.dayShort(iso) + (iso.slice(0, 4) !== TODAY.slice(0, 4) ? ` ${iso.slice(0, 4)}` : "");
+
+  function marksOf(t) {
+    return [t.uncategorized && ["sin categoría", "warn"], t.is_bill && ["recibo", ""], t.neutral && ["no computa", ""],
+      t.manual && ["manual", ""]].filter(Boolean).map(([b, c]) => el("span", { className: `badge${c ? ` ${c}` : ""}`, textContent: b }));
+  }
+
+  function freshText(a) {
+    const b = a.balance;
+    if (!b) return "sin datos de saldo";
+    const when = L.whenLabel(b.at, TODAY);
+    if (a.state === "stale") return `sin actualizar desde ${when}`;
+    if (a.state === "warn") return `falló el último sync · saldo de ${when}`;
+    return when;
+  }
+
+  function balanceCard(a, on, onTap) {
+    const b = a.balance;
+    return el("button", { type: "button", className: `bcard ${a.state}${on ? " on" : ""}`, attrs: { "aria-pressed": String(on) }, onclick: onTap }, [
+      el("span", { className: "bk" }, [el("i", { className: `led ${a.state}`, attrs: { "aria-hidden": "true" } }), el("span", { textContent: a.bank })]),
+      el("span", { className: "bn", textContent: tailOf(a) }),
+      el("span", { className: "bv amt", textContent: b ? eur.format(b.value) : "—" }),
+      b && b.kind === "disponible" ? el("span", { className: "bkind", textContent: "saldo disponible" }) : null,
+      el("span", { className: "bt", textContent: freshText(a) }),
+    ]);
+  }
+
+  // Bancos con la sincronización fallida o desactualizada: motivo y fecha del saldo mostrado.
+  function syncAlerts(accounts) {
+    const lines = accounts.filter((a) => a.state !== "ok").map((a) => {
+      const s = a.sync;
+      const fail = s && s.status === "error"
+        ? `el último intento de sincronización (${L.whenLabel(s.at, TODAY)}) falló${s.error ? `: ${s.error}` : ""}` : null;
+      const old = a.balance ? `el saldo mostrado es de ${L.whenLabel(a.balance.at, TODAY)}` : "no hay ninguna foto de saldo";
+      return el("p", { className: a.state, textContent: `${a.bank}: ${[fail, old].filter(Boolean).join("; ")}.` });
+    });
+    return lines.length ? el("div", { className: "alerts" }, lines) : null;
+  }
+
+  // Explica el saldo al cierre de cada día (calculado) y su contraste con las fotos reales del banco.
+  function closingNote(a, bal) {
+    if (!bal) return el("div", { className: "acc-note" }, el("p", { textContent: `${a.bank}: no hay foto de saldo del banco, así que no se puede calcular el saldo de cada día.` }));
+    const c = bal.check;
+    const ps = [el("p", { textContent: `La cifra junto a cada día es el saldo al cierre, calculado hacia atrás desde la foto del banco de ${L.whenLabel(bal.anchor.at, TODAY)} `
+      + `(${eur.format(bal.anchor.value)}${bal.anchor.kind === "disponible" ? ", saldo disponible" : ""}). No es un dato del banco.` })];
+    if (c.bad) {
+      const b = c.last_bad;
+      ps.push(el("p", { className: "warnv", textContent: `⚠ No cuadra con ${c.bad} de ${c.snapshots} fotos del banco. La más reciente, de ${L.whenLabel(b.at, TODAY)}: el banco daba ${eur.format(b.bank_value)}; `
+        + `el cálculo da ${eur.format(b.calc_prev)} al cierre del día anterior y ${eur.format(b.calc_day)} al cierre de ese día. Falta o sobra algún movimiento: los saldos hasta el ${dshort(b.date)} (en rojo) pueden estar desviados.` }));
+    } else if (c.ok) {
+      ps.push(el("p", { textContent: `Cuadra con ${c.ok === 1 ? "la foto" : `las ${c.ok} fotos`} del banco tomadas desde el ${dshort(c.since)}`
+        + `${c.unknown ? ` (${c.unknown} sin poder comprobar)` : ""}; antes no hay fotos con las que comprobarlo.` }));
+    }
+    return el("div", { className: "acc-note" }, ps);
+  }
+
+  function ledgerRow(t, showBank) {
+    const cat = t.uncategorized && t.category === "Sin categoría" ? null : t.category;
+    const meta = [showBank ? t.bank : null, cat, ...t.tags.map((x) => `#${x}`)].filter(Boolean).join(" · ");
+    return el("div", { className: "tx", attrs: { role: "button", tabindex: "0" }, onclick: () => go(H("diario", "mov", t.id)) }, [
+      el("div", { className: "tx-main" }, [
+        el("div", { className: "tx-title", textContent: L.titleOf(t) }),
+        el("div", { className: "tx-meta" }, [meta ? el("span", { textContent: meta }) : null, ...marksOf(t)]),
+      ]),
+      el("div", { className: `tx-amt amt${t.amount > 0 ? " pos" : ""}`, textContent: L.signedEur(t.amount) }),
+    ]);
+  }
+
+  async function diaryView(seg) {
+    const [accRes, tagRes] = await Promise.all([api("accounts"), api("tags")]);
+    const accounts = accRes.accounts;
+    let cur = L.diaryFilters(seg);
+    const sel = cur.cuenta ? accounts.find((a) => a.id === cur.cuenta) || null : null;
+    if (!sel) delete cur.cuenta;
+    const fetchFirst = async (f) => {
+      const page = await ledgerPage(f);
+      // Copias: las páginas siguientes se añaden a `rows`, y la respuesta original sigue en la caché.
+      return { key: L.diaryQuery(f), rows: [...page.transactions], next: page.next, closing: { ...(page.closing || {}) }, balance: page.balance };
+    };
+    if (!diary || diary.key !== L.diaryQuery(cur)) diary = await fetchFirst(cur);
+
+    const setF = (patch) => {
+      const nf = { ...cur, ...patch };
+      if (nf.desde && nf.hasta && nf.desde > nf.hasta) {
+        if ("desde" in patch) nf.hasta = ""; else nf.desde = "";
+      }
+      go(diaryHash(nf), { replace: true, keep: true });
+    };
+
+    // Lista: cabecera por día (con el saldo al cierre si hay una cuenta elegida) y carga progresiva.
+    const listBox = el("div", { className: "tx-list" });
+    const moreBtn = el("button", { className: "more", type: "button", textContent: "Cargar más" });
+    const sentinel = el("div", { className: "sentinel", attrs: { "aria-hidden": "true" } });
+    let lastDay = null;
+    const dayHead = (d) => {
+      const cl = sel ? diary.closing[d] : undefined;
+      const upTo = sel && diary.balance ? diary.balance.check.suspect_through : null;
+      return el("div", { className: "day dayb" }, [el("span", { textContent: L.dayHeading(d, TODAY) }),
+        cl === undefined ? null : el("span", { className: `cl amt${upTo && d <= upTo ? " suspect" : ""}`, textContent: `saldo ${eur.format(cl)}` })]);
+    };
+    const append = (rows) => {
+      const out = [];
+      for (const t of rows) {
+        if (t.date !== lastDay) { out.push(dayHead(t.date)); lastDay = t.date; }
+        out.push(ledgerRow(t, !sel));
+      }
+      listBox.append(...out);
+    };
+    const paintMore = () => {
+      moreBtn.classList.toggle("hidden", !diary.next);
+      moreBtn.disabled = false;
+      moreBtn.textContent = "Cargar más";
+    };
+    const paintList = () => {
+      lastDay = null;
+      listBox.replaceChildren(diary.rows.length ? "" : el("p", { className: "muted empty", textContent: "No hay movimientos con estos filtros." }));
+      append(diary.rows);
+      paintMore();
+    };
+    let loading = false;
+    const loadMore = async () => {
+      if (loading || !diary.next || !listBox.isConnected) return;
+      const d = diary;
+      loading = true;
+      moreBtn.disabled = true;
+      moreBtn.textContent = "Cargando…";
+      try {
+        const page = await ledgerPage(cur, d.next);
+        if (d !== diary) return;
+        d.rows.push(...page.transactions);
+        d.next = page.next;
+        Object.assign(d.closing, page.closing || {});
+        append(page.transactions);
+        paintMore();
+      } catch (err) {
+        if (err instanceof PinRequired) { render(); return; }
+        moreBtn.disabled = false;
+        moreBtn.textContent = "No se ha podido cargar · Reintentar";
+      } finally {
+        loading = false;
+      }
+    };
+    moreBtn.addEventListener("click", loadMore);
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver((entries) => {
+        if (!sentinel.isConnected) { io.disconnect(); return; }
+        if (entries.some((e) => e.isIntersecting)) loadMore();
+      }, { rootMargin: "900px 0px" });
+      io.observe(sentinel);
+    }
+
+    // Buscador: filtra sin repintar la pantalla (no se pierde el foco) y deja el texto en la ruta.
+    const search = el("input", { type: "search", className: "filter", value: cur.q || "",
+      placeholder: "Buscar: comercio, concepto, importe…", attrs: { "aria-label": "Buscar por comercio, concepto, categoría, etiqueta o importe", enterkeyhint: "search" } });
+    let timer = null, gen = 0;
+    search.addEventListener("keydown", (e) => { if (e.key === "Enter") search.blur(); });
+    search.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const q = search.value.trim();
+        if ((cur.q || "") === q) return;
+        cur = { ...cur, q };
+        if (!q) delete cur.q;
+        history.replaceState(history.state, "", diaryHash(cur));
+        const my = ++gen;
+        listBox.classList.add("busy");
+        try {
+          const d = await fetchFirst(cur);
+          if (my !== gen) return;
+          diary = d;
+          paintList();
+        } catch (err) {
+          if (err instanceof PinRequired) { render(); return; }
+          listBox.replaceChildren(el("p", { className: "muted empty", textContent: `No se ha podido buscar: ${err.message}` }));
+        } finally {
+          if (my === gen) listBox.classList.remove("busy");
+        }
+      }, 350);
+    });
+
+    // Más filtros: etiqueta y fechas.
+    const first = accounts.map((a) => a.first).filter(Boolean).sort()[0] || "";
+    const tagSel = el("select", { attrs: { "aria-label": "Etiqueta" } }, [el("option", { value: "", textContent: "Todas" }),
+      ...tagRes.tags.map((t) => el("option", { value: t.name, textContent: `#${t.name} (${t.count})` })),
+      cur.etiqueta && !tagRes.tags.some((t) => t.name === cur.etiqueta) ? el("option", { value: cur.etiqueta, textContent: `#${cur.etiqueta}` }) : null]);
+    tagSel.value = cur.etiqueta || "";
+    tagSel.addEventListener("change", () => setF({ etiqueta: tagSel.value }));
+    const dateIn = (key, label) => {
+      const n = el("input", { type: "date", value: cur[key] || "", attrs: { "aria-label": label, ...(first ? { min: first } : {}), max: TODAY } });
+      n.addEventListener("change", () => setF({ [key]: n.value }));
+      return n;
+    };
+    const extraN = ["etiqueta", "desde", "hasta"].filter((k) => cur[k]).length;
+    const xf = el("div", { className: `xf${extraN || diaryExtra ? "" : " hidden"}` }, [
+      el("label", {}, [el("span", { textContent: "Etiqueta" }), tagSel]),
+      el("label", {}, [el("span", { textContent: "Desde" }), dateIn("desde", "Desde")]),
+      el("label", {}, [el("span", { textContent: "Hasta" }), dateIn("hasta", "Hasta")]),
+    ]);
+    const anyFilter = Object.keys(cur).length > 0;
+
+    paintList();
+    return [
+      topbar("Diario"),
+      el("main", {}, [
+        el("h2", { className: "h2first", textContent: "Saldos" }),
+        el("div", { className: "bgrid" }, accounts.map((a) => balanceCard(a, sel === a, () => setF({ cuenta: sel === a ? "" : a.id })))),
+        syncAlerts(accounts),
+        el("h2", { textContent: sel ? `Movimientos · ${sel.bank} ${tailOf(sel)}` : "Movimientos" }),
+        sel ? closingNote(sel, diary.balance) : null,
+        search,
+        subtabs(TIPOS, cur.tipo || "todos", (k) => setF({ tipo: k === "todos" ? "" : k }), "small"),
+        el("div", { className: "chips" }, MARCAS.map(([k, l]) => el("button", { type: "button", className: `chip${cur.marca === k ? " on" : ""}`,
+          textContent: cur.marca === k ? `${l} ✕` : l, attrs: { "aria-pressed": String(cur.marca === k) },
+          onclick: () => setF({ marca: cur.marca === k ? "" : k }) }))),
+        el("div", { className: "chips" }, [
+          el("button", { type: "button", className: `chip${extraN ? " on" : ""}`, textContent: `Más filtros${extraN ? ` (${extraN})` : ""} ${diaryExtra || extraN ? "▴" : "▾"}`,
+            attrs: { "aria-expanded": String(Boolean(diaryExtra || extraN)) },
+            onclick: (e) => { diaryExtra = xf.classList.toggle("hidden") === false; e.currentTarget.textContent = `Más filtros${extraN ? ` (${extraN})` : ""} ${diaryExtra ? "▴" : "▾"}`; } }),
+          sel ? el("button", { type: "button", className: "chip on", textContent: `${sel.bank} ${tailOf(sel)} ✕`, attrs: { "aria-label": "Ver todas las cuentas" },
+            onclick: () => setF({ cuenta: "" }) }) : null,
+          anyFilter ? el("button", { type: "button", className: "chip", textContent: "Quitar filtros", onclick: () => go("#/diario", { replace: true, keep: true }) }) : null,
+        ]),
+        xf,
+        listBox, moreBtn, sentinel,
+        el("footer", { className: "note" }, [
+          el("p", { textContent: "Todos los movimientos de todas las cuentas, también los que no computan como ingreso ni gasto (traspasos entre cuentas propias, liquidaciones de tarjeta…)." }),
+          el("p", { textContent: "El banco solo da la fecha de cada movimiento, no la hora: dentro de un mismo día el orden no es el real." }),
+          el("p", { textContent: "Toque una cuenta para ver solo sus movimientos y su saldo al cierre de cada día." }),
+          PIN ? el("button", { className: "lockbtn", type: "button", textContent: "Bloquear el panel", onclick: lockPanel }) : null,
+        ]),
+      ]),
+      nav("diario"),
+    ];
+  }
+
+  // Copia al portapapeles; en http (red de casa) no hay API de portapapeles y se usa execCommand.
+  function copyButton(text, label) {
+    const b = el("button", { type: "button", className: "chip", textContent: label });
+    b.addEventListener("click", async () => {
+      let ok = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; }
+      } catch { ok = false; }
+      if (!ok) {
+        const ta = el("textarea", { value: text, readOnly: true, className: "offscreen", attrs: { "aria-hidden": "true" } });
+        document.body.append(ta);
+        ta.select();
+        try { ok = document.execCommand("copy"); } catch { ok = false; }
+        ta.remove();
+      }
+      b.textContent = ok ? "Copiado ✓" : "No se ha podido copiar";
+      setTimeout(() => { b.textContent = label; }, 1800);
+    });
+    return b;
+  }
+
+  async function movementView(id) {
+    const t = await api("movement", { id });
+    const a = t.account_info;
+    const kv = (pairs) => el("dl", { className: "kv" }, pairs.filter(([, v]) => v !== null && v !== undefined && v !== "")
+      .flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", {}, v)]));
+    const marks = marksOf(t);
+    return [
+      detailBar(L.titleOf(t), `${L.dayHeading(t.date, TODAY)} · ${a.bank}${a.iban_tail ? ` ··${a.iban_tail}` : ""}`),
+      el("main", {}, [
+        el("div", { className: "ghead" }, [
+          el("span", { className: `big amt${t.amount > 0 ? " posv" : ""}`, textContent: L.signedEur(t.amount) }),
+          marks.length ? el("div", { className: "tx-meta" }, marks) : null,
+        ]),
+        el("h2", { textContent: "Movimiento" }),
+        el("div", { className: "card" }, kv([
+          ["Concepto", t.description || "—"],
+          ["Comercio", t.merchant && /\p{L}/u.test(t.merchant) ? t.merchant : null], // la cola del IBAN de ING no es un comercio
+          ["Fecha", L.cap(L.dayLong(t.date))],
+          ["Cuenta", `${a.bank}${a.iban_tail ? ` ··${a.iban_tail}` : ""}${a.name ? ` · ${a.name}` : ""}`],
+          ["Categoría", t.category],
+          ["Etiquetas", t.tags.map((x) => `#${x}`).join(" ")],
+          ["Recibo", t.is_bill ? "sí" : "no"],
+          ["Computa", t.neutral ? "no: no cuenta como ingreso ni como gasto" : "sí"],
+          ["Categoría a mano", t.manual ? "sí: las reglas no la cambian" : null],
+        ])),
+        el("h2", { textContent: "Datos del banco" }),
+        el("div", { className: "card" }, t.source === "feed"
+          ? (t.bank_data.length ? kv(t.bank_data.map((x) => [x.label, x.value])) : el("p", { className: "muted", textContent: "El banco no envió más datos." }))
+          : el("p", { className: "muted", textContent: t.source === "csv"
+            ? "Importado de un extracto descargado del banco: no hay datos originales de la conexión bancaria."
+            : "Sin datos originales del banco." })),
+        t.raw ? el("details", { className: "raw" }, [el("summary", { textContent: "Ver el dato original completo" }),
+          el("pre", { textContent: JSON.stringify(t.raw, null, 2) })]) : null,
+        el("h2", { textContent: "Identificador" }),
+        el("div", { className: "card idrow" }, [el("code", { textContent: t.id }), copyButton(t.id, "Copiar id")]),
+      ]),
+      nav("diario"),
+    ];
   }
 
   /* ---------- Mes ---------- */
@@ -869,7 +1185,7 @@
       try {
         const r = await fetch("/api/login", { method: "POST", credentials: "same-origin",
           headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: input.value }) });
-        if (r.ok) { cache.clear(); boot(); return; }
+        if (r.ok) { resetData(); boot(); return; }
         const body = await r.json().catch(() => ({}));
         const wait = body.retry_after || 0;
         msg.textContent = r.status === 429 ? `Demasiados intentos fallidos. Inténtelo de nuevo en ${waitText(wait)}.`
@@ -887,7 +1203,7 @@
 
   async function lockPanel() {
     await fetch("/api/logout", { method: "POST", credentials: "same-origin" }).catch(() => null);
-    cache.clear();
+    resetData();
     app.replaceChildren(...pinView());
     window.scrollTo(0, 0);
   }
@@ -898,8 +1214,8 @@
     return [el("div", { className: "error" }, [
       el("p", { textContent: "No se han podido cargar los datos." }),
       el("p", { className: "muted", textContent: (err && err.message) || String(err) }),
-      el("button", { className: "link", type: "button", textContent: "Reintentar", onclick: () => { cache.clear(); render(); } }),
-    ]), CUR ? nav(L.parseHash(location.hash)[0] || "mes") : null].filter(Boolean);
+      el("button", { className: "link", type: "button", textContent: "Reintentar", onclick: () => { resetData(); render(); } }),
+    ]), CUR ? nav(L.parseHash(location.hash)[0] || "diario") : null].filter(Boolean);
   }
 
   let seq = 0;
@@ -908,14 +1224,16 @@
     const y = window.scrollY;
     document.querySelectorAll(".backdrop").forEach((n) => n.remove());
     const p = L.parseHash(location.hash);
-    const top = p[0] || "mes";
+    const top = p[0] || "diario";
     const slow = setTimeout(() => { if (my === seq) app.classList.add("loading"); }, 150);
     let view;
     try {
-      if (top === "evolucion") view = await evolutionView(p);
+      if (top === "mes") view = await monthView(MONTHS.includes(p[1]) ? p[1] : CUR, tipoOf(p[2]));
+      else if (top === "evolucion") view = await evolutionView(p);
       else if (top === "tendencias") view = await trendsView();
       else if (top === "rango" && p.length >= 7) view = await rangeView(p);
-      else view = await monthView(MONTHS.includes(p[1]) ? p[1] : CUR, tipoOf(p[2]));
+      else if (top === "diario" && p[1] === "mov" && p[2]) view = await movementView(p[2]);
+      else view = await diaryView(top === "diario" ? p[1] : "");
     } catch (err) {
       view = err instanceof PinRequired ? pinView() : errorView(err);
     } finally {
@@ -928,18 +1246,19 @@
   }
 
   let started = false;
-  async function boot() {
+  async function boot({ refreshing = false } = {}) {
     let meta;
     try {
       meta = await api("meta");
     } catch (err) {
       if (err instanceof PinRequired) { app.replaceChildren(...pinView()); return; }
       app.replaceChildren(...errorView(err));
-      app.querySelector(".error .link").onclick = () => { cache.clear(); boot(); };
+      app.querySelector(".error .link").onclick = () => { resetData(); boot(); };
       return;
     }
     MONTHS = meta.months;
     CUR = meta.current_month;
+    TODAY = meta.today;
     CLOSED = MONTHS.filter((m) => m !== CUR);
     CUT = { day: meta.cut_day, days: meta.days_in_month };
     COVERAGE = meta.coverage;
@@ -951,13 +1270,19 @@
       window.addEventListener("popstate", (e) => render({ scroll: e.state && typeof e.state.scroll === "number" ? e.state.scroll : 0 }));
       swipe(app, (d) => {
         const p = L.parseHash(location.hash);
-        if ((p[0] || "mes") !== "mes" || document.querySelector(".backdrop")) return;
+        if (p[0] !== "mes" || document.querySelector(".backdrop")) return;
         const ym = MONTHS.includes(p[1]) ? p[1] : CUR;
         const m = stepMonth(ym, d);
         if (m) go(H("mes", m, tipoOf(p[2])), { replace: true });
       });
+      // De vuelta al panel tras un rato en segundo plano (p. ej. al día siguiente), datos frescos.
+      let hiddenAt = 0;
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) { hiddenAt = Date.now(); return; }
+        if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000) { hiddenAt = 0; resetData(); boot({ refreshing: true }); }
+      });
     }
-    render();
+    render({ keep: refreshing });
   }
 
   boot();
