@@ -227,6 +227,12 @@ finmcp web --host 192.168.1.10 --host 100.x.y.z    # y además en su IP de Tails
 
 Abre `http://<IP>:8790/` en el navegador del móvil o del PC e introduce el PIN.
 
+- **Diario** (la pestaña de apertura): el día a día, sin agregaciones.
+  - **Saldos:** el último saldo conocido de cada cuenta, con la hora de la foto y un semáforo de frescura (ámbar si falló el último sync, rojo si la foto tiene más de 36 h).
+  - **Movimientos:** la lista plana de todos, también los no computables, del más reciente al más antiguo, por tramos.
+  - **Filtros:** cuenta, cargos o abonos, una marca (sin categoría, recibos, no computables, manuales), etiqueta, fechas y un buscador sin acentos que también mira el importe.
+  - **Saldo de cada día:** con una cuenta elegida, cada día muestra su saldo al cierre, calculado hacia atrás desde la última foto del banco y contrastado con todas las fotos reales.
+  - **Detalle:** al tocar un movimiento se ven sus datos originales del banco (contraparte, concepto íntegro, fechas, referencia y el JSON completo) y un botón «Copiar id».
 - **Mes**: ingresos y gastos del mes por categoría (donut y lista con minigráfica de 6 meses),
   con detalle por subcategoría y movimientos. Se cambia de mes con las flechas, el selector o deslizando.
 - **Evolución**: *Mes a mes* (gasto del mes en curso frente al mes anterior y a las medias de 3 y
@@ -234,7 +240,7 @@ Abre `http://<IP>:8790/` en el navegador del móvil o del PC e introduce el PIN.
   actual o todo; solo meses cerrados) y *Periodo contra periodo* (mes, trimestre, semestre o año).
 - **Tendencias**: 12 meses de las categorías de gasto que elijas, con su tendencia.
 
-Criterios de cálculo: los movimientos neutrales no computan; son categorías de ingreso las que
+Criterios de cálculo (salvo en Diario, que no agrega): los movimientos neutrales no computan; son categorías de ingreso las que
 empiezan por «Ingresos», más «Otros ingresos» e «Intereses»; las devoluciones se restan del gasto
 de su categoría, y el ahorro coincide con el neto de `finmcp summary`. Toda comparación con el mes
 en curso se hace **a la misma fecha** (del día 1 al día de hoy de cada mes).

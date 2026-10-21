@@ -104,10 +104,16 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   spike does not contaminate its own baseline; when MAD is 0 it falls back to a 50%-over-median
   rule. Both `anomalies.py` and `bills.py` group by `util.merchant_key` (merchant, else
   description, lowercased).
-- **Web dashboard** (`web/app.py`, `analytics/dashboard.py`, `web/static/`): Starlette app served by
+- **Web dashboard** (`web/app.py`, `analytics/dashboard.py`, `analytics/ledger.py`, `web/static/`): Starlette app served by
   `finmcp web` on its own port (8790). Opens the DB through a separate read-only engine
   (`sqlite:///file:...?mode=ro&uri=true`) and exposes only GET JSON endpoints (`/api/meta`,
-  `/api/monthly[?day=D]`, `/api/breakdown`, `/api/series`, `/api/transactions`) plus a static UI.
+  `/api/monthly[?day=D]`, `/api/breakdown`, `/api/series`, `/api/transactions`, and for the «Diario»
+  tab `/api/accounts`, `/api/tags`, `/api/ledger`, `/api/movement`) plus a static UI.
+  `analytics/ledger.py` («Diario», the landing tab) aggregates nothing and hides nothing.
+  - It returns the latest balance per account (`current`, else `available`) with a freshness `state`: `warn` if the bank's last sync failed, `stale` if the snapshot is older than 36 h.
+  - It lists every movement, neutral ones included, ordered by `booked_at` desc, then `id` desc, with keyset pagination (`cursor=<booked_at iso>|<id>`). Text search folds case and accents, so it runs in Python.
+  - With `account`, it reconstructs each day's closing balance backwards from the latest snapshot. It checks every snapshot: the value must equal the previous day's close plus some subset of that day's movements.
+  - It exposes the raw bank data (`raw_json`) in `/api/movement`.
   `analytics/dashboard.py` encodes the dashboard semantics: classification by category, not sign
   (income = categories starting with «Ingresos» plus «Otros ingresos»/«Intereses»), refunds
   subtracted from their category, `neutral` excluded, `net` equal to `monthly_summary`; panel
@@ -118,7 +124,7 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   serialized, global exponential lockout after 5 failures) sets it; the session-signing secret lives
   in `data/web_session.key` (0600). The static UI is public (no data). Strict CSP (no inline scripts/styles: SVG styling via classes; element
   styles only through CSSOM). The UI is dependency-free vanilla JS: `lib.js` (pure, tested with
-  `node --test`) and `app.js` (DOM, hash routes such as `#/mes/AAAA-MM/gastos`).
+  `node --test`) and `app.js` (DOM, hash routes such as `#/mes/AAAA-MM/gastos`, `#/diario/<filters>`, `#/diario/mov/<id>`).
 - **CSV/Excel importer** (`importers/csv_import.py`): for history older than the ~90 days PSD2
   allows. Header detection is heuristic (Spanish/English key lists at the top of the file),each
   bank's link (session id + account list) is stored via `save_secret(name, ...)` where `name` is
