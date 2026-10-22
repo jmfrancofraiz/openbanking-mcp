@@ -237,6 +237,8 @@ Abre `http://<IP>:8790/` en el navegador del móvil o del PC e introduce el PIN.
   - **Detalle:** al tocar un movimiento se ven sus datos originales del banco (contraparte, concepto íntegro, fechas, referencia y el JSON completo) y un botón «Copiar id».
 - **Mes**: ingresos y gastos del mes por categoría (donut y lista con minigráfica de 6 meses),
   con detalle por subcategoría y movimientos. Se cambia de mes con las flechas, el selector o deslizando.
+  Toda lista de movimientos del panel (también las de Evolución y Tendencias) se abre con la fecha
+  descendente, lo más reciente primero; los botones de orden son «Fecha ↓», «Fecha ↑» e «Importe».
 - **Evolución**: *Mes a mes* (gasto del mes en curso frente al mes anterior y a las medias de 3 y
   6 meses, a la misma fecha, y el ahorro de cada mes), *Acumulado* (3 meses, 6 meses, 1 año, año
   actual o todo; solo meses cerrados) y *Periodo contra periodo* (mes, trimestre, semestre o año).

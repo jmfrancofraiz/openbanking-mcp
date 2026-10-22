@@ -347,8 +347,9 @@
   }
 
   // Movimientos: buscador + orden + lista por días + resumen fijo con el total de lo filtrado.
+  // Se abre siempre con la fecha descendente (lo más reciente primero), como el Diario.
   function txPanel(rows, tipo, showCat) {
-    let sort = "asc";
+    let sort = "desc";
     const income = tipo === "ingresos";
     const input = el("input", { type: "search", className: "filter", placeholder: "Buscar comercio, concepto o etiqueta",
       attrs: { "aria-label": "Buscar movimientos" } });
@@ -364,7 +365,7 @@
       total.replaceChildren(el("span", { textContent: `${r.length} mov.` }),
         el("span", { className: "amt", textContent: eur.format(nz(income ? net : -net)) }));
       list.replaceChildren(...txList(r, { byDay: sort !== "amount", showCat, income }));
-      chips.replaceChildren(...[["asc", "Fecha ↑"], ["desc", "Fecha ↓"], ["amount", "Importe"]].map(([v, l]) =>
+      chips.replaceChildren(...[["desc", "Fecha ↓"], ["asc", "Fecha ↑"], ["amount", "Importe"]].map(([v, l]) =>
         el("button", { type: "button", className: `chip${v === sort ? " on" : ""}`, textContent: l, onclick: () => { sort = v; paint(); } })));
     };
     input.addEventListener("input", paint);
