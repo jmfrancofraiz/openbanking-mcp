@@ -57,3 +57,11 @@ def test_banks_empty_when_nothing_configured(monkeypatch):
 
     s = Settings(_env_file=None)
     assert s.banks == []
+
+
+def test_freno_de_sincronizacion_del_panel_por_defecto_y_por_entorno(monkeypatch):
+    monkeypatch.delenv("FINMCP_WEB_SYNC_COOLDOWN", raising=False)
+    assert Settings(_env_file=None).finmcp_web_sync_cooldown == 300
+    monkeypatch.setenv("FINMCP_WEB_SYNC_COOLDOWN", "60")
+    assert Settings(_env_file=None).finmcp_web_sync_cooldown == 60
+

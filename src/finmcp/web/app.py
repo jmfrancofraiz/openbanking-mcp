@@ -4,7 +4,9 @@ Tercera superficie de finmcp, junto al CLI y al servidor MCP: un servicio HTTP
 independiente (puerto 8790 por defecto; el MCP --http usa el 8000) que sirve una
 interfaz estática y una API JSON sobre `analytics/dashboard.py`.
 
-- La base de datos se abre en modo de solo lectura (`mode=ro`): no hay escrituras.
+- La base de datos se abre en modo de solo lectura (`mode=ro`): el panel no escribe.
+  Única acción: `POST /api/sync` (tirar hacia abajo en la interfaz) lanza `finmcp sync`
+  en un proceso aparte (ver `web/syncjob.py`); el panel solo lo vigila.
 - Solo atiende clientes de la red local (loopback y rangos privados) y, si escucha
   en su IP, de Tailscale. Nunca escucha en 0.0.0.0.
 - Con PIN (`finmcp web-pin`): la API exige una cookie de sesión obtenida en
@@ -35,7 +37,7 @@ from starlette.staticfiles import StaticFiles
 
 from finmcp.analytics import dashboard, ledger
 from finmcp.db import models
-from finmcp.web import auth
+from finmcp.web import auth, syncjob
 
 STATIC_DIR = Path(__file__).parent / "static"
 DEFAULT_PORT = 8790
@@ -316,11 +318,13 @@ def create_app(
     pin_hash: str = "",
     session_secret: bytes | None = None,
     throttle: auth.Throttle | None = None,
+    sync_job: syncjob.SyncJob | None = None,
 ) -> Starlette:
     """Crea la aplicación del panel sobre una factoría de sesiones (de solo lectura).
 
     Con `pin_hash`, la API exige sesión (POST /api/login con el PIN). Sin
-    `session_secret`, las sesiones duran lo que dure el proceso.
+    `session_secret`, las sesiones duran lo que dure el proceso. Con `sync_job`, la
+    interfaz puede lanzar una sincronización (POST /api/sync); sin él, no.
     """
     networks = LAN_NETWORKS + ((TAILSCALE_NETWORK,) if allow_tailscale else ())
     sessions = auth.Sessions(session_secret or secrets.token_bytes(32), pin_hash) if pin_hash else None
@@ -332,7 +336,8 @@ def create_app(
             return fn(session)
 
     def api_meta(request: Request) -> JSONResponse:
-        return JSONResponse({**query(lambda s: dashboard.meta(s, today())), "pin": bool(pin_hash)})
+        return JSONResponse({**query(lambda s: dashboard.meta(s, today())), "pin": bool(pin_hash),
+                             "sync": sync_job is not None})
 
     async def api_login(request: Request) -> Response:
         if not sessions:
@@ -363,6 +368,22 @@ def create_app(
         response = Response(status_code=204)
         response.delete_cookie(auth.SESSION_COOKIE, path="/", httponly=True, samesite="strict")
         return response
+
+    async def api_sync_start(request: Request) -> Response:
+        """Lanza una sincronización (si no hay otra en marcha ni se está en el freno)."""
+        if sync_job is None:
+            return JSONResponse({"error": "La sincronización desde el panel no está disponible."},
+                                status_code=404)
+        if request.headers.get("content-type", "").split(";")[0].strip() != "application/json":
+            return JSONResponse({"error": "Se esperaba JSON."}, status_code=415)
+        snapshot, started = await sync_job.start()
+        return JSONResponse({**snapshot, "started": started}, status_code=202 if started else 200)
+
+    async def api_sync_status(request: Request) -> Response:
+        if sync_job is None:
+            return JSONResponse({"error": "La sincronización desde el panel no está disponible."},
+                                status_code=404)
+        return JSONResponse(await sync_job.snapshot())
 
     def api_monthly(request: Request) -> JSONResponse:
         day = _day_param(request)
@@ -446,6 +467,8 @@ def create_app(
             Route("/api/meta", api_meta),
             Route("/api/login", api_login, methods=["POST"]),
             Route("/api/logout", api_logout, methods=["POST"]),
+            Route("/api/sync", api_sync_start, methods=["POST"]),
+            Route("/api/sync", api_sync_status, methods=["GET"]),
             Route("/api/monthly", api_monthly),
             Route("/api/breakdown", api_breakdown),
             Route("/api/series", api_series),
@@ -476,11 +499,15 @@ def run(hosts: list[str], port: int = DEFAULT_PORT) -> None:
 
     hosts, allow_tailscale = validate_hosts(hosts)
     pin_hash = settings.finmcp_web_pin_hash
+    session_factory = readonly_session_factory(settings.db_path)
     app = create_app(
-        readonly_session_factory(settings.db_path),
+        session_factory,
         allow_tailscale=allow_tailscale,
         pin_hash=pin_hash,
         session_secret=auth.load_secret(settings.data_dir / "web_session.key") if pin_hash else None,
+        # El hijo arranca en la raíz del repo: allí está el `.env` con las credenciales del banco.
+        sync_job=syncjob.SyncJob(session_factory, cwd=settings.data_dir.parent,
+                                 cooldown=settings.finmcp_web_sync_cooldown),
     )
     sockets = []
     for host in hosts:
@@ -490,8 +517,8 @@ def run(hosts: list[str], port: int = DEFAULT_PORT) -> None:
         sock.bind((host, port))
         sockets.append(sock)
         shown = f"[{host}]" if ":" in host else host
-        print(f"Panel finmcp (solo lectura{', con PIN' if pin_hash else ''}) en http://{shown}:{port}/",
-              flush=True)
+        print(f"Panel finmcp (solo lectura{', con PIN' if pin_hash else ''}; "
+              f"tirar hacia abajo sincroniza) en http://{shown}:{port}/", flush=True)
     # proxy_headers=False: la IP del cliente es siempre la del socket (filtro de red local).
     config = uvicorn.Config(app, proxy_headers=False, server_header=False, log_level="info")
     uvicorn.Server(config).run(sockets=sockets)
