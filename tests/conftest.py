@@ -76,3 +76,11 @@ def make_tx(session):
         return tx
 
     return _make
+
+
+@pytest.fixture(autouse=True)
+def _bloqueo_de_sync_aislado(tmp_path, monkeypatch):
+    """Ningún test toca `data/`: el bloqueo de `run_sync` va a un directorio temporal."""
+    from finmcp.sync import lock
+
+    monkeypatch.setattr(lock, "lock_path", lambda: tmp_path / "sync.lock")

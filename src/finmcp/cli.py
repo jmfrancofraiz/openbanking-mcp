@@ -97,12 +97,16 @@ def sync(
     ),
 ) -> None:
     """Sincroniza cuentas, saldos y movimientos a la base de datos local (por banco)."""
+    from finmcp.sync.lock import EXIT_BUSY, SyncInProgress
     from finmcp.sync.service import run_sync
 
     try:
         runs = run_sync(from_date, to_date, bank_id=bank, strategy=strategy)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
+    except SyncInProgress as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=EXIT_BUSY) from exc
     any_error = False
     for run in runs:
         if run.status == "ok":

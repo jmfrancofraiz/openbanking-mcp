@@ -8,6 +8,7 @@ from finmcp.db import repo
 from finmcp.db.models import SyncRun
 from finmcp.db.session import SessionLocal, init_db
 from finmcp.providers.factory import get_provider
+from finmcp.sync.lock import sync_lock
 
 
 def _sync_one_bank(
@@ -70,6 +71,7 @@ def run_sync(
     Un fallo en un banco no aborta los demás: cada uno reporta su propio SyncRun.
     `strategy` se reenvía al proveedor (Enable Banking): con 'longest' busca todo lo
     disponible desde `from_date` sin devolver error de periodo fuera de rango.
+    Lanza `SyncInProgress` si ya hay otra sincronización en curso (ver `sync/lock.py`).
     """
     init_db()
     banks = settings.banks
@@ -84,7 +86,8 @@ def run_sync(
             ids = ", ".join(b.id for b in banks)
             raise ValueError(f"Banco '{bank_id}' no encontrado. Disponibles: {ids}")
         banks = selected
-    with SessionLocal() as session:
+    # Una sola sincronización a la vez (CLI, MCP, cron, panel web): si hay otra, SyncInProgress.
+    with sync_lock(), SessionLocal() as session:
         runs = [
             _sync_one_bank(session, bank, from_date, to_date, strategy)
             for bank in banks
