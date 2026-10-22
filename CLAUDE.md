@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Read-only personal-finance MCP server over Open Banking (PSD2). Pulls accounts, balances and
 transactions from a bank via an aggregator (Enable Banking by default), stores them in a local
 SQLite database, and exposes analytics (spend by category, bills/recurring payments, unusual charges,
-monthly summaries) as MCP tools, plus a mobile-first read-only web dashboard (`finmcp web`).
+monthly summaries) as MCP tools, plus a mobile-first web dashboard (`finmcp web`) that reads the DB read-only and can only trigger a sync.
 Three surfaces share the same SQLite: CLI, MCP server (same operations as the CLI except `auth`)
 and the web dashboard (separate service/port). Code comments, docstrings, CLI output and README are in Spanish;
 keep new user-facing strings and comments in Spanish for consistency.
@@ -30,7 +30,7 @@ finmcp --help                            # CLI entry point (typer), defined in s
 finmcp serve                             # MCP over stdio (Claude Desktop / Cursor)
 finmcp serve --http --port 8000          # Streamable HTTP on /mcp; set FINMCP_HTTP_TOKEN for bearer auth
 finmcp web-pin                          # set the dashboard PIN (stores only a PBKDF2 hash in .env)
-finmcp web --host 192.168.1.10          # web dashboard on :8790 (read-only, LAN-only, PIN)
+finmcp web --host 192.168.1.10          # web dashboard on :8790 (read-only DB, LAN-only, PIN; pull-down triggers a sync)
 node --test tests/js/lib.test.js        # pure JS helpers of the dashboard UI (Node >= 18)
 ```
 
@@ -49,6 +49,7 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
 - **Only `sync` and `list_institutions` MCP tools call the network**; the rest read/write SQLite
   (or local files for `import_csv`). `auth` is CLI-only by design (browser consent flow).
   Scheduled fetching happens via `finmcp sync` (manually or the launchd template in `deploy/`).
+  The dashboard can also trigger one (pull-down gesture, see «Web dashboard»).
 - **Multi-bank** (`config.py`): any number of banks can be linked at once. `Settings.banks`
   discovers `FINMCP_BANK_<n>_ID/ASPSP_NAME/COUNTRY` env vars (grouped by index `n`) and falls
   back to a single legacy bank (`id="default"`) built from `ENABLEBANKING_ASPSP_NAME` if no
@@ -68,7 +69,11 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   (with `bank_id`) *before* calling the bank so a failure is recorded as `status="error"` instead
   of hanging in `running`; one bank's failure doesn't abort the others. Balance failures are
   swallowed per account; anything else rolls back that bank's run and marks it as error. Finishes
-  by calling `apply_rules` once, after all banks, to recategorize.
+  by calling `apply_rules` once, after all banks, to recategorize. The whole run holds an
+  exclusive `flock` on `data/sync.lock` (`sync/lock.py`): a second concurrent `run_sync` (CLI, MCP,
+  cron or dashboard) raises `SyncInProgress` before touching any bank, and `finmcp sync` exits with
+  code 75 (`EXIT_BUSY`). The OS releases the lock if the process dies. `tests/conftest.py` redirects
+  the lock path to a temp dir for every test.
 - **Categorization**: `Transaction.my_category` (user rules, `CategoryRule` table) always wins
   over `provider_category`; `analytics/categories.category_of` is the single place that encodes
   this precedence. Rules are case-insensitive substring matches on merchant/description/any,
@@ -106,14 +111,15 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   description, lowercased).
 - **Web dashboard** (`web/app.py`, `analytics/dashboard.py`, `analytics/ledger.py`, `web/static/`): Starlette app served by
   `finmcp web` on its own port (8790). Opens the DB through a separate read-only engine
-  (`sqlite:///file:...?mode=ro&uri=true`) and exposes only GET JSON endpoints (`/api/meta`,
+  (`sqlite:///file:...?mode=ro&uri=true`) and exposes GET JSON endpoints (`/api/meta`,
   `/api/monthly[?day=D]`, `/api/breakdown`, `/api/series`, `/api/transactions`, and for the «Diario»
-  tab `/api/accounts`, `/api/tags`, `/api/ledger`, `/api/movement`) plus a static UI.
+  tab `/api/accounts`, `/api/tags`, `/api/ledger`, `/api/movement`; `POST/GET /api/sync` is the only non-read action, below) plus a static UI.
   `analytics/ledger.py` («Diario», the landing tab) aggregates nothing and hides nothing.
   - It returns the latest balance per account (`current`, else `available`) with a freshness `state`: `warn` if the bank's last sync failed, `stale` if the snapshot is older than 36 h.
   - It lists every movement, neutral ones included, ordered by `booked_at` desc, then `id` desc, with keyset pagination (`cursor=<booked_at iso>|<id>`). Text search folds case and accents, so it runs in Python.
   - With `account`, it reconstructs each day's closing balance backwards from the latest snapshot. It checks every snapshot: the value must equal the previous day's close plus some subset of that day's movements.
   - It exposes the raw bank data (`raw_json`) in `/api/movement`.
+  - **The only action: pull-down to sync (Diario list view only).** `POST /api/sync` (JSON only, behind the PIN) starts `web/syncjob.py::SyncJob`, which spawns `python -m finmcp.cli sync --from <today-30d>` in a **separate process** (cwd = repo root for the `.env`; `PYTHONPATH`/`PYTHONHOME`/`VIRTUAL_ENV` stripped, like the `~/.local/bin/finmcp` wrapper). The web process keeps its read-only DB: the child writes. The job reads the child's `sync_runs` rows (id > the last one before launching) to build the summary (`outcome` ok/partial/error/busy/timeout, per-bank status, `new_transactions`); `GET /api/sync` polls it. One at a time (a second POST joins the running one). **Cooldown** `FINMCP_WEB_SYNC_COOLDOWN` (default 300 s) counts from the last finished run of *any* origin (max `sync_runs.finished_at`), because PSD2 caps bank accesses (429s are common); inside it the POST returns `started=false` + `retry_after` and the UI only reloads data. 300 s timeout kills the child. `/api/meta` carries `sync` (bool): when false the UI does not capture the gesture and `POST /api/sync` is a 404. Client: `app.js::setupPull` (touch events, non-passive `touchmove`; active only while the Diario *list* is on screen (`L.viewOf(parseHash) === "diario"`, which also covers empty/unknown/incomplete routes that render the list; NOT Mes, Evolución, Tendencias, `rango` lists or the `diario/mov/<id>` detail) — `render()` dispatches on `L.viewOf` and records what it actually painted with `setPullView(kind)` (empty while loading and on error/PIN screens; leaving the list switches it off immediately); ignored when `scrollY>0`, with a `.backdrop` sheet open, on `input`/`textarea`, with one touch only, if the move is horizontal or upward, or while syncing) + pure helpers in `lib.js` (`PULL`, `pullDistance`, `pullReady`, `waitLabel`, `syncResult`); `html.ptr-on { overscroll-behavior-y: contain }` is toggled by that same `setPullView` and set only when `sync` is true *and* the Diario list is showing, so the browser keeps its own pull-to-refresh everywhere else. On finish it runs `resetData(); boot({refreshing: true})`, which re-renders the current route; a 401 shows the PIN screen. Tests: `tests/test_web_sync.py` (real child process against a file DB), `tests/test_sync_lock.py`, JS in `tests/js/lib.test.js`.
   `analytics/dashboard.py` encodes the dashboard semantics: classification by category, not sign
   (income = categories starting with «Ingresos» plus «Otros ingresos»/«Intereses»), refunds
   subtracted from their category, `neutral` excluded, `net` equal to `monthly_summary`; panel

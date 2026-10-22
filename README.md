@@ -4,8 +4,9 @@ Servidor MCP de **finanzas personales de solo lectura** sobre **Open Banking** (
 vía **[Enable Banking](https://enablebanking.com)**. Consulta cuentas, saldos y
 movimientos de tu banco y genera analítica: gasto por categoría, suscripciones,
 cargos inusuales y resúmenes mensuales — desde Claude Desktop, Cursor o ChatGPT.
-Incluye además un **panel web de solo lectura**, pensado para el móvil, para analizar
-ingresos, gastos y ahorro de forma visual ([Panel web](#panel-web-dashboard)).
+Incluye además un **panel web de consulta**, pensado para el móvil, para analizar
+ingresos, gastos y ahorro de forma visual; tirando hacia abajo lanza una sincronización
+([Panel web](#panel-web-dashboard)).
 
 > **Solo lectura.** No inicia pagos ni transferencias: solo se piden permisos de datos
 > (cuentas, saldos y movimientos).
@@ -157,7 +158,7 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp skip-rules TX_ID...` | Desactiva las reglas para esos movimientos (`--off` para reactivarlas) |
 | `finmcp tags list/add/delete/assign/remove/spend` | Catálogo de etiquetas y etiquetado manual |
 | `finmcp serve` | Arranca el servidor MCP (stdio; `--http` para remoto) |
-| `finmcp web --host IP [--port 8790]` | Arranca el panel web de solo lectura en la red local ([Panel web](#panel-web-dashboard)) |
+| `finmcp web --host IP [--port 8790]` | Arranca el panel web en la red local: consulta en solo lectura y, tirando hacia abajo, lanza una sincronización ([Panel web](#panel-web-dashboard)) |
 | `finmcp web-pin [--remove]` | Fija (o quita) el PIN del panel web; guarda solo su huella en `.env` |
 
 ## Herramientas MCP
@@ -215,9 +216,10 @@ cabecera `Authorization: Bearer <FINMCP_HTTP_TOKEN>`.
 
 ## Panel web (dashboard)
 
-Tercera superficie de finmcp, junto al CLI y al servidor MCP: un panel web **de solo lectura**,
+Tercera superficie de finmcp, junto al CLI y al servidor MCP: un panel web **de consulta**,
 pensado primero para el móvil, para analizar ingresos, gastos y ahorro por categoría y periodo,
-con detalle hasta cada movimiento.
+con detalle hasta cada movimiento. No modifica tus datos: lo único que puede hacer es pedir una
+sincronización con los bancos (ver «Tirar para sincronizar»).
 
 ```bash
 finmcp web-pin                                     # fija el PIN (de 4 a 12 cifras); se pide dos veces
@@ -245,11 +247,33 @@ empiezan por «Ingresos», más «Otros ingresos» e «Intereses»; las devoluci
 de su categoría, y el ahorro coincide con el neto de `finmcp summary`. Toda comparación con el mes
 en curso se hace **a la misma fecha** (del día 1 al día de hoy de cada mes).
 
+**Tirar para sincronizar.** En el móvil, tirando hacia abajo desde arriba del todo de la pestaña
+**Diario** (la lista, con o sin filtros) y soltando pasado el umbral, el panel lanza una sincronización
+con los bancos y, cuando termina, recarga la lista con los datos nuevos. Es la única vista que lo hace:
+en Mes, Evolución, Tendencias, las listas de movimientos de un periodo y el detalle de un movimiento el
+gesto no sincroniza y el navegador conserva el suyo. Un aviso resume el resultado («Sincronizado · 3
+movimientos nuevos», o qué banco falló y por qué).
+
+- **Cómo:** `POST /api/sync` arranca `finmcp sync --from <hoy − 30 días>` (el mismo rango que el
+  cron diario) en un **proceso aparte**; el panel solo lo vigila y sigue abriendo la BD en solo
+  lectura. Mientras tanto, la interfaz consulta `GET /api/sync`.
+- **Una a la vez:** `finmcp sync` toma un bloqueo de fichero (`data/sync.lock`), también desde el
+  CLI, el servidor MCP y el cron. Si ya hay otra sincronización en curso, sale con código 75 y el
+  panel lo dice y muestra los datos actuales.
+- **Freno:** no se lanza otra si la última sincronización, **de cualquier origen**, terminó hace menos de
+  `FINMCP_WEB_SYNC_COOLDOWN` segundos (300 por defecto; `0` lo quita). PSD2 limita los accesos de cada
+  banco (el 429 es habitual) y un tirón repetido podría agotar el cupo del sync diario. Entonces el
+  panel solo recarga los datos y avisa de cuándo podrá volver a sincronizar.
+- **Límite:** una sincronización se cancela a los 300 s.
+- Exige el mismo PIN y la misma restricción de red que el resto de la API. Si la sesión caducó, el gesto lleva a
+  la pantalla del PIN. Sin la sincronización disponible (`meta.sync` falso) el panel tampoco captura el gesto en Diario.
+
 Seguridad:
 
 - Servicio aparte del servidor MCP, en otro puerto (8790; el MCP `--http` usa el 8000).
 - Abre la base de datos en **solo lectura** (SQLite `mode=ro`); los datos solo se consultan con
-  `GET` (los únicos `POST` son entrar y salir con el PIN).
+  `GET`. Los únicos `POST` son entrar y salir con el PIN y `POST /api/sync` (solo JSON, tras el PIN),
+  que no escribe él mismo: lanza `finmcp sync` en otro proceso.
 - **Solo red local**: atiende clientes de la red local (loopback y rangos privados) y de Tailscale
   si escucha en su IP; al resto responde 403. Se niega a escuchar en `0.0.0.0` o en una IP pública.
   **No lo publiques en Internet** (ni con Tailscale Funnel ni redirigiendo puertos).
