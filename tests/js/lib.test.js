@@ -185,3 +185,71 @@ test("Diario: filtros en la ruta ↔ parámetros de la API", () => {
   const hash = `#/diario/${encodeURIComponent(L.diaryQuery(f))}`;
   assert.deepEqual(L.diaryFilters(L.parseHash(hash)[1]), f);
 });
+
+test("tirar para sincronizar: resistencia, tope y umbral", () => {
+  assert.equal(L.pullDistance(-30), 0);                 // hacia arriba no es tirar
+  assert.equal(L.pullDistance(0), 0);
+  assert.equal(L.pullDistance(100), 100 * L.PULL.damping);
+  assert.equal(L.pullDistance(1000), L.PULL.max);       // tope
+  assert.equal(L.pullReady(L.PULL.trigger - 0.1), false);
+  assert.equal(L.pullReady(L.PULL.trigger), true);
+  // El gesto necesario es razonable: ni un roce (< 80 px de dedo) ni media pantalla (> 160 px).
+  const finger = L.PULL.trigger / L.PULL.damping;
+  assert.ok(finger > 80 && finger < 160, `dedo necesario: ${finger}`);
+  assert.ok(L.PULL.trigger < L.PULL.max && L.PULL.hold <= L.PULL.max);
+});
+
+test("tirar para sincronizar: tiempos de espera legibles", () => {
+  assert.equal(L.waitLabel(0), "1 s");
+  assert.equal(L.waitLabel(45.2), "46 s");
+  assert.equal(L.waitLabel(89), "89 s");
+  assert.equal(L.waitLabel(90), "2 min");
+  assert.equal(L.waitLabel(240), "4 min");
+});
+
+test("tirar para sincronizar: mensaje según el resultado", () => {
+  const snap = (o) => ({ outcome: "ok", new_transactions: 0, banks: [], error: null, retry_after: 0, ...o });
+  assert.deepEqual(L.syncResult(snap({ new_transactions: 3 }), true), { tone: "ok", text: "Sincronizado · 3 movimientos nuevos" });
+  assert.equal(L.syncResult(snap({ new_transactions: 1 }), true).text, "Sincronizado · 1 movimiento nuevo");
+  assert.equal(L.syncResult(snap({}), true).text, "Sincronizado · sin movimientos nuevos");
+
+  const partial = L.syncResult(snap({ outcome: "partial", new_transactions: 2, error: "el banco ha limitado los accesos (429)",
+    banks: [{ bank: "BBVA", status: "ok" }, { bank: "Trade Republic", status: "error" }] }), true);
+  assert.equal(partial.tone, "warn");
+  assert.equal(partial.text, "Sincronizado con avisos · 2 movimientos nuevos. Trade Republic no ha podido sincronizarse: el banco ha limitado los accesos (429).");
+  assert.match(L.syncResult(snap({ outcome: "partial", banks: [{ bank: "A", status: "error" }, { bank: "B", status: "error" }] }), true).text, /A, B no han podido/);
+
+  const error = L.syncResult(snap({ outcome: "error", error: "fallo de red (DNS).", banks: [{ bank: "ING", status: "error" }] }), true);
+  assert.deepEqual(error, { tone: "error", text: "No se ha podido sincronizar (ING): fallo de red (DNS). Se muestran los datos que ya había." });
+  assert.equal(L.syncResult(snap({ outcome: "error" }), true).text, "No se ha podido sincronizar. Se muestran los datos que ya había.");
+
+  assert.equal(L.syncResult(snap({ outcome: "busy" }), true).tone, "info");
+  assert.equal(L.syncResult(snap({ outcome: "timeout" }), true).tone, "warn");
+});
+
+test("tirar para sincronizar: si el servidor la frena, se dice cuándo se podrá y no se afirma que se sincronizó", () => {
+  const frenada = L.syncResult({ outcome: "ok", retry_after: 240, new_transactions: 5 }, false);
+  assert.equal(frenada.tone, "info");
+  assert.equal(frenada.text, "Datos recargados. La última sincronización es reciente: podrá volver a sincronizar en 4 min.");
+  assert.doesNotMatch(frenada.text, /Sincronizado|nuevo/);  // el resultado de la corrida anterior no se presenta como de ahora
+  assert.equal(L.syncResult({ retry_after: 0 }, false).text, "Datos recargados.");
+});
+
+test("tirar para sincronizar: solo la lista del Diario (y lo que cae en ella) puede hacerlo", () => {
+  const v = (hash) => L.viewOf(L.parseHash(hash));
+  // Diario: la lista, con o sin filtros; la ruta vacía y las desconocidas o incompletas también pintan la lista.
+  for (const h of ["", "#/", "#/diario", "#/diario/cuenta=acc1&tipo=cargos", "#/desconocida", "#/diario/mov", "#/rango/a/b"]) {
+    assert.equal(v(h), "diario", h);
+    assert.equal(L.pullEnabled(v(h)), true, h);
+  }
+  // El resto de vistas, no: pestañas, listas de movimientos de un periodo y detalle de un movimiento.
+  const otras = { "#/mes/2026-10/gastos": "mes", "#/mes": "mes", "#/evolucion": "evolucion", "#/evolucion/acumulado": "evolucion",
+    "#/tendencias": "tendencias", "#/rango/tendencias/2026-09-01/2026-09-30/gastos/g/Vivienda/mov": "rango",
+    "#/diario/mov/abc-123": "movimiento" };
+  for (const [h, view] of Object.entries(otras)) {
+    assert.equal(v(h), view, h);
+    assert.equal(L.pullEnabled(v(h)), false, h);
+  }
+  assert.equal(L.pullEnabled(""), false); // cargando, error o PIN: nada en pantalla
+});
+

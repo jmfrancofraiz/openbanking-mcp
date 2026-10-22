@@ -2,6 +2,7 @@
 :root { --bg:#f7f4ee; --card:#fffdf9; --fg:#22201c; --muted:#7a7266; --line:#e8e1d5; --accent:#0f5c55;
         --accent2:#147a70; --good:#2f7d32; --bad:#b3261e; --warn:#9a5b00; }
 html, body { overscroll-behavior-x:none; }
+html.ptr-on { overscroll-behavior-y:contain; } /* solo en la lista del Diario el gesto de tirar es del panel: sin recarga ni rebote del navegador */
 #app { touch-action:pan-y; }
 * { box-sizing:border-box; }
 body { margin:0; font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--fg); background:var(--bg); padding-bottom:80px; }
@@ -218,6 +219,20 @@ h2.h2first { margin-top:6px; }
 .idrow { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .idrow code { min-width:0; font-size:.85rem; overflow-wrap:anywhere; }
 .offscreen { position:fixed; left:-9999px; top:0; }
+
+/* tirar hacia abajo para sincronizar */
+.ptr { position:fixed; top:calc(env(safe-area-inset-top) + 6px); left:50%; z-index:40; display:flex; align-items:center; gap:8px; max-width:calc(100vw - 32px); height:40px; padding:0 16px 0 12px; border-radius:999px; background:var(--card); border:1px solid var(--line); box-shadow:0 4px 14px #0002; font-size:.88rem; font-weight:600; color:var(--muted); white-space:nowrap; pointer-events:none; opacity:0; transform:translate(-50%,-60px); transition:transform .2s ease, opacity .2s ease; }
+.ptr.drag { transition:none; }
+.ptr.ready { color:var(--accent); border-color:var(--accent); }
+.ptr-ico { flex:none; width:18px; height:18px; display:inline-block; border-radius:50%; border:2px solid currentColor; border-bottom-color:transparent; transition:transform .2s ease; }
+.ptr.ready .ptr-ico { transform:rotate(180deg); }
+.ptr.busy { color:var(--accent); }
+.ptr.busy .ptr-ico { animation:ptr-spin .8s linear infinite; }
+@keyframes ptr-spin { to { transform:rotate(360deg); } }
+.toast { position:fixed; left:12px; right:12px; bottom:calc(72px + env(safe-area-inset-bottom)); z-index:45; max-width:496px; margin:0 auto; padding:12px 14px; border-radius:14px; background:var(--fg); color:#fff; font-size:.88rem; line-height:1.35; box-shadow:0 6px 18px #0004; cursor:pointer; }
+.toast.ok { background:var(--accent); }
+.toast.warn { background:var(--warn); }
+.toast.error { background:var(--bad); }
 
 /* navegación inferior */
 .nav { position:fixed; left:0; right:0; bottom:0; z-index:20; display:grid; grid-template-columns:repeat(4,1fr); height:64px; padding-bottom:env(safe-area-inset-bottom); background:var(--card); border-top:1px solid var(--line); }

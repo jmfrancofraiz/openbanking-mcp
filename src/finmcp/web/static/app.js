@@ -3,7 +3,8 @@
    Diario (pestaña de apertura): último saldo de cada cuenta y lista plana de todos los movimientos, sin agregaciones.
    Mes: ingresos y gastos del mes seleccionado, sin comparaciones (solo minigráficas de 6 meses).
    Evolución: «Mes a mes», «Acumulado» y «Periodo contra periodo». Tendencias: una tarjeta por categoría.
-   Los importes llegan calculados de la API de solo lectura (/api/*); aquí solo se presentan. */
+   Los importes llegan calculados de la API de solo lectura (/api/*); aquí solo se presentan.
+   Única acción: tirar hacia abajo desde arriba del todo de la lista del Diario pide sincronizar con los bancos y recarga los datos. */
 (() => {
   const L = window.FinLib;
   const { eur, eur0 } = L;
@@ -22,6 +23,7 @@
   let CUT = { day: 1, days: 30 };
   let COVERAGE = []; // [{bank, first_month}]
   let PIN = false;   // ¿el panel está protegido con PIN?
+  let SYNC = false;  // ¿puede el panel lanzar una sincronización (tirar hacia abajo)?
 
   // La API responde 401 {auth: "pin"} si falta la sesión: se muestra la pantalla del PIN.
   class PinRequired extends Error {}
@@ -1164,7 +1166,7 @@
 
   /* ---------- PIN ---------- */
 
-  const waitText = (s) => (s >= 90 ? `${Math.ceil(s / 60)} min` : `${s} s`);
+  const waitText = L.waitLabel;
 
   function pinView() {
     const input = el("input", { type: "password", className: "pin-in", inputMode: "numeric", autocomplete: "off",
@@ -1208,6 +1210,128 @@
     window.scrollTo(0, 0);
   }
 
+  /* ---------- tirar hacia abajo para sincronizar ---------- */
+
+  // Al soltar pasado el umbral se pide al servidor una sincronización con los bancos (POST /api/sync), se espera a que
+  // termine y se recargan los datos. El servidor la frena si ya hay una en marcha o es muy reciente (L.syncResult lo cuenta).
+  const POLL_MS = 1500, POLL_MAX_MS = 330000; // el servidor cancela a los 300 s
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function syncCall(method) {
+    const post = method === "POST";
+    const r = await fetch("/api/sync", { method, credentials: "same-origin", cache: "no-store",
+      headers: post ? { Accept: "application/json", "Content-Type": "application/json" } : { Accept: "application/json" },
+      body: post ? "{}" : undefined });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 401 && body.auth === "pin") throw new PinRequired(body.error);
+    if (!r.ok) throw new Error(body.error || `Error ${r.status}`);
+    return body;
+  }
+
+  // Vista que hay realmente en pantalla (L.viewOf) o «» mientras carga, o si es un error o el PIN. Solo la lista del
+  // Diario puede sincronizar; solo entonces el panel hace suyo el gesto (`ptr-on`) y el navegador pierde el suyo: en las
+  // demás pestañas conserva su recarga nativa.
+  let pullView = "";
+  function setPullView(kind) {
+    pullView = kind;
+    document.documentElement.classList.toggle("ptr-on", SYNC && L.pullEnabled(kind));
+  }
+
+  function setupPull() {
+    let syncing = false;
+    let t = null; // gesto en curso: {x, y, active, pull}
+    let toastTimer = 0;
+    const txt = el("span", { className: "ptr-txt" });
+    const ptr = el("div", { className: "ptr", attrs: { "aria-hidden": "true" } }, [el("i", { className: "ptr-ico" }), txt]);
+    const toast = el("div", { className: "toast hidden", attrs: { role: "status", "aria-live": "polite" }, onclick: () => toast.classList.add("hidden") });
+    document.body.append(ptr, toast);
+
+    // `mode`: pull (tirando) · ready (se sincronizará al soltar) · busy (trabajando). `drag`: sigue al dedo, sin animación.
+    function paint(pull, mode, drag, label) {
+      ptr.className = `ptr ${mode}${drag ? " drag" : ""}`;
+      ptr.style.transform = `translate(-50%, ${Math.round(pull - 60)}px)`;
+      ptr.style.opacity = String(Math.min(1, pull / 32));
+      txt.textContent = label || (mode === "ready" ? "Suelte para sincronizar" : "Tire para sincronizar");
+    }
+    function showToast({ tone, text }) {
+      clearTimeout(toastTimer);
+      toast.className = `toast ${tone}`;
+      toast.textContent = text;
+      toastTimer = setTimeout(() => toast.classList.add("hidden"), tone === "ok" || tone === "info" ? 5000 : 9000);
+    }
+    function finish() {
+      syncing = false;
+      app.removeAttribute("aria-busy");
+      paint(0, "pull", false);
+    }
+
+    async function run() {
+      syncing = true;
+      app.setAttribute("aria-busy", "true");
+      toast.classList.add("hidden");
+      paint(L.PULL.hold, "busy", false, "Sincronizando…");
+      let result;
+      try {
+        let snap = await syncCall("POST");
+        const ran = snap.started === true || snap.state === "running"; // la lanzó este gesto o se unió a una en marcha
+        const t0 = Date.now();
+        while (snap.state === "running") {
+          if (Date.now() - t0 > POLL_MAX_MS) throw new Error("la sincronización no termina");
+          await sleep(POLL_MS);
+          snap = await syncCall("GET");
+        }
+        result = L.syncResult(snap, ran);
+      } catch (err) {
+        if (err instanceof PinRequired) { // la sesión caducó: pantalla del PIN
+          resetData();
+          app.replaceChildren(...pinView());
+          window.scrollTo(0, 0);
+          finish();
+          return;
+        }
+        const why = err instanceof TypeError ? "no hay conexión con el panel" : (err && err.message) || String(err);
+        result = { tone: "error", text: `No se ha podido sincronizar: ${why}. Se muestran los datos que ya había.` };
+      }
+      paint(L.PULL.hold, "busy", false, "Actualizando…");
+      resetData();
+      await boot({ refreshing: true }); // recarga la vista actual con datos frescos (boot gestiona sus propios errores)
+      finish();
+      showToast(result);
+    }
+
+    const cancel = () => { const s = t; t = null; if (s && s.active) paint(0, "pull", false); };
+
+    document.addEventListener("touchstart", (e) => {
+      t = null;
+      const off = !SYNC || !L.pullEnabled(pullView) || syncing || document.querySelector(".backdrop, .pin");
+      if (off || e.touches.length !== 1 || window.scrollY > 0 || e.target.closest("input, textarea")) return;
+      t = { x: e.touches[0].clientX, y: e.touches[0].clientY, active: false, pull: 0 };
+    }, { passive: true });
+
+    document.addEventListener("touchmove", (e) => {
+      if (!t) return;
+      if (e.touches.length !== 1 || window.scrollY > 0) { cancel(); return; }
+      const dx = e.touches[0].clientX - t.x, dy = e.touches[0].clientY - t.y;
+      if (!t.active) {
+        if (Math.abs(dx) < L.PULL.slop && Math.abs(dy) < L.PULL.slop) return;
+        if (dy <= 0 || Math.abs(dx) > Math.abs(dy)) { t = null; return; } // hacia arriba o de lado: no es tirar
+        t.active = true;
+      }
+      if (e.cancelable) e.preventDefault(); // sin rebote de la página ni recarga del navegador
+      t.pull = L.pullDistance(dy);
+      paint(t.pull, L.pullReady(t.pull) ? "ready" : "pull", true);
+    }, { passive: false });
+
+    const release = (fire) => {
+      const s = t;
+      t = null;
+      if (!s || !s.active) return;
+      if (fire && L.pullReady(s.pull)) run(); else paint(0, "pull", false);
+    };
+    document.addEventListener("touchend", () => release(true), { passive: true });
+    document.addEventListener("touchcancel", () => release(false), { passive: true });
+  }
+
   /* ---------- arranque ---------- */
 
   function errorView(err) {
@@ -1225,23 +1349,27 @@
     document.querySelectorAll(".backdrop").forEach((n) => n.remove());
     const p = L.parseHash(location.hash);
     const top = p[0] || "diario";
+    const kind = L.viewOf(p);
+    if (kind !== pullView) setPullView(""); // al salir de la lista del Diario el gesto se apaga ya, sin esperar a la carga
     const slow = setTimeout(() => { if (my === seq) app.classList.add("loading"); }, 150);
-    let view;
+    let view, shown = "";
     try {
-      if (top === "mes") view = await monthView(MONTHS.includes(p[1]) ? p[1] : CUR, tipoOf(p[2]));
-      else if (top === "evolucion") view = await evolutionView(p);
-      else if (top === "tendencias") view = await trendsView();
-      else if (top === "rango" && p.length >= 7) view = await rangeView(p);
-      else if (top === "diario" && p[1] === "mov" && p[2]) view = await movementView(p[2]);
+      if (kind === "mes") view = await monthView(MONTHS.includes(p[1]) ? p[1] : CUR, tipoOf(p[2]));
+      else if (kind === "evolucion") view = await evolutionView(p);
+      else if (kind === "tendencias") view = await trendsView();
+      else if (kind === "rango") view = await rangeView(p);
+      else if (kind === "movimiento") view = await movementView(p[2]);
       else view = await diaryView(top === "diario" ? p[1] : "");
+      shown = kind;
     } catch (err) {
-      view = err instanceof PinRequired ? pinView() : errorView(err);
+      view = err instanceof PinRequired ? pinView() : errorView(err); // pantalla de error o de PIN: no se tira
     } finally {
       clearTimeout(slow);
     }
     if (my !== seq) return;
     app.classList.remove("loading");
     app.replaceChildren(...view);
+    setPullView(shown);
     window.scrollTo(0, scroll !== null ? scroll : keep ? y : 0);
   }
 
@@ -1263,8 +1391,10 @@
     CUT = { day: meta.cut_day, days: meta.days_in_month };
     COVERAGE = meta.coverage;
     PIN = Boolean(meta.pin);
+    SYNC = Boolean(meta.sync);
     if (!started) {
       started = true;
+      setupPull();
       if ("scrollRestoration" in history) history.scrollRestoration = "manual";
       if (!history.state) history.replaceState({ depth: 0 }, "");
       window.addEventListener("popstate", (e) => render({ scroll: e.state && typeof e.state.scroll === "number" ? e.state.scroll : 0 }));

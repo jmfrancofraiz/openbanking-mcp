@@ -76,6 +76,40 @@
     return `${dayShort(date)}${otherYear(date, today)} ${time}`;
   }
 
+  /* ---------- tirar hacia abajo para sincronizar ---------- */
+
+  // Distancias en px. `trigger`: lo que hay que tirar (ya con resistencia) para que al soltar sincronice.
+  // `damping`: el dedo recorre 1/damping px por cada px que baja el indicador. `hold`: dónde queda mientras trabaja.
+  const PULL = { trigger: 56, max: 96, damping: 0.55, slop: 8, hold: 64 };
+  const pullDistance = (dy) => (dy > 0 ? Math.min(PULL.max, dy * PULL.damping) : 0);
+  const pullReady = (pull) => pull >= PULL.trigger;
+
+  // «45 s» o, desde 90 s, «3 min».
+  const waitLabel = (s) => { const n = Math.max(1, Math.ceil(s)); return n >= 90 ? `${Math.ceil(n / 60)} min` : `${n} s`; };
+
+  // Mensaje y tono de lo ocurrido tras tirar. `snap`: respuesta de /api/sync; `ran`: ¿se sincronizó con los bancos
+  // (la lanzó este gesto o se unió a una en marcha)? Si no, el servidor la frenó por reciente y solo se recargaron los datos.
+  function syncResult(snap, ran) {
+    const n = snap.new_transactions || 0;
+    const fresh = n ? `${n} ${n === 1 ? "movimiento nuevo" : "movimientos nuevos"}` : "sin movimientos nuevos";
+    const failed = (snap.banks || []).filter((b) => b.status !== "ok").map((b) => b.bank);
+    const why = snap.error ? snap.error.replace(/\.$/, "") : "";
+    if (!ran) {
+      return { tone: "info", text: snap.retry_after > 0
+        ? `Datos recargados. La última sincronización es reciente: podrá volver a sincronizar en ${waitLabel(snap.retry_after)}.`
+        : "Datos recargados." };
+    }
+    switch (snap.outcome) {
+      case "ok": return { tone: "ok", text: `Sincronizado · ${fresh}` };
+      case "partial": return { tone: "warn",
+        text: `Sincronizado con avisos · ${fresh}. ${failed.join(", ")} no ${failed.length === 1 ? "ha podido" : "han podido"} sincronizarse${why ? `: ${why}` : ""}.` };
+      case "busy": return { tone: "info", text: "Ya había otra sincronización en curso; se muestran los datos actuales." };
+      case "timeout": return { tone: "warn", text: "La sincronización tardó demasiado y se canceló; se muestran los datos actuales." };
+      default: return { tone: "error",
+        text: `No se ha podido sincronizar${failed.length ? ` (${failed.join(", ")})` : ""}${why ? `: ${why}` : ""}. Se muestran los datos que ya había.` };
+    }
+  }
+
   // «septiembre 2026», «jul – sep 2026», «oct 25 – sep 26», «1–20 oct 2026» o «1 jul – 20 oct 2026».
   function rangeLabel(from, to) {
     const fm = from.slice(0, 7), tm = to.slice(0, 7);
@@ -152,6 +186,19 @@
       try { return decodeURIComponent(x); } catch { return x; }
     });
   }
+
+  // Vista que pinta una ruta (ya con parseHash): «mes», «evolucion», «tendencias», «rango» (movimientos de un periodo),
+  // «movimiento» (detalle del Diario) o «diario» (la lista, que además es la de las rutas desconocidas o incompletas).
+  function viewOf(p) {
+    const top = p[0] || "diario";
+    if (top === "mes" || top === "evolucion" || top === "tendencias") return top;
+    if (top === "rango" && p.length >= 7) return "rango";
+    if (top === "diario" && p[1] === "mov" && p[2]) return "movimiento";
+    return "diario";
+  }
+
+  // Solo la lista del Diario puede lanzar una sincronización tirando hacia abajo.
+  const pullEnabled = (view) => view === "diario";
 
   /* ---------- periodos ---------- */
 
@@ -272,6 +319,7 @@
     dayLabel, dayShort, cap, rangeLabel, addDays, dayHeading, dayLong, localStamp, whenLabel,
     colorFor, share, shown, cleanTitle, titleOf, signedEur, topN, delta, parseHash,
     DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams,
+    PULL, pullDistance, pullReady, waitLabel, syncResult, viewOf, pullEnabled,
     periodsOf, comparisonCut, periodRange, accumulatedMonths,
     PACE_REFS, paceRefs, verdict, trendOf, diffGroups, diffSubcategories,
   };
