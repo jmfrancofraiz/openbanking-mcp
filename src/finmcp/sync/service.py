@@ -77,8 +77,8 @@ def run_sync(
     banks = settings.banks
     if not banks:
         raise RuntimeError(
-            "No hay ningún banco configurado. Define ENABLEBANKING_ASPSP_NAME "
-            "o FINMCP_BANK_1_ASPSP_NAME en .env."
+            "No hay ningún banco configurado. Define FINMCP_BANK_1_ASPSP_NAME "
+            "(Enable Banking) o BONUSLY_API_TOKEN en .env."
         )
     if bank_id:
         selected = [b for b in banks if b.id == bank_id]

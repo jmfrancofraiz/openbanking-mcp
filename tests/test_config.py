@@ -5,7 +5,7 @@ from finmcp.config import Settings
 
 def _clear_bank_env(monkeypatch):
     for key in list(__import__("os").environ):
-        if key.startswith("FINMCP_BANK_") or key.startswith("ENABLEBANKING_"):
+        if key.startswith(("FINMCP_BANK_", "ENABLEBANKING_", "BONUSLY_")):
             monkeypatch.delenv(key, raising=False)
 
 
@@ -50,6 +50,37 @@ def test_banks_falls_back_to_legacy_single_bank(monkeypatch):
     assert len(banks) == 1
     assert banks[0].id == "default"
     assert banks[0].aspsp_name == "CaixaBank"
+
+
+def test_bonusly_se_anade_como_banco_si_hay_token(monkeypatch):
+    _clear_bank_env(monkeypatch)
+    monkeypatch.setenv("FINMCP_BANK_1_ID", "bbva")
+    monkeypatch.setenv("FINMCP_BANK_1_ASPSP_NAME", "BBVA")
+    monkeypatch.setenv("BONUSLY_API_TOKEN", "tok")
+
+    banks = Settings(_env_file=None).banks
+
+    assert [(b.id, b.provider) for b in banks] == [
+        ("bbva", "enablebanking"),
+        ("Bonusly", "bonusly"),
+    ]
+
+
+def test_bonusly_id_y_valor_del_punto_configurables(monkeypatch):
+    _clear_bank_env(monkeypatch)
+    monkeypatch.setenv("BONUSLY_API_TOKEN", "tok")
+    monkeypatch.setenv("BONUSLY_BANK_ID", "bonus")
+    monkeypatch.setenv("BONUSLY_EUR_PER_POINT", "1.07")
+
+    s = Settings(_env_file=None)
+
+    assert [b.id for b in s.banks] == ["bonus"]
+    assert s.bonusly_eur_per_point == 1.07
+
+
+def test_sin_token_no_hay_bonusly(monkeypatch):
+    _clear_bank_env(monkeypatch)
+    assert Settings(_env_file=None).banks == []
 
 
 def test_banks_empty_when_nothing_configured(monkeypatch):

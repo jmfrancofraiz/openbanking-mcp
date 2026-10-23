@@ -27,11 +27,12 @@ _BANK_ENV_RE = re.compile(r"^FINMCP_BANK_(\d+)_([A-Z0-9_]+)$")
 
 @dataclass
 class BankConfig:
-    """Un banco (ASPSP) vinculado vía Enable Banking."""
+    """Un banco: vía Enable Banking (PSD2) o Bonusly (puntos de reconocimiento)."""
 
     id: str
     aspsp_name: str = ""
     country: str = "ES"
+    provider: str = "enablebanking"  # "enablebanking" | "bonusly"
 
 
 def _discover_bank_configs(env_file: Path | None) -> list[BankConfig]:
@@ -75,6 +76,14 @@ class Settings(BaseSettings):
     enablebanking_country: str = "ES"
     # Enable Banking exige HTTPS; usamos copy-paste del code (no se captura por servidor).
     enablebanking_redirect_uri: str = "https://localhost:3000/callback"
+
+    # --- Bonusly (puntos de reconocimiento tratados como una cuenta; solo lectura) ---
+    # PAT de Bonusly (Settings → API) con scopes user:read, recognition:read y rewards:read.
+    bonusly_api_token: str = ""
+    bonusly_bank_id: str = "Bonusly"
+    # Valor en euros de un punto (NetCoin). Con dos decimales como máximo, cada movimiento
+    # es un número exacto de céntimos y el saldo cuadra al céntimo con la suma de movimientos.
+    bonusly_eur_per_point: float = 1.08
 
     # --- Almacenamiento ---
     finmcp_db_path: Path | None = None
@@ -126,19 +135,21 @@ class Settings(BaseSettings):
 
     @property
     def banks(self) -> list[BankConfig]:
-        """Bancos configurados: `FINMCP_BANK_N_*` indexados, o el legacy de uno solo."""
-        discovered = _discover_bank_configs(self._env_file_path)
-        if discovered:
-            return discovered
-        if self.enablebanking_aspsp_name:
-            return [
+        """Bancos configurados: `FINMCP_BANK_N_*` (o el legacy de uno) + Bonusly si hay token."""
+        banks = _discover_bank_configs(self._env_file_path)
+        if not banks and self.enablebanking_aspsp_name:
+            banks = [
                 BankConfig(
                     id="default",
                     aspsp_name=self.enablebanking_aspsp_name,
                     country=self.enablebanking_country,
                 )
             ]
-        return []
+        if self.bonusly_api_token:
+            banks.append(
+                BankConfig(id=self.bonusly_bank_id, aspsp_name="Bonusly", provider="bonusly")
+            )
+        return banks
 
 
 settings = Settings()

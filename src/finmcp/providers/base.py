@@ -6,7 +6,7 @@ from finmcp.providers.types import Account, Balance, Transaction
 
 
 class BankDataProvider(Protocol):
-    """Interfaz de solo lectura para el proveedor Open Banking (Enable Banking).
+    """Interfaz de solo lectura de un proveedor (Enable Banking, Bonusly).
 
     Ninguna operación inicia pagos ni transferencias.
     """
