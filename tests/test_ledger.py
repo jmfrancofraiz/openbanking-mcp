@@ -91,6 +91,74 @@ def test_accounts_sin_saldo_es_stale(session, cuentas):
     assert rows["acc2"]["sync"] is None and rows["acc2"]["count"] == 0
 
 
+def _acc(bank, value, kind="actual", state="ok", at="2026-10-21T05:30:00Z", currency="EUR"):
+    """Una fila de `accounts()` con lo único que mira `accounts_total`."""
+    balance = None if value is None else {"value": value, "kind": kind, "at": at}
+    return {"bank": bank, "currency": currency, "balance": balance, "state": state}
+
+
+def test_accounts_total_suma_los_ultimos_saldos(session, cuentas):
+    add_balance(session, "acc1", utc(2026, 10, 21), current=8075.99)
+    add_balance(session, "acc2", utc(2026, 10, 21), current=9380.35)
+    add_balance(session, "acc3", utc(2026, 10, 21), current=None, available=9.75)
+    for bank in ("ING", "BBVA", "Revolut"):
+        add_run(session, bank, utc(2026, 10, 21))
+
+    total = ledger.accounts_total(ledger.accounts(session, NOW))
+
+    assert total == {
+        "value": 17466.09, "currency": "EUR", "count": 3, "missing": [],
+        # Revolut no da saldo contable: aporta el disponible, y se avisa.
+        "disponible": ["Revolut"], "outdated": [], "oldest": "2026-10-21T05:30:00Z", "state": "ok",
+    }
+
+
+def test_accounts_total_en_centimos_sin_errores_de_coma_flotante():
+    # 0,1 + 0,2 en coma flotante da 0,30000000000000004.
+    total = ledger.accounts_total([_acc("A", 0.1), _acc("B", 0.2), _acc("C", 1234.56)])
+
+    assert total["value"] == 1234.86
+
+
+def test_accounts_total_cuenta_sin_saldo_no_suma_pero_se_avisa():
+    total = ledger.accounts_total([_acc("A", 100.0), _acc("B", None, state="stale")])
+
+    assert total["value"] == 100.0 and total["count"] == 1
+    assert total["missing"] == ["B"] and total["outdated"] == []
+    assert total["state"] == "stale"  # el peor estado cuenta aunque esa cuenta no sume
+
+
+def test_accounts_total_saldo_viejo_o_con_sync_fallida_suma_pero_se_avisa():
+    total = ledger.accounts_total([
+        _acc("A", 100.0), _acc("B", 50.0, state="warn"),
+        _acc("C", 25.0, state="stale", at="2026-10-18T05:30:00Z"),
+    ])
+
+    assert total["value"] == 175.0 and total["count"] == 3 and total["missing"] == []
+    assert total["outdated"] == ["B", "C"] and total["state"] == "stale"
+    assert total["oldest"] == "2026-10-18T05:30:00Z"
+
+
+def test_accounts_total_compara_las_fotos_como_fechas_no_como_texto():
+    # «…05:30:00Z» y «…05:30:00.5Z»: como texto la segunda sería la menor; como fecha es la posterior.
+    total = ledger.accounts_total([_acc("A", 1.0, at="2026-10-21T05:30:00Z"),
+                                   _acc("B", 1.0, at="2026-10-21T05:30:00.5Z")])
+
+    assert total["oldest"] == "2026-10-21T05:30:00Z"
+
+
+def test_accounts_total_un_banco_con_dos_cuentas_se_nombra_una_vez():
+    total = ledger.accounts_total([_acc("BBVA", 10.0, kind="disponible"), _acc("BBVA", 5.0, kind="disponible")])
+
+    assert total["disponible"] == ["BBVA"] and total["count"] == 2
+
+
+def test_accounts_total_sin_saldos_o_con_monedas_distintas_no_hay_total():
+    assert ledger.accounts_total([]) is None
+    assert ledger.accounts_total([_acc("A", None, state="stale")]) is None
+    assert ledger.accounts_total([_acc("A", 10.0), _acc("B", 10.0, currency="USD")]) is None
+
+
 def test_tags_in_use_sin_exclusiones(session, make_tx):
     a, b = make_tx(1), make_tx(2)
     tag(session, a, "tomiño")

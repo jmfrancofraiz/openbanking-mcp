@@ -287,6 +287,8 @@ def test_api_accounts_y_tags(diario):
     [acc] = body["accounts"]
     assert acc["id"] == "acc1" and acc["state"] == "ok"
     assert acc["balance"] == {"value": 1000.0, "kind": "actual", "at": "2026-04-10T05:30:00Z"}
+    assert body["total"] == {"value": 1000.0, "currency": "EUR", "count": 1, "missing": [], "disponible": [],
+                             "outdated": [], "oldest": "2026-04-10T05:30:00Z", "state": "ok"}
     assert diario.get("/api/tags").json() == {"tags": []}
 
 

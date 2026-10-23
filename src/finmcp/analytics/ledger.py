@@ -4,6 +4,7 @@ A diferencia de `dashboard.py`, aquí no se agrupa ni se excluye nada: se listan
 los movimientos (también los no computables) y el último saldo conocido de cada cuenta.
 
 - `accounts()`: una tarjeta por cuenta con su último saldo y la frescura de su sincronización.
+- `accounts_total()`: la suma de esos últimos saldos (tarjeta «Total»; cálculo del servidor, no del cliente).
 - `movements()`: lista plana de la fecha más reciente a la más antigua, con filtros y
   paginación por cursor. Orden estable: fecha descendente y, dentro del día, id descendente
   (el banco solo da la fecha, sin hora: el orden dentro de un día no es el real).
@@ -166,6 +167,41 @@ def accounts(session: Session, now: datetime) -> list[dict]:
             "last": last.date().isoformat() if last else None,
         })
     return out
+
+
+_STATE_RANK = {"ok": 0, "warn": 1, "stale": 2}
+
+
+def accounts_total(accounts: list[dict]) -> dict | None:
+    """Suma de los últimos saldos de todas las cuentas (salida de `accounts()`), con sus salvedades.
+
+    Suma el saldo que cada cuenta muestra: el contable («actual») o, si el banco no lo da, el disponible
+    (`disponible` dice de qué bancos es así). Se suma en céntimos para no arrastrar errores de coma flotante.
+    Una cuenta sin saldo no suma (`missing`); una con saldo viejo o con la última sincronización fallida sí,
+    porque es el último dato que se tiene, pero queda en `outdated`. `state` es el peor estado de todas las
+    cuentas (también las que no suman) y `oldest`, la foto de saldo más antigua de las que suman.
+
+    Sin ninguna cuenta con saldo, o con saldos en monedas distintas (no hay tipo de cambio que aplicar),
+    no hay total: devuelve None.
+    """
+    with_balance = [a for a in accounts if a["balance"] is not None]
+    currencies = {a["currency"] for a in with_balance}
+    if not with_balance or len(currencies) != 1:
+        return None
+
+    def banks(rows):
+        return list(dict.fromkeys(a["bank"] for a in rows))  # sin repetir, en orden
+
+    return {
+        "value": round(sum(_cents(a["balance"]["value"]) for a in with_balance) / 100, 2),
+        "currency": currencies.pop(),
+        "count": len(with_balance),
+        "missing": banks(a for a in accounts if a["balance"] is None),
+        "disponible": banks(a for a in with_balance if a["balance"]["kind"] == "disponible"),
+        "outdated": banks(a for a in with_balance if a["state"] != "ok"),
+        "oldest": min((a["balance"]["at"] for a in with_balance), key=datetime.fromisoformat),
+        "state": max((a["state"] for a in accounts), key=_STATE_RANK.__getitem__),
+    }
 
 
 def tags_in_use(session: Session) -> list[dict]:

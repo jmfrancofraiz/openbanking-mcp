@@ -414,8 +414,9 @@ def create_app(
 
     def api_accounts(request: Request) -> JSONResponse:
         moment = now()
-        return JSONResponse({"now": ledger.iso_utc(moment),
-                             "accounts": query(lambda s: ledger.accounts(s, moment))})
+        rows = query(lambda s: ledger.accounts(s, moment))
+        return JSONResponse({"now": ledger.iso_utc(moment), "accounts": rows,
+                             "total": ledger.accounts_total(rows)})
 
     def api_tags(request: Request) -> JSONResponse:
         return JSONResponse({"tags": query(ledger.tags_in_use)})
