@@ -25,8 +25,8 @@ entregado "tal cual", sin garantías (ver [LICENSE](LICENSE)). Lee las [notas PS
 ## Arquitectura
 
 ```txt
-Tu banco (PSD2)
-   -> Enable Banking (AIS)          [interfaz BankDataProvider]
+Tu banco (PSD2)                     Bonusly (puntos de reconocimiento)
+   -> Enable Banking (AIS)             -> API de Bonusly      [interfaz BankDataProvider]
    -> Capa de sincronización        (pull idempotente e incremental)
    -> SQLite (SQLAlchemy)
    -> Capa de analítica             (funciones puras)
@@ -42,8 +42,9 @@ El servidor MCP **lee de SQLite, nunca llama al banco en caliente**. La sincroni
 es un proceso aparte (`finmcp sync`, manual o por cron).
 
 > ¿Por qué Enable Banking? Es el agregador AIS **self-serve y gratis para uso personal**
-> que cubre la banca europea. Es el único proveedor soportado por el proyecto; el código
-> mantiene una interfaz `BankDataProvider` por si se añade otro proveedor en el futuro.
+> que cubre la banca europea. Es el proveedor de todos los bancos. El segundo proveedor,
+> **Bonusly**, trata los puntos de reconocimiento de la empresa como una cuenta más
+> ([Bonusly](#bonusly-puntos-de-reconocimiento-como-cuenta)); ambos implementan `BankDataProvider`.
 
 ## Paso a paso
 
@@ -144,6 +145,7 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp accounts` | Lista las cuentas locales (las manuales, marcadas `· manual`) |
 | `finmcp add-account --bank B --name N [--iban …] [--type SVGS]` | Da de alta una **cuenta manual**: no se sincroniza; sus movimientos llegan por `import-csv` ([Cuentas manuales](#cuentas-manuales-sin-sincronización)) |
 | `finmcp set-balance ID IMPORTE [--at FECHA]` | Fija el saldo de una cuenta manual |
+| `finmcp remove-account ID [--apply]` | Retira una cuenta manual sin movimientos y sus saldos anotados (sin `--apply`, simula) |
 | `finmcp balances` | Saldo más reciente de cada cuenta |
 | `finmcp transactions` | Movimientos (`--account`, `--bank`, `--from`, `--to`, `--type`, `--tag`, `--limit`) |
 | `finmcp search TEXTO` | Busca movimientos por comercio o concepto (`--tag`) |
@@ -170,7 +172,7 @@ Equivalentes a los comandos del CLI, salvo `auth` (solo CLI, requiere navegador)
 `list_accounts` · `get_balances` · `get_transactions` · `search_transactions` ·
 `spend_by_category_tool` · `list_bills` · `unusual_charges` ·
 `monthly_summary_tool` · `sync_status` · `sync` · `list_banks` · `list_institutions` ·
-`import_csv` · `add_manual_account` · `set_manual_balance` · `categorize` · `add_category_rule` · `update_category_rule` · `remove_category_rules` · `list_category_rules` ·
+`import_csv` · `add_manual_account` · `set_manual_balance` · `remove_manual_account` · `categorize` · `add_category_rule` · `update_category_rule` · `remove_category_rules` · `list_category_rules` ·
 `add_rule_tags` · `remove_rule_tags` · `set_rule_neutral` · `set_rule_is_bill` · `list_tags` · `create_tag` ·
 `delete_tag` · `tag_transactions` · `untag_transactions` · `set_transactions_neutral` ·
 `recategorize_transaction` · `set_transactions_skip_rules` · `spend_by_tag_tool`
@@ -457,6 +459,46 @@ finmcp import-csv movimientos.xlsx --iban ES9121000418450200051332
 - `set-balance` solo vale para cuentas manuales (el saldo de las sincronizadas lo da el banco).
 - En el panel, la cuenta sale en los saldos del Diario con «manual · <fecha del saldo>», sin semáforo de
   sincronización (no se marca desactualizada por antigüedad: la fecha ya dice de cuándo es) y suma en el total.
+
+## Bonusly (puntos de reconocimiento como cuenta)
+
+Si la empresa usa [Bonusly](https://bonus.ly), finmcp puede tratar el saldo de puntos como una
+cuenta más, en euros, que se sincroniza con el resto:
+
+- **Ingresos** = reconocimientos recibidos (también los añadidos de otros compañeros y las
+  felicitaciones a grupos). Los de 0 puntos no se importan, y los que usted da tampoco (salen
+  de la asignación para regalar, no de su saldo).
+- **Gastos** = canjes de recompensas. El comercio es la marca de la tarjeta regalo
+  («€100 Amazon.es Gift Card» → «Amazon.es»), así que cada canje se categoriza con las reglas
+  de siempre, como cualquier otro gasto.
+- **Saldo** = puntos canjeables × `BONUSLY_EUR_PER_POINT` (€ por punto). Con dos decimales
+  como máximo, cada movimiento es un número exacto de céntimos y el saldo cuadra con la suma.
+
+Configuración (solo `.env`; no hay `auth`):
+
+```bash
+BONUSLY_API_TOKEN=...          # Bonusly → Settings → API → Create token
+BONUSLY_EUR_PER_POINT=1.08     # valor de un punto en euros
+# BONUSLY_BANK_ID=Bonusly      # id del «banco» en finmcp
+```
+
+El token debe llevar **solo** los scopes `user:read`, `recognition:read` y `rewards:read`, y
+caduca (máximo un año; Bonusly avisa por correo). Con él, `finmcp banks list` muestra el banco
+`Bonusly` y `finmcp sync` lo incluye (`--strategy` no aplica; los rangos largos se piden por
+tramos de un año). Un `401/403` en `finmcp sync` es un token caducado o sin scope.
+
+Detalles y límites conocidos:
+
+- La API es la de herramientas JSON-RPC de `https://bonus.ly/mcp`, que Bonusly declara en
+  acceso anticipado: si cambian una herramienta, el sync de Bonusly fallará con un error claro
+  (los bancos siguen).
+- `getRecognitionReceived` omite las felicitaciones a grupos grandes y `getRecognitionFeed` no
+  trae los añadidos: se unen ambas por id (juntas cuadran con el total ganado de Bonusly).
+- Bonusly solo da el precio **actual** de cada recompensa, no el que se pagó: el histórico de
+  canjes antiguos puede no cuadrar con el saldo. Se corrige con un único movimiento de ajuste
+  (`import-csv --account-id` + regla `--neutral`).
+- El mensaje del reconocimiento no va en la descripción (haría casar reglas ajenas y sus
+  etiquetas); se conserva en `raw_json`, visible en el detalle del movimiento del panel.
 
 ## Sincronización programada (macOS / launchd)
 
