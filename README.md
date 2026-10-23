@@ -5,8 +5,8 @@ vía **[Enable Banking](https://enablebanking.com)**. Consulta cuentas, saldos y
 movimientos de tu banco y genera analítica: gasto por categoría, suscripciones,
 cargos inusuales y resúmenes mensuales — desde Claude Desktop, Cursor o ChatGPT.
 Incluye además un **panel web de consulta**, pensado para el móvil, para analizar
-ingresos, gastos y ahorro de forma visual; tirando hacia abajo lanza una sincronización
-([Panel web](#panel-web-dashboard)).
+ingresos, gastos y ahorro de forma visual; tirando hacia abajo recarga la página o, con un tirón largo,
+lanza una sincronización ([Panel web](#panel-web-dashboard)).
 
 > **Solo lectura.** No inicia pagos ni transferencias: solo se piden permisos de datos
 > (cuentas, saldos y movimientos).
@@ -158,7 +158,7 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp skip-rules TX_ID...` | Desactiva las reglas para esos movimientos (`--off` para reactivarlas) |
 | `finmcp tags list/add/delete/assign/remove/spend` | Catálogo de etiquetas y etiquetado manual |
 | `finmcp serve` | Arranca el servidor MCP (stdio; `--http` para remoto) |
-| `finmcp web --host IP [--port 8790]` | Arranca el panel web en la red local: consulta en solo lectura y, tirando hacia abajo, lanza una sincronización ([Panel web](#panel-web-dashboard)) |
+| `finmcp web --host IP [--port 8790]` | Arranca el panel web en la red local: consulta en solo lectura y, tirando hacia abajo, recarga la página o (tirón largo) lanza una sincronización ([Panel web](#panel-web-dashboard)) |
 | `finmcp web-pin [--remove]` | Fija (o quita) el PIN del panel web; guarda solo su huella en `.env` |
 
 ## Herramientas MCP
@@ -219,7 +219,7 @@ cabecera `Authorization: Bearer <FINMCP_HTTP_TOKEN>`.
 Tercera superficie de finmcp, junto al CLI y al servidor MCP: un panel web **de consulta**,
 pensado primero para el móvil, para analizar ingresos, gastos y ahorro por categoría y periodo,
 con detalle hasta cada movimiento. No modifica tus datos: lo único que puede hacer es pedir una
-sincronización con los bancos (ver «Tirar para sincronizar»).
+sincronización con los bancos (ver «Tirar para recargar o sincronizar»).
 
 ```bash
 finmcp web-pin                                     # fija el PIN (de 4 a 12 cifras); se pide dos veces
@@ -256,12 +256,20 @@ empiezan por «Ingresos», más «Otros ingresos» e «Intereses»; las devoluci
 de su categoría, y el ahorro coincide con el neto de `finmcp summary`. Toda comparación con el mes
 en curso se hace **a la misma fecha** (del día 1 al día de hoy de cada mes).
 
-**Tirar para sincronizar.** En el móvil, tirando hacia abajo desde arriba del todo de la pestaña
-**Diario** (la lista, con o sin filtros) y soltando pasado el umbral, el panel lanza una sincronización
-con los bancos y, cuando termina, recarga la lista con los datos nuevos. Es la única vista que lo hace:
-en Mes, Evolución, Tendencias, las listas de movimientos de un periodo y el detalle de un movimiento el
-gesto no sincroniza y el navegador conserva el suyo. Un aviso resume el resultado («Sincronizado · 3
-movimientos nuevos», o qué banco falló y por qué).
+**Tirar para recargar o sincronizar.** En el móvil, tirando hacia abajo desde arriba del todo de la pestaña
+**Diario** (la lista, con o sin filtros), lo que ocurre al soltar depende de lo largo que sea el tirón; el
+indicador de arriba lo va diciendo mientras se tira:
+
+- **Tirón corto** (menos de unos 100 px): no hace nada.
+- **Tirón mediano** (unos 100–190 px): **recarga la página** (la recarga nativa del navegador, que además
+  revalida el JavaScript y el CSS y conserva la ruta y los filtros). No habla con los bancos.
+- **Tirón largo** (más de unos 190 px): lanza una **sincronización** con los bancos y, cuando termina,
+  recarga la lista con los datos nuevos.
+
+Se decide por dónde está el dedo al soltar: se puede pasar de largo y volver atrás para elegir el mediano.
+La sincronización solo se dispara en Diario: en Mes, Evolución, Tendencias, las listas de movimientos de un
+periodo y el detalle de un movimiento el panel no captura el gesto y el navegador conserva el suyo. Un aviso
+resume el resultado de la sincronización («Sincronizado · 3 movimientos nuevos», o qué banco falló y por qué).
 
 - **Cómo:** `POST /api/sync` arranca `finmcp sync --from <hoy − 30 días>` (el mismo rango que el
   cron diario) en un **proceso aparte**; el panel solo lo vigila y sigue abriendo la BD en solo

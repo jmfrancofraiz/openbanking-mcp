@@ -78,11 +78,13 @@
 
   /* ---------- tirar hacia abajo para sincronizar ---------- */
 
-  // Distancias en px. `trigger`: lo que hay que tirar (ya con resistencia) para que al soltar sincronice.
-  // `damping`: el dedo recorre 1/damping px por cada px que baja el indicador. `hold`: dónde queda mientras trabaja.
-  const PULL = { trigger: 56, max: 96, damping: 0.55, slop: 8, hold: 64 };
+  // Distancias en px. `reload` y `sync`: lo que hay que tirar (ya con resistencia) para que al soltar recargue la página
+  // (tirón mediano) o sincronice (tirón largo). `damping`: el dedo recorre 1/damping px por cada px que baja el indicador.
+  // `max`: tope del indicador. `hold`: dónde queda mientras trabaja.
+  const PULL = { reload: 56, sync: 104, max: 120, damping: 0.55, slop: 8, hold: 64 };
   const pullDistance = (dy) => (dy > 0 ? Math.min(PULL.max, dy * PULL.damping) : 0);
-  const pullReady = (pull) => pull >= PULL.trigger;
+  // Qué haría soltar ahora: «none» (tirón corto), «reload» (mediano: recarga la página) o «sync» (largo: sincroniza).
+  const pullZone = (pull) => (pull >= PULL.sync ? "sync" : pull >= PULL.reload ? "reload" : "none");
 
   // «45 s» o, desde 90 s, «3 min».
   const waitLabel = (s) => { const n = Math.max(1, Math.ceil(s)); return n >= 90 ? `${Math.ceil(n / 60)} min` : `${n} s`; };
@@ -325,7 +327,7 @@
     dayLabel, dayShort, cap, rangeLabel, addDays, dayHeading, dayLong, localStamp, whenLabel,
     colorFor, share, shown, cleanTitle, titleOf, signedEur, topN, delta, parseHash,
     DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams,
-    PULL, pullDistance, pullReady, waitLabel, syncResult, viewOf, pullEnabled,
+    PULL, pullDistance, pullZone, waitLabel, syncResult, viewOf, pullEnabled,
     periodsOf, comparisonCut, periodRange, accumulatedMonths,
     PACE_REFS, paceRefs, verdict, trendOf, diffGroups, diffSubcategories,
     nextTheme, isDarkTheme,

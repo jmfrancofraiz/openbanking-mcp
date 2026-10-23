@@ -1300,12 +1300,18 @@
     const toast = el("div", { className: "toast hidden", attrs: { role: "status", "aria-live": "polite" }, onclick: () => toast.classList.add("hidden") });
     document.body.append(ptr, toast);
 
-    // `mode`: pull (tirando) · ready (se sincronizará al soltar) · busy (trabajando). `drag`: sigue al dedo, sin animación.
+    // `mode`: pull (tirando, aún corto) · reload (al soltar recarga la página) · sync (al soltar sincroniza) · busy (trabajando).
+    // `drag`: sigue al dedo, sin animación.
+    const HINT = {
+      pull: "Tire para recargar",
+      reload: "Recargar · siga para sincronizar",
+      sync: "Suelte para sincronizar",
+    };
     function paint(pull, mode, drag, label) {
       ptr.className = `ptr ${mode}${drag ? " drag" : ""}`;
       ptr.style.transform = `translate(-50%, ${Math.round(pull - 60)}px)`;
       ptr.style.opacity = String(Math.min(1, pull / 32));
-      txt.textContent = label || (mode === "ready" ? "Suelte para sincronizar" : "Tire para sincronizar");
+      txt.textContent = label || HINT[mode] || HINT.pull;
     }
     function showToast({ tone, text }) {
       clearTimeout(toastTimer);
@@ -1353,6 +1359,14 @@
       showToast(result);
     }
 
+    // Tirón mediano: recarga completa de la página (la nativa del navegador). Revalida también el JS y el CSS, y conserva la ruta.
+    function reloadPage() {
+      syncing = true; // ignora nuevos gestos hasta que la página se cierre
+      toast.classList.add("hidden");
+      paint(L.PULL.hold, "busy", false, "Recargando…");
+      location.reload();
+    }
+
     const cancel = () => { const s = t; t = null; if (s && s.active) paint(0, "pull", false); };
 
     document.addEventListener("touchstart", (e) => {
@@ -1373,14 +1387,19 @@
       }
       if (e.cancelable) e.preventDefault(); // sin rebote de la página ni recarga del navegador
       t.pull = L.pullDistance(dy);
-      paint(t.pull, L.pullReady(t.pull) ? "ready" : "pull", true);
+      const zone = L.pullZone(t.pull);
+      paint(t.pull, zone === "none" ? "pull" : zone, true);
     }, { passive: false });
 
+    // Lo que se hace lo decide dónde está el dedo al soltar: se puede pasar de largo y volver atrás para elegir el mediano.
     const release = (fire) => {
       const s = t;
       t = null;
       if (!s || !s.active) return;
-      if (fire && L.pullReady(s.pull)) run(); else paint(0, "pull", false);
+      const zone = fire ? L.pullZone(s.pull) : "none";
+      if (zone === "sync") run();
+      else if (zone === "reload") reloadPage();
+      else paint(0, "pull", false);
     };
     document.addEventListener("touchend", () => release(true), { passive: true });
     document.addEventListener("touchcancel", () => release(false), { passive: true });

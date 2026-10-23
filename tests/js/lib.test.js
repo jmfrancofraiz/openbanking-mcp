@@ -197,17 +197,25 @@ test("Diario: filtros en la ruta ↔ parámetros de la API", () => {
   assert.deepEqual(L.diaryFilters(L.parseHash(hash)[1]), f);
 });
 
-test("tirar para sincronizar: resistencia, tope y umbral", () => {
+test("tirar: resistencia, tope y zonas (mediano recarga la página, largo sincroniza)", () => {
   assert.equal(L.pullDistance(-30), 0);                 // hacia arriba no es tirar
   assert.equal(L.pullDistance(0), 0);
   assert.equal(L.pullDistance(100), 100 * L.PULL.damping);
   assert.equal(L.pullDistance(1000), L.PULL.max);       // tope
-  assert.equal(L.pullReady(L.PULL.trigger - 0.1), false);
-  assert.equal(L.pullReady(L.PULL.trigger), true);
-  // El gesto necesario es razonable: ni un roce (< 80 px de dedo) ni media pantalla (> 160 px).
-  const finger = L.PULL.trigger / L.PULL.damping;
-  assert.ok(finger > 80 && finger < 160, `dedo necesario: ${finger}`);
-  assert.ok(L.PULL.trigger < L.PULL.max && L.PULL.hold <= L.PULL.max);
+  assert.equal(L.pullZone(0), "none");
+  assert.equal(L.pullZone(L.PULL.reload - 0.1), "none");
+  assert.equal(L.pullZone(L.PULL.reload), "reload");
+  assert.equal(L.pullZone(L.PULL.sync - 0.1), "reload");
+  assert.equal(L.pullZone(L.PULL.sync), "sync");
+  assert.equal(L.pullZone(L.PULL.max), "sync");         // el tope del indicador llega a la zona larga
+  assert.equal(L.pullZone(L.pullDistance(1000)), "sync");
+  // Distancias de dedo razonables: el mediano no es un roce ni media pantalla, el largo es claramente más largo
+  // (margen para no pasar de uno a otro sin querer) y cabe en una pantalla de móvil.
+  const finger = (pull) => pull / L.PULL.damping;
+  assert.ok(finger(L.PULL.reload) > 80 && finger(L.PULL.reload) < 130, `mediano: ${finger(L.PULL.reload)}`);
+  assert.ok(finger(L.PULL.sync) > 160 && finger(L.PULL.sync) < 240, `largo: ${finger(L.PULL.sync)}`);
+  assert.ok(finger(L.PULL.sync) - finger(L.PULL.reload) >= 60);
+  assert.ok(L.PULL.reload < L.PULL.sync && L.PULL.sync <= L.PULL.max && L.PULL.hold <= L.PULL.max);
 });
 
 test("tirar para sincronizar: tiempos de espera legibles", () => {
