@@ -39,24 +39,28 @@ def _resolve_bank(bank_id: str | None):
 def auth(
     bank: str = typer.Option(None, "--bank", help="Id del banco (ver `finmcp banks list`)"),
 ) -> None:
-    """Autoriza con Enable Banking y guarda las credenciales cifradas."""
+    """Autoriza con Enable Banking y guarda las credenciales cifradas (Bonusly no lo necesita)."""
+    b = _resolve_bank(bank)
+    if b.provider == "bonusly":
+        typer.echo("Bonusly no usa `auth`: basta con BONUSLY_API_TOKEN en .env.", err=True)
+        raise typer.Exit(code=2)
     from finmcp.providers.enablebanking.auth import run_link_flow
 
-    run_link_flow(_resolve_bank(bank))
+    run_link_flow(b)
 
 
 @banks_app.command("list")
 def banks_list() -> None:
-    """Lista los bancos configurados y si ya tienen vínculo (auth) guardado."""
+    """Lista los bancos configurados y si ya pueden sincronizarse (vínculo de auth o token)."""
     from finmcp.config import settings
-    from finmcp.providers.enablebanking.auth import has_link
+    from finmcp.providers.factory import is_linked
 
     banks = settings.banks
     if not banks:
         typer.echo("No hay ningún banco configurado. Ver .env.example.")
         raise typer.Exit()
     for b in banks:
-        vinculado = "sí" if has_link(b.id) else "no"
+        vinculado = "sí" if is_linked(b) else "no"
         typer.echo(f"- {b.id} · {b.aspsp_name or 's/nombre'} · {b.country} · vinculado: {vinculado}")
 
 

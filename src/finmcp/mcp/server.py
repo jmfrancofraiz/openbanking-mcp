@@ -296,16 +296,17 @@ def sync(
 
 @mcp.tool()
 def list_banks() -> list[dict]:
-    """Bancos configurados y si ya tienen vínculo (auth) guardado."""
+    """Bancos configurados, su proveedor y si ya pueden sincronizarse (vínculo o token)."""
     from finmcp.config import settings
-    from finmcp.providers.enablebanking.auth import has_link
+    from finmcp.providers.factory import is_linked
 
     return [
         {
             "id": b.id,
             "aspsp_name": b.aspsp_name,
             "country": b.country,
-            "linked": has_link(b.id),
+            "provider": b.provider,
+            "linked": is_linked(b),
         }
         for b in settings.banks
     ]
