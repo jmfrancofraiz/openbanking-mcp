@@ -212,9 +212,10 @@ test("tirar: resistencia, tope y zonas (mediano recarga la página, largo sincro
   // Distancias de dedo razonables: el mediano no es un roce ni media pantalla, el largo es claramente más largo
   // (margen para no pasar de uno a otro sin querer) y cabe en una pantalla de móvil.
   const finger = (pull) => pull / L.PULL.damping;
-  assert.ok(finger(L.PULL.reload) > 80 && finger(L.PULL.reload) < 130, `mediano: ${finger(L.PULL.reload)}`);
-  assert.ok(finger(L.PULL.sync) > 160 && finger(L.PULL.sync) < 240, `largo: ${finger(L.PULL.sync)}`);
-  assert.ok(finger(L.PULL.sync) - finger(L.PULL.reload) >= 60);
+  // Tirones largos a propósito (petición del Señor): ~200 px de dedo para recargar y ~370 px para sincronizar.
+  assert.ok(finger(L.PULL.reload) > 180 && finger(L.PULL.reload) < 230, `mediano: ${finger(L.PULL.reload)}`);
+  assert.ok(finger(L.PULL.sync) > 340 && finger(L.PULL.sync) < 420, `largo: ${finger(L.PULL.sync)}`);
+  assert.ok(finger(L.PULL.sync) - finger(L.PULL.reload) >= 120);
   assert.ok(L.PULL.reload < L.PULL.sync && L.PULL.sync <= L.PULL.max && L.PULL.hold <= L.PULL.max);
 });
 

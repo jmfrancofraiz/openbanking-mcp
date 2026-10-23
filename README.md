@@ -263,10 +263,10 @@ en curso se hace **a la misma fecha** (del día 1 al día de hoy de cada mes).
 **Diario** (la lista, con o sin filtros), lo que ocurre al soltar depende de lo largo que sea el tirón; el
 indicador de arriba lo va diciendo mientras se tira:
 
-- **Tirón corto** (menos de unos 100 px): no hace nada.
-- **Tirón mediano** (unos 100–190 px): **recarga la página** (la recarga nativa del navegador, que además
+- **Tirón corto** (menos de unos 200 px): no hace nada.
+- **Tirón mediano** (unos 200–370 px): **recarga la página** (la recarga nativa del navegador, que además
   revalida el JavaScript y el CSS y conserva la ruta y los filtros). No habla con los bancos.
-- **Tirón largo** (más de unos 190 px): lanza una **sincronización** con los bancos y, cuando termina,
+- **Tirón largo** (más de unos 370 px): lanza una **sincronización** con los bancos y, cuando termina,
   recarga la lista con los datos nuevos.
 
 Se decide por dónde está el dedo al soltar: se puede pasar de largo y volver atrás para elegir el mediano.

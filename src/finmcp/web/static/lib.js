@@ -103,9 +103,10 @@
   /* ---------- tirar hacia abajo para sincronizar ---------- */
 
   // Distancias en px. `reload` y `sync`: lo que hay que tirar (ya con resistencia) para que al soltar recargue la página
-  // (tirón mediano) o sincronice (tirón largo). `damping`: el dedo recorre 1/damping px por cada px que baja el indicador.
-  // `max`: tope del indicador. `hold`: dónde queda mientras trabaja.
-  const PULL = { reload: 56, sync: 104, max: 120, damping: 0.55, slop: 8, hold: 64 };
+  // (tirón mediano) o sincronice (tirón largo). `damping`: el dedo recorre 1/damping px por cada px que baja el indicador;
+  // con 0.28 el dedo tiene que bajar unos 200 px para recargar y unos 370 px para sincronizar (tirones largos a propósito,
+  // para que no se disparen sin querer). `max`: tope del indicador. `hold`: dónde queda mientras trabaja.
+  const PULL = { reload: 56, sync: 104, max: 120, damping: 0.28, slop: 8, hold: 64 };
   const pullDistance = (dy) => (dy > 0 ? Math.min(PULL.max, dy * PULL.damping) : 0);
   // Qué haría soltar ahora: «none» (tirón corto), «reload» (mediano: recarga la página) o «sync» (largo: sincroniza).
   const pullZone = (pull) => (pull >= PULL.sync ? "sync" : pull >= PULL.reload ? "reload" : "none");
