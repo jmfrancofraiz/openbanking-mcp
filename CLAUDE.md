@@ -131,6 +131,21 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   in `data/web_session.key` (0600). The static UI is public (no data). Strict CSP (no inline scripts/styles: SVG styling via classes; element
   styles only through CSSOM). The UI is dependency-free vanilla JS: `lib.js` (pure, tested with
   `node --test`) and `app.js` (DOM, hash routes such as `#/mes/AAAA-MM/gastos`, `#/diario/<filters>`, `#/diario/mov/<id>`).
+  - **Dark mode** (23-oct-2026): automatic via `prefers-color-scheme`, no UI needed. A ☀/☾ toggle in the
+    header of Diario, Evolución and Tendencias (`topbar()`) force-cycles auto → dark → light → auto,
+    storing the override in `localStorage['finmcp.theme']` and setting `<html data-theme>` (no server
+    state; Mes and the movement detail have no header icon slot, so they follow whichever of the other
+    three tabs was set last). `--accent`/`--accent2` stay the fixed brand teal (solid buttons, the hero
+    gradient, white text on top); every other place accent appears as text/border on `--card`/`--bg`
+    uses `--accent-text`/`--accent2-text`, which brighten in dark mode for contrast. `--good`/`--bad`/
+    `--warn` are brightened too; `--track`/`--tick`/`--axis`/`--led-warn`/`--hero-shadow` replace small
+    fixed hex values that used to ignore the theme; `--ink` is a theme-independent dark value kept only
+    for the toast's neutral background (reusing `--fg` broke once it turns light in dark mode). Hand-drawn
+    SVG chart colours (`barsChart`, `miniBars`, `spark`) are set via `setAttribute("fill"/"stroke", …)`,
+    which doesn't track CSS `var()` reliably across browsers, so `app.js` reads the resolved colour with
+    a `cssVar()` (`getComputedStyle`) helper at paint time; toggling the theme calls `render({keep:true})`
+    to repaint them. The category colour palette (`lib.js::PALETTE`) is intentionally unchanged across
+    themes. Pure cycle/resolution helpers (`L.nextTheme`, `L.isDarkTheme`) are covered in `lib.test.js`.
 - **CSV/Excel importer** (`importers/csv_import.py`): for history older than the ~90 days PSD2
   allows. Header detection is heuristic (Spanish/English key lists at the top of the file),each
   bank's link (session id + account list) is stored via `save_secret(name, ...)` where `name` is

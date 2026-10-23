@@ -244,6 +244,13 @@ Abre `http://<IP>:8790/` en el navegador del móvil o del PC e introduce el PIN.
   actual o todo; solo meses cerrados) y *Periodo contra periodo* (mes, trimestre, semestre o año).
 - **Tendencias**: 12 meses de las categorías de gasto que elijas, con su tendencia.
 
+**Modo oscuro.** Automático, según el tema claro/oscuro del sistema operativo o del navegador
+(`prefers-color-scheme`); no hace falta tocar nada. Un botón ☀/☾ en la cabecera de **Diario**,
+**Evolución** y **Tendencias** (no en Mes ni en el detalle de un movimiento, que no llevan icono de
+cabecera propio: se alterna cambiando a una de esas tres pestañas) permite forzarlo con independencia
+del sistema, en el ciclo automático → oscuro → claro → automático; la elección se recuerda en el
+dispositivo (`localStorage`), nunca en el servidor.
+
 Criterios de cálculo (salvo en Diario, que no agrega): los movimientos neutrales no computan; son categorías de ingreso las que
 empiezan por «Ingresos», más «Otros ingresos» e «Intereses»; las devoluciones se restan del gasto
 de su categoría, y el ahorro coincide con el neto de `finmcp summary`. Toda comparación con el mes
