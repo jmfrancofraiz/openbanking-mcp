@@ -188,6 +188,26 @@ def set_balance(
     )
 
 
+@app.command("remove-account")
+def remove_account(
+    account_id: str = typer.Argument(..., help="Id de la cuenta manual"),
+    apply: bool = typer.Option(
+        False, "--apply", help="Aplica el cambio. Sin esta opción solo simula."
+    ),
+) -> None:
+    """Retira una cuenta manual sin movimientos (y sus saldos anotados a mano)."""
+    from finmcp.mcp.server import remove_manual_account
+
+    r = _query(remove_manual_account, account_id, apply)
+    typer.echo(
+        f"Cuenta manual [{r['bank_id']}] {r['name']} · id={r['id']} · saldos anotados: {r['balances']}"
+    )
+    if r["removed"]:
+        typer.echo("Hecho: cuenta y saldos retirados.")
+    else:
+        typer.echo("Simulación: no se ha modificado nada. Añade --apply para aplicar.")
+
+
 @app.command("merge-accounts")
 def merge_accounts(
     old_id: str = typer.Argument(..., help="Id obsoleto de la cuenta (se retira)"),

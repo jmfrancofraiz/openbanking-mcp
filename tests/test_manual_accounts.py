@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from finmcp.analytics import ledger
-from finmcp.db.models import Account, Balance, SyncRun, is_manual_account
+from finmcp.db.models import Account, Balance, SyncRun, Transaction, is_manual_account
 from finmcp.db.queries import latest_balances
 from finmcp.importers.csv_import import import_file
 from finmcp.mcp import server
@@ -78,6 +78,32 @@ def test_set_manual_balance_solo_cuentas_manuales(tools):
         tools.set_manual_balance("acc1", 10.0)
     with pytest.raises(ValueError, match="No existe"):
         tools.set_manual_balance("nada", 10.0)
+
+
+def test_remove_manual_account_simula_y_retira(tools, session):
+    a = tools.add_manual_account("Bonusly", "Bonusly", account_type="OTHR")
+    tools.set_manual_balance(a["id"], 1643)
+
+    sim = tools.remove_manual_account(a["id"])
+    assert (sim["removed"], sim["balances"]) == (False, 1)
+    assert session.get(Account, a["id"]) is not None  # la simulación no toca nada
+
+    done = tools.remove_manual_account(a["id"], apply=True)
+    session.expire_all()
+    assert done["removed"] is True
+    assert session.get(Account, a["id"]) is None
+    assert session.query(Balance).filter(Balance.account_id == a["id"]).count() == 0
+
+
+def test_remove_manual_account_rechaza_sincronizadas_y_con_movimientos(tools, session, make_tx):
+    with pytest.raises(ValueError, match="se sincroniza"):
+        tools.remove_manual_account("acc1")  # la cuenta de prueba no es manual
+    a = tools.add_manual_account("ING", "Naranja", account_type="SVGS")
+    session.add(Transaction(id="t-man", account_id=a["id"], amount=5.0, currency="EUR",
+                            booked_at=datetime(2026, 10, 1), description="x", type="debit"))
+    session.commit()
+    with pytest.raises(ValueError, match="1 movimientos"):
+        tools.remove_manual_account(a["id"], apply=True)
 
 
 def test_import_csv_encuentra_la_cuenta_por_iban_con_espacios(tools, session, tmp_path):

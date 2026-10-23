@@ -174,6 +174,48 @@ def set_manual_balance(account_id: str, amount: float, at: str | None = None) ->
 
 
 @mcp.tool()
+def remove_manual_account(account_id: str, apply: bool = False) -> dict:
+    """Retira una cuenta manual SIN movimientos, junto con sus saldos anotados a mano.
+
+    Para deshacer un alta de prueba o retirar una cuenta manual que pasa a sincronizarse
+    con su propio proveedor (p. ej. Bonusly). Rechaza las cuentas sincronizadas, las que
+    tienen movimientos y las que tienen reglas restringidas a ellas. Sin `apply` solo
+    simula: devuelve lo que se retiraría con `removed=False`.
+    """
+    from sqlalchemy import func
+
+    with SessionLocal() as s:
+        acc = s.get(models.Account, account_id)
+        if acc is None:
+            raise ValueError(f"No existe la cuenta {account_id}.")
+        if not models.is_manual_account(acc):
+            raise ValueError(f"La cuenta {account_id} se sincroniza con su proveedor: no se retira a mano.")
+        n_tx = (
+            s.query(func.count(models.Transaction.id))
+            .filter(models.Transaction.account_id == acc.id)
+            .scalar()
+        )
+        if n_tx:
+            raise ValueError(f"La cuenta {account_id} tiene {n_tx} movimientos: no se retira.")
+        n_rules = (
+            s.query(func.count(models.CategoryRule.id))
+            .filter(models.CategoryRule.account_id == acc.id)
+            .scalar()
+        )
+        if n_rules:
+            raise ValueError(f"La cuenta {account_id} tiene {n_rules} reglas restringidas a ella: no se retira.")
+        balances = s.query(models.Balance).filter(models.Balance.account_id == acc.id)
+        n_bal = balances.count()
+        info = {**_manual_account_dict(acc), "balances": n_bal, "removed": False}
+        if not apply:
+            return info
+        balances.delete(synchronize_session=False)
+        s.delete(acc)
+        s.commit()
+        return {**info, "removed": True}
+
+
+@mcp.tool()
 def get_transactions(
     account_id: str | None = None,
     bank_id: str | None = None,
