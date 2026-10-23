@@ -10,9 +10,18 @@
   const { eur, eur0 } = L;
   const app = document.getElementById("app");
   const SVGNS = "http://www.w3.org/2000/svg";
-  const INC = "#147a70", EXP = "#c0663b", VARC = "#e8b89c", INK = "#22201c";
+  const INC = "#147a70", EXP = "#c0663b", VARC = "#e8b89c";
   // En el dispositivo solo se guardan preferencias, nunca cifras.
   const PREF = { split: "finmcp.split", trend: "finmcp.trend" };
+  const THEME_KEY = "finmcp.theme";
+
+  // Colores de gráficos SVG dibujados a mano: no siguen la cascada CSS (son atributos `fill`/`stroke`,
+  // no `style=`), así que se leen del DOM ya pintado en cada trazo — así reflejan el tema vigente
+  // (claro/oscuro) sin tener que tocar estas funciones cuando cambia.
+  const cssVar = (name, fallback) => {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name);
+    return v && v.trim() ? v.trim() : fallback;
+  };
   const ACC_PERIODS = [["3", "3 meses"], ["6", "6 meses"], ["12", "1 año"], ["ano", "Año actual"], ["todo", "Todo"]];
   const PERIOD_TYPES = [["mes", "Mes"], ["trimestre", "Trimestre"], ["semestre", "Semestre"], ["ano", "Año"]];
 
@@ -159,7 +168,49 @@
         onclick: () => { if (k !== current) onChange(k); } }))]);
   }
 
-  const topbar = (title) => el("header", { className: "top" }, [spacer(), el("div", { className: "ttl" }, el("div", { className: "mon", textContent: title })), spacer()]);
+  /* ---------- modo oscuro ---------- */
+
+  const getThemeOverride = () => { try { return localStorage.getItem(THEME_KEY) || ""; } catch { return ""; } };
+  const darkMQ = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const isDark = () => L.isDarkTheme(getThemeOverride(), darkMQ && darkMQ.matches);
+
+  function paintThemeColor() {
+    const meta = document.getElementById("theme-color-meta");
+    if (meta) meta.setAttribute("content", isDark() ? "#1c1a16" : "#f7f4ee");
+  }
+  // Aplica el tema al <html> (o lo deja en automático) y refresca el color de la barra del navegador.
+  function applyTheme(t) {
+    if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    else document.documentElement.removeAttribute("data-theme");
+    paintThemeColor();
+  }
+  applyTheme(getThemeOverride());
+  // Si el sistema cambia de tema (p. ej. se hace de noche) y no hay un forzado propio, seguirlo.
+  if (darkMQ) darkMQ.addEventListener("change", () => { if (!getThemeOverride()) { paintThemeColor(); render({ keep: true }); } });
+
+  // Icono ☀/☾: muestra el modo EFECTIVO actual (a qué modo pasará si se toca lo indica el aria-label).
+  function themeIcon() {
+    const common = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 2,
+      "stroke-linecap": "round", "aria-hidden": "true" };
+    return isDark()
+      ? svg("svg", common, [svg("circle", { cx: 12, cy: 12, r: 4.2 }),
+          svg("path", { d: "M12 2.5v2.3M12 19.2v2.3M4.4 4.4l1.6 1.6M18 18l1.6 1.6M2.5 12h2.3M19.2 12h2.3M4.4 19.6l1.6-1.6M18 6l1.6-1.6" })])
+      : svg("svg", common, [svg("path", { d: "M20.2 14.7A8.6 8.6 0 1 1 9.3 3.8a7 7 0 0 0 10.9 10.9Z" })]);
+  }
+  function cycleTheme() {
+    const next = L.nextTheme(getThemeOverride());
+    try { if (next) localStorage.setItem(THEME_KEY, next); else localStorage.removeItem(THEME_KEY); } catch { /* sin almacenamiento: queda en automático */ }
+    applyTheme(next);
+    render({ keep: true }); // reconstruye la vista: repinta los gráficos SVG dibujados a mano con el nuevo tema
+  }
+  function themeBtn() {
+    const cur = getThemeOverride();
+    const label = cur === "dark" ? "oscuro (forzado)" : cur === "light" ? "claro (forzado)" : "automático, según el sistema";
+    return el("button", { className: "ib", type: "button",
+      attrs: { "aria-label": `Modo de color: ${label}. Tocar para cambiar.` }, onclick: cycleTheme }, [themeIcon()]);
+  }
+
+  const topbar = (title) => el("header", { className: "top" }, [spacer(), el("div", { className: "ttl" }, el("div", { className: "mon", textContent: title })), themeBtn()]);
 
   function detailBar(title, subtitle) {
     return el("header", { className: "top" }, [
@@ -243,7 +294,7 @@
       root.append(svg("line", { x1: x(n - 2), y1: y(values[n - 2]), x2: x(n - 1), y2: y(values[n - 1]), stroke: color,
         "stroke-width": 1.6, "stroke-dasharray": "2.5 2.5", "stroke-linecap": "round", class: "partial-seg" }));
     }
-    root.append(svg("circle", { cx: x(n - 1), cy: y(values[n - 1]), r: 2.6, fill: partial ? "#fffdf9" : color,
+    root.append(svg("circle", { cx: x(n - 1), cy: y(values[n - 1]), r: 2.6, fill: partial ? cssVar("--card", "#fffdf9") : color,
       stroke: color, "stroke-width": partial ? 1.4 : 0 }));
     return root;
   }
@@ -837,7 +888,8 @@
     const min = Math.min(...vals, 0);
     const y = (v) => padT + ((max - v) / (max - min)) * (h - padT - padB);
     const root = svg("svg", { viewBox: `0 0 ${w} ${h}`, width: w, height: h, class: "bars", role: "img", "aria-label": "Ingresos, gastos y ahorro por mes" });
-    root.append(svg("line", { x1: 0, x2: w, y1: y(0), y2: y(0), stroke: "#d8cfc0" }));
+    const ink = cssVar("--fg", "#22201c");
+    root.append(svg("line", { x1: 0, x2: w, y1: y(0), y2: y(0), stroke: cssVar("--axis", "#d8cfc0") }));
     const x0 = (w - rows.length * colW) / 2;
     const bar = (x, v, fill) => svg("rect", { x, y: Math.min(y(v), y(0)), width: bw, height: Math.max(1, Math.abs(y(v) - y(0))), rx: 2, fill });
     rows.forEach((r, i) => {
@@ -846,15 +898,15 @@
       g.append(bar(cx + 3, r.income, INC));
       if (split) g.append(bar(cx + 4 + bw, r.expense, VARC), bar(cx + 4 + bw, Math.max(0, Math.min(r.bills, r.expense)), EXP));
       else g.append(bar(cx + 4 + bw, r.expense, EXP));
-      g.append(svg("text", { x: cx + colW / 2, y: h - 12, "text-anchor": "middle", "font-size": 9.5, fill: INK, opacity: 0.75 }, [L.monthInitial(r.month)]));
+      g.append(svg("text", { x: cx + colW / 2, y: h - 12, "text-anchor": "middle", "font-size": 9.5, fill: ink, opacity: 0.75 }, [L.monthInitial(r.month)]));
       if (i === 0 || r.month.endsWith("-01")) {
-        g.append(svg("text", { x: cx + colW / 2, y: h - 2, "text-anchor": "middle", "font-size": 8, fill: INK, opacity: 0.5 }, [r.month.slice(0, 4)]));
+        g.append(svg("text", { x: cx + colW / 2, y: h - 2, "text-anchor": "middle", "font-size": 8, fill: ink, opacity: 0.5 }, [r.month.slice(0, 4)]));
       }
       root.append(g);
     });
     const pts = rows.map((r, i) => ({ x: x0 + i * colW + colW / 2, y: y(r.net) }));
-    if (pts.length > 1) root.append(svg("polyline", { points: pts.map((pt) => `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(" "), fill: "none", stroke: INK, "stroke-width": 1.6, "stroke-linejoin": "round" }));
-    pts.forEach((pt) => root.append(svg("circle", { cx: pt.x, cy: pt.y, r: 2.8, fill: INK })));
+    if (pts.length > 1) root.append(svg("polyline", { points: pts.map((pt) => `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(" "), fill: "none", stroke: ink, "stroke-width": 1.6, "stroke-linejoin": "round" }));
+    pts.forEach((pt) => root.append(svg("circle", { cx: pt.x, cy: pt.y, r: 2.8, fill: ink })));
     rows.forEach((r, i) => {
       const hit = svg("rect", { x: x0 + i * colW, y: 0, width: colW, height: h, fill: "transparent", class: "hit" });
       hit.addEventListener("click", () => onSelect(i));
@@ -999,7 +1051,7 @@
       const kids = [
         el("div", { className: "top2" }, [el("span", { textContent: L.shown(x.k) }), el("span", { className: tone }, [up ? "+" : "−", amt(Math.abs(x.d))])]),
         el("div", { className: "track" }, el("i", { style: { left: up ? "50%" : `${50 - wPct}%`, width: `${wPct}%`,
-          background: tone === "worse" ? "#b3261e" : tone === "better" ? "#2f7d32" : "#b9ad9a" } })),
+          background: tone === "worse" ? "var(--bad)" : tone === "better" ? "var(--good)" : "var(--tick)" } })),
         el("div", { className: "s" }, [amt(x.va), ` en ${short(A)} frente a `, amt(x.vb), ` en ${short(B)}`, isOpen ? "" : " · detalle ▾"]),
       ];
       if (isOpen) {
@@ -1078,6 +1130,7 @@
     const y = (v) => padT + ((max - v) / (max - min)) * (h - padT - padB);
     const id = `h${Math.random().toString(36).slice(2, 8)}`;
     const root = svg("svg", { viewBox: `0 0 ${w} ${h}`, class: "mini", "aria-hidden": "true" });
+    const ink = cssVar("--fg", "#22201c");
     root.append(svg("defs", {}, [svg("pattern", { id, width: 5, height: 5, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" },
       [svg("line", { x1: 0, y1: 0, x2: 0, y2: 5, stroke: color, "stroke-width": 2 })])]));
     vals.forEach((v, i) => {
@@ -1085,9 +1138,9 @@
       const partial = months[i] === CUR;
       root.append(svg("rect", { x: cx - bw / 2, y: Math.min(y(v), y(0)), width: bw, height: Math.max(1.5, Math.abs(y(v) - y(0))), rx: 2,
         fill: partial ? `url(#${id})` : color, stroke: partial ? color : "none", opacity: selected !== undefined && selected !== i ? 0.35 : 1 }));
-      root.append(svg("text", { x: cx, y: h - 3, "text-anchor": "middle", "font-size": 9, fill: INK, opacity: 0.65 }, [L.monthInitial(months[i]).slice(0, 1)]));
+      root.append(svg("text", { x: cx, y: h - 3, "text-anchor": "middle", "font-size": 9, fill: ink, opacity: 0.65 }, [L.monthInitial(months[i]).slice(0, 1)]));
     });
-    root.append(svg("line", { x1: 4, x2: w - 4, y1: y(avg), y2: y(avg), stroke: INK, "stroke-dasharray": "4 3", "stroke-width": 1, opacity: 0.6 }));
+    root.append(svg("line", { x1: 4, x2: w - 4, y1: y(avg), y2: y(avg), stroke: ink, "stroke-dasharray": "4 3", "stroke-width": 1, opacity: 0.6 }));
     vals.forEach((v, i) => {
       const hit = svg("rect", { x: 4 + i * colW, y: 0, width: colW, height: h, fill: "transparent", class: "hit" });
       hit.addEventListener("click", () => onSelect(i));

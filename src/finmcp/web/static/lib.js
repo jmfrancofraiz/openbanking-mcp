@@ -125,6 +125,12 @@
 
   /* ---------- presentación ---------- */
 
+  // Modo oscuro: "" (automático, según el sistema) -> "dark" -> "light" -> "" al tocar el alternador.
+  const THEME_ORDER = ["", "dark", "light"];
+  const nextTheme = (current) => THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
+  // Tema efectivo: el forzado por el usuario si lo hay; si no, el del sistema.
+  const isDarkTheme = (override, systemPrefersDark) => (override ? override === "dark" : Boolean(systemPrefersDark));
+
   function colorFor(name) {
     let h = 0;
     for (const ch of name) h = (h * 31 + ch.codePointAt(0)) >>> 0;
@@ -322,5 +328,6 @@
     PULL, pullDistance, pullReady, waitLabel, syncResult, viewOf, pullEnabled,
     periodsOf, comparisonCut, periodRange, accumulatedMonths,
     PACE_REFS, paceRefs, verdict, trendOf, diffGroups, diffSubcategories,
+    nextTheme, isDarkTheme,
   };
 });

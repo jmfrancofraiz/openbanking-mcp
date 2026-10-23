@@ -54,6 +54,17 @@ test("presentación: porcentaje, nombre de ingreso y título limpio", () => {
   assert.equal(L.colorFor("Vivienda"), L.colorFor("Vivienda"));
 });
 
+test("modo oscuro: ciclo del alternador y tema efectivo", () => {
+  assert.equal(L.nextTheme(""), "dark");
+  assert.equal(L.nextTheme("dark"), "light");
+  assert.equal(L.nextTheme("light"), "");
+  // Sin forzar, manda el sistema; forzado, manda el alternador por encima del sistema.
+  assert.equal(L.isDarkTheme("", true), true);
+  assert.equal(L.isDarkTheme("", false), false);
+  assert.equal(L.isDarkTheme("dark", false), true);
+  assert.equal(L.isDarkTheme("light", true), false);
+});
+
 test("parseHash decodifica los segmentos", () => {
   assert.deepEqual(L.parseHash("#/rango/mes/2026-03-01/2026-03-31/gastos/g/Moda%20y%20complementos"),
     ["rango", "mes", "2026-03-01", "2026-03-31", "gastos", "g", "Moda y complementos"]);
