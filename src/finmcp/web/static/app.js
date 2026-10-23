@@ -445,6 +445,7 @@
     const b = a.balance;
     if (!b) return "sin datos de saldo";
     const when = L.whenLabel(b.at, TODAY);
+    if (a.manual) return `manual · ${when}`; // sin sincronización: la fecha dice de cuándo es el saldo
     if (a.state === "stale") return `sin actualizar desde ${when}`;
     if (a.state === "warn") return `falló el último sync · saldo de ${when}`;
     return when;
@@ -518,17 +519,20 @@
 
   // Explica el saldo al cierre de cada día (calculado) y su contraste con las fotos reales del banco.
   function closingNote(a, bal) {
-    if (!bal) return el("div", { className: "acc-note" }, el("p", { textContent: `${a.bank}: no hay foto de saldo del banco, así que no se puede calcular el saldo de cada día.` }));
+    // Cuenta manual: el saldo de partida lo anotó el Señor a mano, no es una foto del banco.
+    const src = a.manual ? "el saldo anotado a mano" : "la foto del banco";
+    if (!bal) return el("div", { className: "acc-note" }, el("p", { textContent: `${a.bank}: ${a.manual ? "no tiene ningún saldo anotado" : "no hay foto de saldo del banco"}, así que no se puede calcular el saldo de cada día.` }));
     const c = bal.check;
-    const ps = [el("p", { textContent: `La cifra junto a cada día es el saldo al cierre, calculado hacia atrás desde la foto del banco de ${L.whenLabel(bal.anchor.at, TODAY)} `
-      + `(${eur.format(bal.anchor.value)}${bal.anchor.kind === "disponible" ? ", saldo disponible" : ""}). No es un dato del banco.` })];
+    const ps = [el("p", { textContent: `La cifra junto a cada día es el saldo al cierre, calculado hacia atrás desde ${src} de ${L.whenLabel(bal.anchor.at, TODAY)} `
+      + `(${eur.format(bal.anchor.value)}${bal.anchor.kind === "disponible" ? ", saldo disponible" : ""}). ${a.manual ? "Es un cálculo, no un saldo anotado." : "No es un dato del banco."}` })];
+    const snaps = (n) => (a.manual ? (n === 1 ? "el saldo anotado" : `los ${n} saldos anotados`) : (n === 1 ? "la foto del banco" : `las ${n} fotos del banco`));
     if (c.bad) {
       const b = c.last_bad;
-      ps.push(el("p", { className: "warnv", textContent: `⚠ No cuadra con ${c.bad} de ${c.snapshots} fotos del banco. La más reciente, de ${L.whenLabel(b.at, TODAY)}: el banco daba ${eur.format(b.bank_value)}; `
+      ps.push(el("p", { className: "warnv", textContent: `⚠ No cuadra con ${c.bad} de ${snaps(c.snapshots)}. ${a.manual ? "El más reciente" : "La más reciente"}, de ${L.whenLabel(b.at, TODAY)}: ${a.manual ? "el saldo anotado era" : "el banco daba"} ${eur.format(b.bank_value)}; `
         + `el cálculo da ${eur.format(b.calc_prev)} al cierre del día anterior y ${eur.format(b.calc_day)} al cierre de ese día. Falta o sobra algún movimiento: los saldos hasta el ${dshort(b.date)} (en rojo) pueden estar desviados.` }));
     } else if (c.ok) {
-      ps.push(el("p", { textContent: `Cuadra con ${c.ok === 1 ? "la foto" : `las ${c.ok} fotos`} del banco tomadas desde el ${dshort(c.since)}`
-        + `${c.unknown ? ` (${c.unknown} sin poder comprobar)` : ""}; antes no hay fotos con las que comprobarlo.` }));
+      ps.push(el("p", { textContent: `Cuadra con ${snaps(c.ok)} desde el ${dshort(c.since)}`
+        + `${c.unknown ? ` (${c.unknown} sin poder comprobar)` : ""}; antes no hay ${a.manual ? "saldos con los que" : "fotos con las que"} comprobarlo.` }));
     }
     return el("div", { className: "acc-note" }, ps);
   }

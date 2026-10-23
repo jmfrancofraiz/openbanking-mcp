@@ -45,6 +45,7 @@ def list_accounts() -> list[dict]:
                 "type": a.type,
                 "currency": a.currency,
                 "iban": a.iban,
+                "manual": models.is_manual_account(a),
             }
             for a in queries.list_accounts(s)
         ]
@@ -64,6 +65,112 @@ def get_balances() -> list[dict]:
             }
             for b in queries.latest_balances(s)
         ]
+
+
+def _manual_account_dict(a: models.Account) -> dict:
+    return {
+        "id": a.id,
+        "bank_id": a.bank_id,
+        "name": a.name,
+        "type": a.type,
+        "currency": a.currency,
+        "iban": a.iban,
+        "manual": True,
+    }
+
+
+@mcp.tool()
+def add_manual_account(
+    bank_id: str,
+    name: str,
+    iban: str | None = None,
+    currency: str = "EUR",
+    account_type: str = "CACC",
+) -> dict:
+    """Da de alta una cuenta manual: una cuenta que no se sincroniza con el banco.
+
+    Sus movimientos se suben con `import_csv` (por IBAN o id) y su saldo se fija con
+    `set_manual_balance`. El sync nunca la toca. `bank_id` es solo la etiqueta del
+    banco (p. ej. «ING»); no tiene por qué estar configurado en Enable Banking.
+    `account_type`: código ISO 20022 (CACC = cuenta corriente, SVGS = ahorro).
+    """
+    import uuid
+
+    from finmcp.util import iban_is_valid, normalize_iban
+
+    bank_id = (bank_id or "").strip()
+    name = (name or "").strip()
+    if not bank_id or not name:
+        raise ValueError("El banco y el nombre de la cuenta son obligatorios.")
+    iban = normalize_iban(iban)
+    if iban and not iban_is_valid(iban):
+        raise ValueError(f"El IBAN {iban} no es válido (dígitos de control).")
+    currency = (currency or "EUR").strip().upper()
+    with SessionLocal() as s:
+        if iban:
+            clash = s.query(models.Account).filter(models.Account.iban == iban).first()
+            if clash is not None:
+                raise ValueError(f"Ya existe una cuenta con el IBAN {iban} (id={clash.id}).")
+        acc = models.Account(
+            id=str(uuid.uuid4()),
+            bank_id=bank_id,
+            name=name,
+            type=(account_type or "CACC").strip().upper(),
+            currency=currency,
+            iban=iban,
+            raw_json={"source": models.ACCOUNT_SOURCE_MANUAL},
+        )
+        s.add(acc)
+        s.commit()
+        return _manual_account_dict(acc)
+
+
+@mcp.tool()
+def set_manual_balance(account_id: str, amount: float, at: str | None = None) -> dict:
+    """Registra el saldo de una cuenta manual (una foto de saldo, como las del sync).
+
+    `at`: momento del saldo en ISO 8601; con solo la fecha (YYYY-MM-DD) se toma como
+    saldo al cierre de ese día (21:00 UTC, que sigue siendo ese día en hora española);
+    sin él, ahora. Solo para cuentas manuales: el saldo de
+    las sincronizadas lo da el banco.
+    """
+    from datetime import datetime, time, timezone
+
+    from finmcp.util import parse_date
+
+    parsed = parse_date(at)
+    if parsed is None:
+        when = datetime.now(timezone.utc).replace(tzinfo=None)
+    elif len(at or "") == 10:
+        when = datetime.combine(parsed.date(), time(21, 0))
+    elif parsed.tzinfo is not None:
+        when = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    else:
+        when = parsed
+    amount = round(float(amount), 2)
+    with SessionLocal() as s:
+        acc = s.get(models.Account, account_id)
+        if acc is None:
+            raise ValueError(f"No existe la cuenta {account_id}.")
+        if not models.is_manual_account(acc):
+            raise ValueError(
+                f"La cuenta {account_id} se sincroniza con el banco: su saldo lo da el sync."
+            )
+        s.add(
+            models.Balance(
+                account_id=acc.id,
+                available=amount,
+                current=amount,
+                currency=acc.currency,
+                snapshot_at=when,
+            )
+        )
+        s.commit()
+        return {
+            **_manual_account_dict(acc),
+            "balance": amount,
+            "as_of": when.isoformat(),
+        }
 
 
 @mcp.tool()

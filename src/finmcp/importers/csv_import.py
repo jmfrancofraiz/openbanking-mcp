@@ -334,8 +334,12 @@ def import_file(
     if account_id:
         default_acc = session.get(models.Account, account_id)
     elif iban:
+        from finmcp.util import normalize_iban
+
         default_acc = (
-            session.query(models.Account).filter(models.Account.iban == iban).first()
+            session.query(models.Account)
+            .filter(models.Account.iban == normalize_iban(iban))
+            .first()
         )
     elif not has_account_col:
         accs = session.query(models.Account).all()

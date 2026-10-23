@@ -30,6 +30,14 @@ TAG_RULE = "rule"
 # Quitada a mano: se conserva para que las reglas no la vuelvan a poner.
 TAG_EXCLUDED = "excluded"
 
+# Cuentas manuales: las que no se sincronizan con el banco (sus movimientos llegan por
+# `import-csv` y su saldo se fija a mano). Se marcan en `Account.raw_json["source"]`.
+ACCOUNT_SOURCE_MANUAL = "manual"
+
+
+def is_manual_account(account) -> bool:
+    return (getattr(account, "raw_json", None) or {}).get("source") == ACCOUNT_SOURCE_MANUAL
+
 category_rule_tags = Table(
     "category_rule_tags",
     Base.metadata,

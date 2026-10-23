@@ -132,11 +132,56 @@ def accounts() -> None:
         if not rows:
             typer.echo("No hay cuentas. Ejecuta `finmcp sync` primero.")
             raise typer.Exit()
+        from finmcp.db.models import is_manual_account
+
         for a in rows:
+            manual_txt = " · manual" if is_manual_account(a) else ""
             typer.echo(
                 f"- [{a.bank_id}] {a.name} ({a.type}) · {a.currency} · "
-                f"{a.iban or 's/IBAN'} · id={a.id}"
+                f"{a.iban or 's/IBAN'} · id={a.id}{manual_txt}"
             )
+
+
+@app.command("add-account")
+def add_account(
+    bank: str = typer.Option(..., "--bank", help="Banco de la cuenta (etiqueta, p. ej. ING)"),
+    name: str = typer.Option(..., "--name", help="Nombre de la cuenta"),
+    iban: str = typer.Option(None, "--iban", help="IBAN (admite espacios)"),
+    currency: str = typer.Option("EUR", "--currency", help="Divisa"),
+    account_type: str = typer.Option(
+        "CACC", "--type", help="Tipo ISO 20022: CACC (corriente), SVGS (ahorro)…"
+    ),
+) -> None:
+    """Da de alta una cuenta manual (sin sincronización con el banco).
+
+    Sus movimientos se suben con `import-csv --iban …` y su saldo con `set-balance`.
+    """
+    from finmcp.mcp.server import add_manual_account
+
+    a = _query(add_manual_account, bank, name, iban, currency, account_type)
+    typer.echo(
+        f"Cuenta manual añadida: [{a['bank_id']}] {a['name']} ({a['type']}) · "
+        f"{a['currency']} · {a['iban'] or 's/IBAN'} · id={a['id']}"
+    )
+
+
+@app.command("set-balance")
+def set_balance(
+    account_id: str = typer.Argument(..., help="Id de la cuenta manual"),
+    amount: float = typer.Argument(..., help="Saldo (p. ej. 1234.56)"),
+    at: str = typer.Option(
+        None, "--at", help="Fecha (YYYY-MM-DD, saldo al cierre de ese día) o ISO; por defecto, ahora"
+    ),
+) -> None:
+    """Fija el saldo de una cuenta manual (las sincronizadas lo reciben del banco)."""
+    from finmcp.mcp.server import set_manual_balance
+
+    r = _query(set_manual_balance, account_id, amount, at)
+    tail = f" ··{r['iban'][-4:]}" if r["iban"] else ""
+    typer.echo(
+        f"Saldo de [{r['bank_id']}] {r['name']}{tail}: {r['balance']:.2f} {r['currency']} "
+        f"· a {r['as_of']}"
+    )
 
 
 @app.command("merge-accounts")

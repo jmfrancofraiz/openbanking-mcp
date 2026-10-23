@@ -13,6 +13,24 @@ def parse_date(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def normalize_iban(iban: str | None) -> str | None:
+    """IBAN sin espacios ni guiones y en mayúsculas («ES91 2100 …» -> «ES912100…»); None si viene vacío."""
+    if not iban:
+        return None
+    return "".join(ch for ch in iban if ch.isalnum()).upper() or None
+
+
+def iban_is_valid(iban: str) -> bool:
+    """Dígitos de control del IBAN (ISO 13616, módulo 97). Espera el IBAN ya normalizado."""
+    if len(iban) < 15 or not iban[:2].isalpha() or not iban[2:4].isdigit():
+        return False
+    rearranged = iban[4:] + iban[:4]
+    try:
+        return int("".join(str(int(ch, 36)) for ch in rearranged)) % 97 == 1
+    except ValueError:
+        return False
+
+
 def normalize_tag(name: str | None) -> str:
     norm = (name or "").strip().lower()
     if not norm:

@@ -116,6 +116,10 @@ def accounts(session: Session, now: datetime) -> list[dict]:
     `state`: «stale» si no hay saldo o la foto tiene más de 36 h; «warn» si el último
     intento de sincronizar ese banco falló (el saldo mostrado es el de la foto anterior);
     «ok» en otro caso.
+
+    Las cuentas manuales (`manual`: no se sincronizan; saldo fijado a mano con
+    `set-balance`) no dependen del sync de su banco: sin `sync`, y «stale» solo si no
+    tienen saldo; la fecha del saldo ya dice de cuándo es.
     """
     now = _aware(now)
     T = models.Transaction
@@ -138,9 +142,10 @@ def accounts(session: Session, now: datetime) -> list[dict]:
                     key=lambda a: (a.bank_id.lower(), a.name or "", a.id)):
         b = balances.get(a.id)
         value, kind = balance_value(b)
-        run = runs.get(a.bank_id)
+        manual = models.is_manual_account(a)
+        run = None if manual else runs.get(a.bank_id)
         n, first, last = stats.get(a.id, (0, None, None))
-        if value is None or now - _aware(b.snapshot_at) > STALE_AFTER:
+        if b is None or value is None or (not manual and now - _aware(b.snapshot_at) > STALE_AFTER):
             state = "stale"
         elif run is not None and run.status == "error":
             state = "warn"
@@ -162,6 +167,7 @@ def accounts(session: Session, now: datetime) -> list[dict]:
                 "error": short_error(run.detail) if run.status == "error" else None,
             },
             "state": state,
+            "manual": manual,
             "count": n,
             "first": first.date().isoformat() if first else None,
             "last": last.date().isoformat() if last else None,

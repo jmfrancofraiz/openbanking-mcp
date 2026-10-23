@@ -141,7 +141,9 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp banks list` | Lista los bancos configurados y su estado de vínculo |
 | `finmcp institutions` | Lista las entidades disponibles (para fijar `ENABLEBANKING_ASPSP_NAME`) |
 | `finmcp sync` | Trae cuentas/saldos/movimientos a SQLite (por banco) |
-| `finmcp accounts` | Lista las cuentas locales |
+| `finmcp accounts` | Lista las cuentas locales (las manuales, marcadas `· manual`) |
+| `finmcp add-account --bank B --name N [--iban …] [--type SVGS]` | Da de alta una **cuenta manual**: no se sincroniza; sus movimientos llegan por `import-csv` ([Cuentas manuales](#cuentas-manuales-sin-sincronización)) |
+| `finmcp set-balance ID IMPORTE [--at FECHA]` | Fija el saldo de una cuenta manual |
 | `finmcp balances` | Saldo más reciente de cada cuenta |
 | `finmcp transactions` | Movimientos (`--account`, `--bank`, `--from`, `--to`, `--type`, `--tag`, `--limit`) |
 | `finmcp search TEXTO` | Busca movimientos por comercio o concepto (`--tag`) |
@@ -168,7 +170,7 @@ Equivalentes a los comandos del CLI, salvo `auth` (solo CLI, requiere navegador)
 `list_accounts` · `get_balances` · `get_transactions` · `search_transactions` ·
 `spend_by_category_tool` · `list_bills` · `unusual_charges` ·
 `monthly_summary_tool` · `sync_status` · `sync` · `list_banks` · `list_institutions` ·
-`import_csv` · `categorize` · `add_category_rule` · `update_category_rule` · `remove_category_rules` · `list_category_rules` ·
+`import_csv` · `add_manual_account` · `set_manual_balance` · `categorize` · `add_category_rule` · `update_category_rule` · `remove_category_rules` · `list_category_rules` ·
 `add_rule_tags` · `remove_rule_tags` · `set_rule_neutral` · `set_rule_is_bill` · `list_tags` · `create_tag` ·
 `delete_tag` · `tag_transactions` · `untag_transactions` · `set_transactions_neutral` ·
 `recategorize_transaction` · `set_transactions_skip_rules` · `spend_by_tag_tool`
@@ -438,6 +440,23 @@ signo o en columnas **Ingreso/Gasto** separadas (formato CaixaBank), y si el fic
 trae varias cuentas (columna *Número de cuenta*) **mapea cada movimiento a su cuenta**.
 **Deduplica** por (cuenta, día, importe, tipo), así que es seguro reimportar o
 solapar con lo que ya bajó la API. Las reglas de categorización se aplican solas.
+
+## Cuentas manuales (sin sincronización)
+
+Una cuenta que el banco no expone por PSD2 (p. ej. una cuenta de ahorro que no entra en el
+consentimiento) se puede llevar igualmente en finmcp como **cuenta manual**:
+
+```bash
+finmcp add-account --bank ING --name "Cuenta Naranja" --iban "ES91 2100 0418 4502 0005 1332" --type SVGS
+finmcp set-balance <id> 1234.56                  # saldo de ahora; --at 2026-10-23 = al cierre de ese día
+finmcp import-csv movimientos.xlsx --iban ES9121000418450200051332
+```
+
+- El IBAN se guarda sin espacios y se comprueban sus dígitos de control; no puede haber dos cuentas con el mismo.
+- El `--bank` es solo la etiqueta del banco: el `sync` nunca toca estas cuentas.
+- `set-balance` solo vale para cuentas manuales (el saldo de las sincronizadas lo da el banco).
+- En el panel, la cuenta sale en los saldos del Diario con «manual · <fecha del saldo>», sin semáforo de
+  sincronización (no se marca desactualizada por antigüedad: la fecha ya dice de cuándo es) y suma en el total.
 
 ## Sincronización programada (macOS / launchd)
 
