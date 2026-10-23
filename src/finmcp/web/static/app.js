@@ -450,14 +450,57 @@
     return when;
   }
 
-  function balanceCard(a, on, onTap) {
+  // Cifra que rueda como un cuentakilómetros: cada dígito es una cinta 0…9,d (L.odoTape) que, mientras la rejilla de
+  // saldos lleva la clase `roll`, recorre una vuelta y se detiene en su cifra; sin ella la cinta está en reposo, ya en el
+  // valor final (así una tarjeta que no rueda, o un navegador sin animaciones, muestra siempre la cifra correcta).
+  // Para los lectores de pantalla la cifra es una imagen con su texto; las cintas se ocultan. `order`: posición de la
+  // tarjeta, para escalonar el arranque.
+  function odometer(text, order) {
+    let n = 0; // dígito en curso: los separadores no cuentan para el escalonado
+    return el("span", { className: "odo", attrs: { role: "img", "aria-label": text } }, L.figureChars(text).map(({ ch, digit }) => {
+      if (digit === null) return el("span", { className: "odo-ch", attrs: { "aria-hidden": "true" }, textContent: ch });
+      const tape = el("span", { className: "odo-tape", style: { animationDelay: `${L.rollDelay(n++, order)}ms` } },
+        L.odoTape(digit).map((d) => el("span", { textContent: String(d) })));
+      return el("span", { className: "odo-ch odo-col", attrs: { "aria-hidden": "true" } }, tape);
+    }));
+  }
+
+  // Un bloque único con todos los saldos (`.saldos`): arriba el total, a todo el ancho, y debajo las cuentas en una rejilla de
+  // dos columnas (`.bgrid`), todo separado por líneas finas (sin tarjetas sueltas). Cada celda de cuenta es un botón que filtra
+  // por esa cuenta; el total no lo es.
+  //
+  // Celda de cuenta, en tres líneas: banco, cifra (con «saldo disponible» a su lado si el banco no da el contable) y, pequeña,
+  // la terminación del IBAN (o el nombre de la cuenta) con la frescura del saldo.
+  function balanceCell(a, on, onTap, order) {
     const b = a.balance;
-    return el("button", { type: "button", className: `bcard ${a.state}${on ? " on" : ""}`, attrs: { "aria-pressed": String(on) }, onclick: onTap }, [
+    return el("button", { type: "button", className: `bcell ${a.state}${on ? " on" : ""}`, attrs: { "aria-pressed": String(on) }, onclick: onTap }, [
       el("span", { className: "bk" }, [el("i", { className: `led ${a.state}`, attrs: { "aria-hidden": "true" } }), el("span", { textContent: a.bank })]),
-      el("span", { className: "bn", textContent: tailOf(a) }),
-      el("span", { className: "bv amt", textContent: b ? eur.format(b.value) : "—" }),
-      b && b.kind === "disponible" ? el("span", { className: "bkind", textContent: "saldo disponible" }) : null,
-      el("span", { className: "bt", textContent: freshText(a) }),
+      el("span", { className: "bvrow" }, [
+        el("span", { className: "bv amt" }, b ? odometer(eur.format(b.value), order) : "—"),
+        b && b.kind === "disponible" ? el("span", { className: "bkind", textContent: "saldo disponible" }) : null,
+      ]),
+      el("span", { className: "bt", textContent: `${tailOf(a)} · ${freshText(a)}` }),
+    ]);
+  }
+
+  // Fila del total: la suma de los últimos saldos de todas las cuentas (la calcula el servidor: `total` de /api/accounts).
+  // La cifra, grande y a la izquierda, sin rótulo (el nombre solo lo oyen los lectores de pantalla, por `aria-label`); debajo,
+  // pequeña, la nota precedida del semáforo, que es el peor de todas las cuentas.
+  function totalRow(t) {
+    return el("div", { className: `btotal ${t.state}`, attrs: { role: "group", "aria-label": "Total de todas las cuentas" } }, [
+      el("span", { className: "bv amt" }, odometer(eur.format(t.value), 0)),
+      el("span", { className: "bt" }, [
+        el("i", { className: `led ${t.state}`, attrs: { "aria-hidden": "true" } }),
+        el("span", { textContent: L.totalNote(t, TODAY) }),
+      ]),
+    ]);
+  }
+
+  // `total` solo con dos o más cuentas (con una repetiría su propia celda).
+  function saldosBlock(accounts, total, sel, onPick) {
+    return el("div", { className: "saldos", attrs: { role: "group", "aria-label": "Saldos por cuenta" } }, [
+      total && accounts.length > 1 ? totalRow(total) : null,
+      el("div", { className: "bgrid" }, accounts.map((a, i) => balanceCell(a, sel === a, () => onPick(a), i + 1))),
     ]);
   }
 
@@ -639,7 +682,7 @@
       topbar("Diario"),
       el("main", {}, [
         el("h2", { className: "h2first", textContent: "Saldos" }),
-        el("div", { className: "bgrid" }, accounts.map((a) => balanceCard(a, sel === a, () => setF({ cuenta: sel === a ? "" : a.id })))),
+        saldosBlock(accounts, accRes.total, sel, (a) => setF({ cuenta: sel === a ? "" : a.id })),
         syncAlerts(accounts),
         el("h2", { textContent: sel ? `Movimientos · ${sel.bank} ${tailOf(sel)}` : "Movimientos" }),
         sel ? closingNote(sel, diary.balance) : null,
@@ -1415,6 +1458,18 @@
     ]), CUR ? nav(L.parseHash(location.hash)[0] || "diario") : null].filter(Boolean);
   }
 
+  // Las cifras de los saldos ruedan una sola vez por carga de la página, la primera vez que se pintan: al filtrar, elegir una
+  // cuenta, volver del detalle o recargar los datos tras sincronizar no vuelven a girar. Con «reducir movimiento» no ruedan.
+  let rolled = false;
+  function startRoll() {
+    if (rolled) return;
+    const block = app.querySelector(".saldos");
+    if (!block) return; // otra pestaña, la pantalla del PIN o un error: aún no se han pintado los saldos
+    rolled = true;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    block.classList.add("roll");
+  }
+
   let seq = 0;
   async function render({ keep = false, scroll = null } = {}) {
     const my = ++seq;
@@ -1442,6 +1497,7 @@
     if (my !== seq) return;
     app.classList.remove("loading");
     app.replaceChildren(...view);
+    startRoll();
     setPullView(shown);
     window.scrollTo(0, scroll !== null ? scroll : keep ? y : 0);
   }

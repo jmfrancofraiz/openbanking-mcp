@@ -272,3 +272,45 @@ test("tirar para sincronizar: solo la lista del Diario (y lo que cae en ella) pu
   assert.equal(L.pullEnabled(""), false); // cargando, error o PIN: nada en pantalla
 });
 
+test("saldos: la cifra se parte en dígitos que ruedan y símbolos fijos", () => {
+  const nb = "\u00a0"; // Intl separa la cifra del «€» con un espacio duro
+  const chars = L.figureChars(`9.380,35${nb}€`);
+  assert.equal(chars.map((c) => c.ch).join(""), `9.380,35${nb}€`);                       // no se pierde ni se inventa nada
+  assert.deepEqual(chars.filter((c) => c.digit !== null).map((c) => c.digit), [9, 3, 8, 0, 3, 5]);
+  assert.deepEqual(chars.filter((c) => c.digit === null).map((c) => c.ch), [".", ",", nb, "€"]);
+  assert.equal(L.figureChars(L.eur.format(-0.5)).some((c) => c.ch === "−" || c.ch === "-"), true); // el signo es un símbolo fijo
+  assert.deepEqual(L.figureChars(""), []);
+});
+
+test("saldos: la cinta de cada dígito da una vuelta completa y acaba en él", () => {
+  for (let d = 0; d <= 9; d++) {
+    const tape = L.odoTape(d);
+    assert.equal(tape.length, L.TAPE_LEN);
+    assert.deepEqual(tape.slice(0, 10), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);                 // una vuelta entera
+    assert.equal(tape[tape.length - 1], d);                                                // y la celda de reposo es el dígito
+  }
+  // Los -90,9091 % de app.css son (TAPE_LEN-1)/TAPE_LEN del alto de la cinta.
+  assert.equal(((L.TAPE_LEN - 1) / L.TAPE_LEN * 100).toFixed(4), "90.9091");
+});
+
+test("saldos: los dígitos arrancan escalonados, de izquierda a derecha y tarjeta a tarjeta", () => {
+  assert.equal(L.rollDelay(0, 0), 0);
+  assert.ok(L.rollDelay(1, 0) > L.rollDelay(0, 0));
+  assert.ok(L.rollDelay(0, 1) > L.rollDelay(0, 0));
+  // Toda la animación (la cifra más larga de la última tarjeta + 1 s de giro) cabe en un par de segundos.
+  assert.ok(L.rollDelay(8, 4) + 1100 < 2200, `termina a los ${L.rollDelay(8, 4) + 1100} ms`);
+});
+
+test("saldos: el aviso del total dice de cuántas cuentas es y qué salvedades tiene, en una línea", () => {
+  const today = "2026-10-23";
+  const base = { count: 4, missing: [], disponible: [], outdated: [], oldest: "2026-10-23T05:49:49Z" };
+  assert.equal(L.totalNote(base, today), "4 cuentas · más antiguo: hoy 07:49");
+  assert.equal(L.totalNote({ ...base, count: 1 }, today), "1 cuenta · más antiguo: hoy 07:49");
+  assert.equal(L.totalNote({ ...base, oldest: "2026-10-22T05:30:00Z" }, today), "4 cuentas · más antiguo: ayer 07:30");
+  assert.equal(L.totalNote({ ...base, disponible: ["Revolut"] }, today), "4 cuentas · más antiguo: hoy 07:49 · Revolut: saldo disponible");
+  const todo = L.totalNote({ ...base, missing: ["ING"], outdated: ["BBVA", "Revolut"], disponible: ["Revolut"] }, today);
+  assert.equal(todo, "4 cuentas · más antiguo: hoy 07:49 · sin saldo: ING · desactualizado: BBVA, Revolut · Revolut: saldo disponible");
+  // Con todo en orden y una cuenta solo con saldo disponible cabe en una línea de la tarjeta (≈ 55-65 caracteres).
+  assert.ok(L.totalNote({ ...base, disponible: ["Revolut"] }, today).length <= 65);
+});
+

@@ -76,6 +76,30 @@
     return `${dayShort(date)}${otherYear(date, today)} ${time}`;
   }
 
+  /* ---------- saldos del Diario: total y cifras que ruedan ---------- */
+
+  // Texto bajo el total, en una línea cuando todo está bien: de cuántas cuentas es, cuál es el saldo más antiguo y, solo si
+  // las hay, las salvedades. `t`: el `total` de /api/accounts (la suma ya viene hecha del servidor).
+  function totalNote(t, today) {
+    const parts = [`${t.count === 1 ? "1 cuenta" : `${t.count} cuentas`} · más antiguo: ${whenLabel(t.oldest, today)}`];
+    if (t.missing.length) parts.push(`sin saldo: ${t.missing.join(", ")}`);
+    if (t.outdated.length) parts.push(`desactualizado: ${t.outdated.join(", ")}`);
+    if (t.disponible.length) parts.push(`${t.disponible.join(", ")}: saldo disponible`);
+    return parts.join(" · ");
+  }
+
+  // Una cifra ya formateada («9.380,35 €») en caracteres: los dígitos ruedan; separadores, «€» y espacios quedan fijos.
+  const figureChars = (text) => Array.from(String(text), (ch) => ({ ch, digit: /^[0-9]$/.test(ch) ? Number(ch) : null }));
+
+  // Cinta de un dígito: 0…9 y, al final, el propio dígito. Recorrerla entera da una vuelta completa y acaba en él;
+  // en reposo se ve la última celda (la cinta se desplaza (TAPE_LEN-1)/TAPE_LEN de su alto: -90,9091 % en app.css).
+  const TAPE_LEN = 11;
+  const odoTape = (d) => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, d];
+
+  // Retardo (ms) del arranque de un dígito: cada tarjeta empieza un poco después de la anterior (`card`) y, dentro de
+  // la cifra, los dígitos van de izquierda a derecha (`index`, contando solo dígitos).
+  const rollDelay = (index, card) => card * 110 + index * 45;
+
   /* ---------- tirar hacia abajo para sincronizar ---------- */
 
   // Distancias en px. `reload` y `sync`: lo que hay que tirar (ya con resistencia) para que al soltar recargue la página
@@ -328,6 +352,7 @@
     colorFor, share, shown, cleanTitle, titleOf, signedEur, topN, delta, parseHash,
     DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams,
     PULL, pullDistance, pullZone, waitLabel, syncResult, viewOf, pullEnabled,
+    totalNote, figureChars, TAPE_LEN, odoTape, rollDelay,
     periodsOf, comparisonCut, periodRange, accumulatedMonths,
     PACE_REFS, paceRefs, verdict, trendOf, diffGroups, diffSubcategories,
     nextTheme, isDarkTheme,
