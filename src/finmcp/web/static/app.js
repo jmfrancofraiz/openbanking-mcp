@@ -58,7 +58,11 @@
 
   function svg(tag, attrs = {}, children = []) {
     const n = document.createElementNS(SVGNS, tag);
-    for (const [a, v] of Object.entries(attrs)) n.setAttribute(a, v);
+    for (const [a, v] of Object.entries(attrs)) {
+      // El atributo `style` (texto) lo bloquea la CSP; asignar propiedades por el CSSOM sí está permitido.
+      if (a === "style" && typeof v === "object") Object.assign(n.style, v);
+      else n.setAttribute(a, v);
+    }
     n.append(...children);
     return n;
   }
@@ -374,6 +378,39 @@
         + (sp.partial ? `; tramo discontinuo: mes en curso, a día ${CUT.day}.` : ".") }) : null,
       list, more,
     ];
+  }
+
+  // Barras mensuales de una categoría o subcategoría (Evolución › Acumulado), al estilo de Tendencias:
+  // una barra por mes del periodo, media discontinua y, al tocar una barra, enlace a sus movimientos.
+  function monthlyChart(rows, months, tipo, colorKey, onMonth) {
+    if (months.length < 2) return null; // un solo mes: no aporta nada mostrar una gráfica
+    const byMonth = new Map(months.map((m) => [m, 0]));
+    for (const t of rows) {
+      const m = t.date.slice(0, 7);
+      if (byMonth.has(m)) byMonth.set(m, byMonth.get(m) + t.amount);
+    }
+    const sign = tipo === "gastos" ? -1 : 1; // igual criterio que el total de la cabecera (ghead)
+    const vals = months.map((m) => sign * byMonth.get(m));
+    const avg = vals.reduce((a, v) => a + v, 0) / vals.length;
+    const color = L.colorFor(colorKey);
+    let sel = -1;
+    const chartBox = el("div", { className: "chart-scroll", attrs: { "data-noswipe": "1" } });
+    const selLine = el("div", { className: "tsel" });
+    const paintSel = () => {
+      selLine.replaceChildren(sel >= 0
+        ? el("span", {}, [`${L.monthLabel(months[sel])}: `, amt(vals[sel]),
+            Math.abs(vals[sel]) >= 0.005 ? el("button", { type: "button", textContent: "Ver movimientos ›",
+              onclick: () => onMonth(months[sel]) }) : ""])
+        : el("span", { className: "muted", textContent: "Toque una barra para ver ese mes." }));
+    };
+    const paintChart = () => {
+      chartBox.replaceChildren(miniBars(vals, months, { color, avg, selected: sel, scroll: true,
+        onSelect: (i) => { sel = sel === i ? -1 : i; paintChart(); paintSel(); } }));
+    };
+    paintChart();
+    paintSel();
+    requestAnimationFrame(() => { chartBox.scrollLeft = chartBox.scrollWidth; }); // meses recientes a la vista
+    return [el("h2", { textContent: "Por mes" }), el("div", { className: "card" }, [chartBox, selLine])];
   }
 
   function txList(rows, { byDay = true, showCat = false, income = false } = {}) {
@@ -822,18 +859,24 @@
     const [, origin, from, to, tipo0, kind, key, extra] = p;
     const tipo = tipoOf(tipo0);
     const label = L.rangeLabel(from, to);
-    const navKey = ["mes", "evolucion", "tendencias"].includes(origin) ? origin : "mes";
+    const navKey = ["mes", "evolucion", "tendencias"].includes(origin) ? origin : origin === "acumulado" ? "evolucion" : "mes";
+    // Solo en Evolución › Acumulado (petición del Señor, 24-oct-2026): meses cerrados del periodo para la minigráfica mensual.
+    const periodMonths = origin === "acumulado" ? CLOSED.filter((m) => L.monthStart(m) >= from && L.monthEnd(m) <= to) : [];
     if (kind === "g" && extra !== "mov") {
       const agg = aggsOf(await breakdownOf(from, to))[tipo];
       const g = agg.groups.find((x) => x.group === key);
       if (!g) {
         return [detailBar(L.shown(key), label), el("main", {}, el("p", { className: "muted empty", textContent: "Sin movimientos en este periodo." })), nav(navKey)];
       }
+      const chartRows = periodMonths.length > 1 ? await txOf(from, to, tipo, "g", g.group) : null;
+      const chart = chartRows ? monthlyChart(chartRows, periodMonths, tipo, g.group,
+        (m) => go(H("rango", origin, L.monthStart(m), L.monthEnd(m), tipo, "g", g.group, "mov"))) : null;
       return [
         detailBar(L.shown(g.group), label),
         el("main", {}, [
           el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(g.total) }),
             el("div", { className: "muted", textContent: `${g.count} movimientos · ${L.share(g.total, agg.total)} % de los ${word(tipo)}` })]),
+          ...(chart || []),
           el("h2", { textContent: "Por subcategoría" }),
           el("div", { className: "cards" }, g.categories.map((c) => el("button", { className: "gcard", type: "button",
             onclick: () => go(H("rango", origin, from, to, tipo, "c", c.category)) }, [
@@ -852,11 +895,16 @@
     const net = sum(rows.map((t) => t.amount));
     const first = rows[0];
     const isSub = kind === "c" && first && first.group !== key;
+    const chart = periodMonths.length > 1 ? monthlyChart(rows, periodMonths, tipo, key,
+      (m) => go(kind === "g"
+        ? H("rango", origin, L.monthStart(m), L.monthEnd(m), tipo, "g", key, "mov")
+        : H("rango", origin, L.monthStart(m), L.monthEnd(m), tipo, "c", key))) : null;
     return [
       detailBar(isSub ? first.label : L.shown(key), isSub ? `${L.shown(first.group)} · ${label}` : label),
       el("main", {}, [
         el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(nz((tipo === "ingresos" || tipo === "no-computables") ? net : -net)) }),
           el("div", { className: "muted", textContent: `${rows.length} movimientos` })]),
+        ...(chart || []),
         ...txPanel(rows, tipo, kind === "g"),
       ]),
       nav(navKey),
@@ -1037,7 +1085,7 @@
       el("h2", { textContent: "Acumulado por categoría" }),
       subtabs([["ingresos", "Ingresos", aggs.ingresos.total], ["gastos", "Gastos", aggs.gastos.total],
                ["no-computables", "No computables", aggs["no-computables"].total]], tipo, (t) => nav2(period, t, true)),
-      ...categoryBlock(aggs[tipo], tipo, { origin: "evolucion", from, to, months: n }).slice(1),
+      ...categoryBlock(aggs[tipo], tipo, { origin: "acumulado", from, to, months: n }).slice(1),
       tipo === "gastos" ? el("h2", { textContent: "Fijo frente a variable" }) : null,
       tipo === "gastos" ? el("div", { className: "card" }, [
         el("div", {}, ["El ", el("b", { textContent: `${Math.round(billsPct)} %` }), " del gasto fueron recibos: ", amt(bills / n),
@@ -1185,13 +1233,18 @@
   try { trendSel = JSON.parse(localStorage.getItem(PREF.trend) || "null"); } catch { trendSel = null; }
   const trendPick = {};
 
-  function miniBars(vals, months, { color, avg, selected, onSelect }) {
-    const w = 330, h = 96, padT = 8, padB = 16, n = vals.length;
+  function miniBars(vals, months, { color, avg, selected, onSelect, scroll = false }) {
+    // `scroll`: con muchos meses (p. ej. Acumulado › Todo), ensancha el SVG más allá del contenedor
+    // (fijando su anchura real, no solo el viewBox) para que las barras no se aplasten; el contenedor
+    // debe tener `chart-scroll`. Con pocos meses (Tendencias, 13 siempre) no cambia nada.
+    const n = vals.length;
+    const w = scroll ? Math.max(330, n * 22) : 330, h = 96, padT = 8, padB = 16;
     const colW = (w - 8) / n, bw = Math.min(16, colW - 6);
     const max = Math.max(...vals, avg, 1), min = Math.min(...vals, 0);
     const y = (v) => padT + ((max - v) / (max - min)) * (h - padT - padB);
     const id = `h${Math.random().toString(36).slice(2, 8)}`;
-    const root = svg("svg", { viewBox: `0 0 ${w} ${h}`, class: "mini", "aria-hidden": "true" });
+    const root = svg("svg", { viewBox: `0 0 ${w} ${h}`, class: "mini", "aria-hidden": "true",
+      ...(w > 330 ? { style: { width: `${w}px`, height: `${h}px` } } : {}) });
     const ink = cssVar("--fg", "#22201c");
     root.append(svg("defs", {}, [svg("pattern", { id, width: 5, height: 5, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" },
       [svg("line", { x1: 0, y1: 0, x2: 0, y2: 5, stroke: color, "stroke-width": 2 })])]));
