@@ -98,6 +98,10 @@ def test_breakdown_resta_devoluciones_y_excluye_neutrales(session, ejemplo):
     assert [g["group"] for g in b["income"]["groups"]] == ["Ingresos - Nómina"]
     assert b["income"]["count"] == 1 and b["expense"]["count"] == 4
 
+    assert b["neutral"]["total"] == -500.00
+    assert b["neutral"]["count"] == 1
+    assert [g["group"] for g in b["neutral"]["groups"]] == ["Traspasos internos"]
+
 
 def test_breakdown_cuadra_con_monthly_summary(session, ejemplo):
     b = d.breakdown(session, date(2026, 3, 1), date(2026, 3, 31))
@@ -202,6 +206,12 @@ def test_series_por_categoria_y_mes(session, ejemplo):
     assert "Traspasos internos" not in s["expense"]
 
 
+def test_series_incluye_neutral(session, ejemplo):
+    s = d.series(session, "2026-03", "2026-04")
+
+    assert s["neutral"]["Traspasos internos"] == [-500.00, 0.0]
+
+
 # --- transactions ------------------------------------------------------------
 
 
@@ -232,6 +242,14 @@ def test_transactions_por_subcategoria_y_por_tipo(session, ejemplo):
     assert [(r["category"], r["amount"]) for r in income_rows] == [("Ingresos - Nómina", 3000.0)]
     assert len(expense_rows) == 4
     assert all(r["category"] != "Traspasos internos" for r in expense_rows)
+
+
+def test_transactions_neutral(session, ejemplo):
+    rows = d.transactions(session, date(2026, 3, 1), date(2026, 3, 31), d.NEUTRAL)
+
+    assert len(rows) == 1
+    assert rows[0]["category"] == "Traspasos internos"
+    assert rows[0]["amount"] == -500.00
 
 
 def test_transactions_incluye_etiquetas_activas_y_banco(session, make_tx):

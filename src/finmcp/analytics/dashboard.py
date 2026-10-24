@@ -28,7 +28,8 @@ from finmcp.db.queries import latest_sync_runs, query_transactions
 
 INCOME = "income"
 EXPENSE = "expense"
-KINDS = (INCOME, EXPENSE)
+NEUTRAL = "neutral"
+KINDS = (INCOME, EXPENSE, NEUTRAL)
 
 INCOME_PREFIX = "Ingresos"
 EXTRA_INCOME_CATEGORIES = frozenset({"Otros ingresos", "Intereses"})
@@ -150,7 +151,13 @@ def _aggregate(rows: list[tuple[str, float]]) -> dict:
 
 
 def breakdown(session: Session, start: date, end: date) -> dict:
-    """Ingresos y gastos por categoría y subcategoría entre dos fechas (ambas incluidas)."""
+    """Ingresos, gastos y no computables por categoría y subcategoría entre dos fechas.
+
+    Los no computables (`neutral`) se agregan con signo PLANO (abono positivo, cargo
+    negativo), sin la inversión de `value_of()`: no hay un «cómputo» de ingreso o gasto
+    al que sumar o restar, así que un traspaso de ida y vuelta en el mismo periodo se
+    cancela solo, igual que en el criterio de ahorro neto mensual.
+    """
     txs = _computable(session, start, end)
     split: dict[str, list[tuple[str, float]]] = {INCOME: [], EXPENSE: []}
     refunds = bills = 0.0
@@ -166,11 +173,16 @@ def breakdown(session: Session, start: date, end: date) -> dict:
                 bills += val
     credits = sum(t.amount for t in txs if t.type == "credit")
     debits = sum(t.amount for t in txs if t.type == "debit")
+
+    neutral_txs = query_transactions(session, start=_day_start(start), end=_day_end(end), neutral=True)
+    neutral_rows = [(category_of(t), t.amount if t.type == "credit" else -t.amount) for t in neutral_txs]
+
     return {
         "from": start.isoformat(),
         "to": end.isoformat(),
         "income": _aggregate(split[INCOME]),
         "expense": _aggregate(split[EXPENSE]),
+        "neutral": _aggregate(neutral_rows),
         "net": _round(credits - debits),
         "refunds": _round(refunds),
         "bills": _round(bills),
@@ -225,19 +237,25 @@ def monthly(session: Session, today: date, day: int | None = None) -> list[dict]
 
 
 def series(session: Session, start_month: str, end_month: str) -> dict:
-    """Total de cada categoría del panel por mes, alineado con `months` (ingresos y gastos)."""
+    """Total de cada categoría del panel por mes (ingresos, gastos y no computables)."""
     first, last = parse_month(start_month), parse_month(end_month)
     months = month_range(first, last)
     index = {m: i for i, m in enumerate(months)}
-    out: dict[str, dict[str, list[float]]] = {INCOME: {}, EXPENSE: {}}
-    for t in _computable(session, first, date(last.year, last.month, days_in(last))):
+    end_date = date(last.year, last.month, days_in(last))
+    out: dict[str, dict[str, list[float]]] = {INCOME: {}, EXPENSE: {}, NEUTRAL: {}}
+    for t in _computable(session, first, end_date):
         cat = category_of(t)
         values = out[kind_of(cat)].setdefault(group_of(cat), [0.0] * len(months))
         values[index[month_key(t.booked_at)]] += value_of(t, cat)
+    for t in query_transactions(session, start=_day_start(first), end=_day_end(end_date), neutral=True):
+        cat = category_of(t)
+        values = out[NEUTRAL].setdefault(group_of(cat), [0.0] * len(months))
+        values[index[month_key(t.booked_at)]] += t.amount if t.type == "credit" else -t.amount
     return {
         "months": months,
         INCOME: {g: [_round(v) for v in vals] for g, vals in out[INCOME].items()},
         EXPENSE: {g: [_round(v) for v in vals] for g, vals in out[EXPENSE].items()},
+        NEUTRAL: {g: [_round(v) for v in vals] for g, vals in out[NEUTRAL].items()},
     }
 
 
@@ -249,12 +267,20 @@ def transactions(
     group: str | None = None,
     category: str | None = None,
 ) -> list[dict]:
-    """Movimientos computables de un tipo (y opcionalmente de una categoría o subcategoría)."""
+    """Movimientos de un tipo (y opcionalmente de una categoría o subcategoría).
+
+    `kind=NEUTRAL` devuelve los movimientos no computables del periodo; los demás
+    valores siguen devolviendo solo movimientos computables de ese tipo.
+    """
     banks = dict(session.query(models.Account.id, models.Account.bank_id).all())
+    if kind == NEUTRAL:
+        txs = query_transactions(session, start=_day_start(start), end=_day_end(end), neutral=True)
+    else:
+        txs = _computable(session, start, end)
     rows = []
-    for t in _computable(session, start, end):
+    for t in txs:
         cat = category_of(t)
-        if kind_of(cat) != kind:
+        if kind != NEUTRAL and kind_of(cat) != kind:
             continue
         if category is not None and cat != category:
             continue
