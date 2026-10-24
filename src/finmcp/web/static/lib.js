@@ -311,16 +311,19 @@
   }
 
   // Tendencia de una categoría: media de los 3 últimos meses cerrados frente a los anteriores (hasta 9).
-  function trendOf(closedVals) {
+  // `invert`: para categorías de ingreso, subir es «better» y bajar es «worse» (al revés que en gasto).
+  function trendOf(closedVals, invert = false) {
     const avg = (xs) => (xs.length ? xs.reduce((a, v) => a + v, 0) / xs.length : 0);
     const l3 = avg(closedVals.slice(-3));
     const p9 = avg(closedVals.slice(0, -3));
     const ratio = closedVals.length > 3 && p9 > 0 ? (l3 - p9) / p9 : null;
     if (ratio === null) return { ratio, text: "", tone: "flat" };
     if (Math.abs(ratio) < 0.1) return { ratio, text: "estable", tone: "flat" };
-    return ratio > 0
-      ? { ratio, text: `al alza (+${Math.round(ratio * 100)} %)`, tone: "worse" }
-      : { ratio, text: `a la baja (${Math.round(ratio * 100)} %)`, tone: "better" };
+    const rising = ratio > 0;
+    const tone = rising === invert ? "better" : "worse";
+    return rising
+      ? { ratio, text: `al alza (+${Math.round(ratio * 100)} %)`, tone }
+      : { ratio, text: `a la baja (${Math.round(ratio * 100)} %)`, tone };
   }
 
   // «Qué ha cambiado»: diferencia por categoría entre dos periodos, de mayor a menor magnitud.

@@ -138,6 +138,15 @@ test("trendOf: estable, al alza, a la baja y sin histórico suficiente", () => {
   assert.equal(L.trendOf([100, 100, 100]).ratio, null);
 });
 
+test("trendOf: invertido (ingresos) cambia el tono pero no el texto", () => {
+  const nine = Array(9).fill(100);
+  const up = L.trendOf([...nine, 150, 150, 150], true);
+  assert.deepEqual(up, { ratio: 0.5, text: "al alza (+50 %)", tone: "better" });
+  const down = L.trendOf([...nine, 50, 50, 50], true);
+  assert.equal(down.tone, "worse");
+  assert.equal(L.trendOf([...nine, 105, 100, 95], true).tone, "flat");
+});
+
 test("diffGroups y diffSubcategories", () => {
   const A = [{ group: "Alimentación", total: 60, categories: [{ category: "Alimentación - Super", label: "Super", total: 60 }] },
     { group: "Restauración", total: 40, categories: [] }];

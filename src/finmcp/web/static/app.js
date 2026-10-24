@@ -2,7 +2,8 @@
 /* Panel finmcp · interfaz (variante B «Relato del mes»).
    Diario (pestaña de apertura): último saldo de cada cuenta y lista plana de todos los movimientos, sin agregaciones.
    Mes: ingresos y gastos del mes seleccionado, sin comparaciones (solo minigráficas de 6 meses).
-   Evolución: «Mes a mes», «Acumulado» y «Periodo contra periodo». Tendencias: una tarjeta por categoría.
+   Evolución: «Mes a mes», «Acumulado» y «Periodo contra periodo». Tendencias: una tarjeta por categoría
+   (de gasto o de ingreso, a elección).
    Los importes llegan calculados de la API de solo lectura (/api/*); aquí solo se presentan.
    Única acción: tirar hacia abajo desde arriba del todo de la lista del Diario pide sincronizar con los bancos y recarga los datos. */
 (() => {
@@ -1196,16 +1197,22 @@
     return root;
   }
 
-  function openPicker(options, totals, nMonths, onPick) {
+  function openPicker(options, totals, nMonths, kindOf, onPick) {
     const close = () => sheet.remove();
+    const card = (g) => el("button", { className: "gcard", type: "button", onclick: () => { close(); onPick(g); } }, [
+      el("span", { className: "dot", style: { background: L.colorFor(g) } }), el("span", { className: "n", textContent: g }),
+      el("span", { className: "s" }, [`${nMonths} meses: `, amt(totals[g])]),
+      el("span", { className: "v" }, [amt(totals[g] / Math.max(1, nMonths)), el("span", { className: "s", textContent: "al mes" })]),
+    ]);
+    const section = (title, opts) => (opts.length
+      ? [el("h2", { textContent: title }), el("div", { className: "cards" }, opts.map(card))] : []);
+    const expenseOpts = options.filter((g) => kindOf(g) === "gastos");
+    const incomeOpts = options.filter((g) => kindOf(g) === "ingresos");
     const sheet = el("div", { className: "backdrop", onclick: (e) => { if (e.target === e.currentTarget) close(); } }, el("div", { className: "sheet", attrs: { role: "dialog", "aria-label": "Añadir categoría" } }, [
       el("div", { className: "grab" }),
       el("h2", { textContent: "Añadir categoría" }),
-      options.length ? el("div", { className: "cards" }, options.map((g) => el("button", { className: "gcard", type: "button", onclick: () => { close(); onPick(g); } }, [
-        el("span", { className: "dot", style: { background: L.colorFor(g) } }), el("span", { className: "n", textContent: g }),
-        el("span", { className: "s" }, [`${nMonths} meses: `, amt(totals[g])]),
-        el("span", { className: "v" }, [amt(totals[g] / Math.max(1, nMonths)), el("span", { className: "s", textContent: "al mes" })]),
-      ]))) : el("p", { className: "muted", textContent: "No quedan más categorías con gasto." }),
+      options.length ? el("div", {}, [...section("Gastos", expenseOpts), ...section("Ingresos", incomeOpts)])
+        : el("p", { className: "muted", textContent: "No quedan más categorías." }),
     ]));
     document.body.append(sheet);
   }
@@ -1215,17 +1222,22 @@
     const months = [...last12, CUR];
     const ser = await seriesOf(months[0], CUR);
     const idx = new Map(ser.months.map((m, i) => [m, i]));
-    const gv = (g, m) => (ser.expense[g] ? ser.expense[g][idx.get(m)] : 0) || 0;
-    const tot12 = Object.fromEntries(Object.keys(ser.expense).map((g) => [g, sum(last12.map((m) => gv(g, m)))]));
-    const ranked = Object.keys(tot12).filter((g) => tot12[g] > 0).sort((a, b) => tot12[b] - tot12[a]);
-    if (!Array.isArray(trendSel)) trendSel = ranked.slice(0, 5);
-    trendSel = trendSel.filter((g) => g in ser.expense);
+    const kindOf = (g) => (g in ser.income ? "ingresos" : "gastos");
+    const seriesFor = (g) => (kindOf(g) === "ingresos" ? ser.income : ser.expense);
+    const gv = (g, m) => { const s = seriesFor(g)[g]; return (s ? s[idx.get(m)] : 0) || 0; };
+    const allGroups = [...new Set([...Object.keys(ser.income), ...Object.keys(ser.expense)])];
+    const tot12 = Object.fromEntries(allGroups.map((g) => [g, sum(last12.map((m) => gv(g, m)))]));
+    const ranked = allGroups.filter((g) => tot12[g] > 0).sort((a, b) => tot12[b] - tot12[a]);
+    // Por defecto, las 5 categorías de gasto de mayor importe (como siempre); el ingreso se añade a mano.
+    if (!Array.isArray(trendSel)) trendSel = ranked.filter((g) => kindOf(g) === "gastos").slice(0, 5);
+    trendSel = trendSel.filter((g) => allGroups.includes(g));
     const save = () => localStorage.setItem(PREF.trend, JSON.stringify(trendSel));
     const card = (g) => {
+      const kind = kindOf(g);
       const vals = months.map((m) => gv(g, m));
       const closedVals = vals.slice(0, -1);
       const avg = closedVals.length ? sum(closedVals) / closedVals.length : 0;
-      const tr = L.trendOf(closedVals);
+      const tr = L.trendOf(closedVals, kind === "ingresos");
       const maxI = closedVals.length ? closedVals.indexOf(Math.max(...closedVals)) : -1;
       const pick = trendPick[g];
       const selLine = el("div", { className: "tsel" });
@@ -1233,7 +1245,7 @@
         const m = months[pick];
         selLine.append(el("span", {}, [L.monthLabel(m) + (m === CUR ? ` (a día ${CUT.day})` : "") + ": ", amt(vals[pick])]),
           Math.abs(vals[pick]) >= 0.005 ? el("button", { type: "button", textContent: "Ver movimientos ›",
-            onclick: () => go(H("rango", "tendencias", L.monthStart(m), L.monthEnd(m), "gastos", "g", g, "mov")) }) : "");
+            onclick: () => go(H("rango", "tendencias", L.monthStart(m), L.monthEnd(m), kind, "g", g, "mov")) }) : "");
       } else {
         selLine.append(el("span", { className: "muted", textContent: "Toque una barra para ver ese mes." }));
       }
@@ -1254,7 +1266,7 @@
             onclick: () => { trendSel = trendSel.filter((x) => x !== g); save(); render({ keep: true }); } },
           [el("span", { className: "dot2", style: { background: L.colorFor(g) } }), `${g} ✕`])),
           el("button", { type: "button", className: "chip", textContent: "＋ Añadir",
-            onclick: () => openPicker(ranked.filter((g) => !trendSel.includes(g)), tot12, last12.length,
+            onclick: () => openPicker(ranked.filter((g) => !trendSel.includes(g)), tot12, last12.length, kindOf,
               (g) => { trendSel = [...trendSel, g]; save(); render({ keep: true }); }) }),
         ]),
         trendSel.length ? null : el("p", { className: "muted empty", textContent: "Añada una categoría para ver su evolución." }),
