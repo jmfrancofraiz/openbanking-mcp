@@ -66,8 +66,9 @@
   // Sin «−0 €»: los importes que redondean a cero se muestran como 0.
   const nz = (v) => (Math.abs(v) < 0.005 ? 0 : v);
   const amt = (v, fmt = eur0) => el("span", { className: "amt", textContent: fmt.format(nz(v)) });
-  const word = (tipo) => (tipo === "ingresos" ? "ingresos" : "gastos");
-  const tipoOf = (x) => (x === "ingresos" ? "ingresos" : "gastos");
+  const word = (tipo) => (tipo === "ingresos" ? "ingresos"
+    : tipo === "no-computables" ? "movimientos no computables" : "gastos");
+  const tipoOf = (x) => (x === "ingresos" || x === "no-computables" ? x : "gastos");
   const H = (...segs) => `#/${segs.map((x) => encodeURIComponent(x)).join("/")}`;
   const spacer = () => el("span", { className: "spacer" });
   const stepMonth = (ym, d) => MONTHS[MONTHS.indexOf(ym) + d] || null;
@@ -95,7 +96,7 @@
   // movimiento se repinta tal cual, sin perder lo desplazado.
   let diary = null;
   const resetData = () => { cache.clear(); diary = null; };
-  const aggsOf = (b) => ({ ingresos: b.income, gastos: b.expense });
+  const aggsOf = (b) => ({ ingresos: b.income, gastos: b.expense, "no-computables": b.neutral });
   const breakdownOf = (from, to) => api("breakdown", { from, to });
   const monthlyRows = (day) => api("monthly", day ? { day } : {}).then((b) => b.months);
   const seriesOf = (from, to) => api("series", { from, to });
@@ -364,7 +365,8 @@
     paintList();
     const sp = ctx.spark;
     return [
-      el("h2", { textContent: tipo === "ingresos" ? "¿De dónde ha venido?" : "¿En qué se ha ido?" }),
+      el("h2", { textContent: tipo === "ingresos" ? "¿De dónde ha venido?"
+        : tipo === "no-computables" ? "¿Qué ha quedado fuera?" : "¿En qué se ha ido?" }),
       donutBox, detail,
       el("h2", { textContent: `${L.cap(word(tipo))} por categoría` }),
       sp ? el("p", { className: "muted lead2", textContent: `Minigráfica: últimos ${sp.months.length} meses `
@@ -402,7 +404,9 @@
   // Se abre siempre con la fecha descendente (lo más reciente primero), como el Diario.
   function txPanel(rows, tipo, showCat) {
     let sort = "desc";
-    const income = tipo === "ingresos";
+    // «income»: signo natural (sin invertir) y sin etiqueta «devolución/abono» — vale tanto para
+    // Ingresos como para No computables (estos no tienen semántica de devolución).
+    const income = tipo === "ingresos" || tipo === "no-computables";
     const input = el("input", { type: "search", className: "filter", placeholder: "Buscar comercio, concepto o etiqueta",
       attrs: { "aria-label": "Buscar movimientos" } });
     const chips = el("div", { className: "chips" });
@@ -786,16 +790,22 @@
     const sm = MONTHS.slice(Math.max(0, i - 5), i + 1);
     const [b, ser] = await Promise.all([breakdownOf(from, to), sm.length > 1 ? seriesOf(sm[0], ym) : null]);
     const aggs = aggsOf(b);
-    const sp = ser ? { months: ser.months, values: tipo === "ingresos" ? ser.income : ser.expense, partial: ym === CUR } : null;
+    const sp = ser ? { months: ser.months,
+      values: tipo === "ingresos" ? ser.income : tipo === "no-computables" ? ser.neutral : ser.expense,
+      partial: ym === CUR } : null;
     return [
       monthBar(ym, tipo),
       el("main", {}, [
-        subtabs([["ingresos", "Ingresos", aggs.ingresos.total], ["gastos", "Gastos", aggs.gastos.total]], tipo,
+        subtabs([["ingresos", "Ingresos", aggs.ingresos.total], ["gastos", "Gastos", aggs.gastos.total],
+                 ["no-computables", "No computables", aggs["no-computables"].total]], tipo,
           (t) => go(H("mes", ym, t), { replace: true })),
         ...categoryBlock(aggs[tipo], tipo, { origin: "mes", from, to, months: 1, spark: sp }),
         el("footer", { className: "note" }, [
           ym === CUR ? el("p", { textContent: `Mes en curso: movimientos hasta el día ${CUT.day}.` }) : null,
           tipo === "gastos" && b.refunds > 0 ? el("p", {}, ["Las devoluciones (", amt(b.refunds), ") se han descontado del gasto de su categoría."]) : null,
+          tipo === "no-computables" ? el("p", { textContent:
+            "Estos movimientos no cuentan como ingreso ni como gasto: traspasos entre cuentas propias, "
+            + "liquidaciones de tarjeta, ajustes de saldo, o dinero recibido y gastado a través de Bonusly." }) : null,
           coverageNote(from),
           el("p", { textContent: "Cambie de mes con las flechas, tocando el nombre del mes o deslizando ⇆." }),
           PIN ? el("button", { className: "lockbtn", type: "button", textContent: "Bloquear el panel", onclick: lockPanel }) : null,
@@ -845,7 +855,7 @@
     return [
       detailBar(isSub ? first.label : L.shown(key), isSub ? `${L.shown(first.group)} · ${label}` : label),
       el("main", {}, [
-        el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(nz(tipo === "ingresos" ? net : -net)) }),
+        el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(nz((tipo === "ingresos" || tipo === "no-computables") ? net : -net)) }),
           el("div", { className: "muted", textContent: `${rows.length} movimientos` })]),
         ...txPanel(rows, tipo, kind === "g"),
       ]),
@@ -1025,7 +1035,8 @@
       el("div", { className: "chart-card" }, [legend, chartBox]),
       selBox,
       el("h2", { textContent: "Acumulado por categoría" }),
-      subtabs([["ingresos", "Ingresos", aggs.ingresos.total], ["gastos", "Gastos", aggs.gastos.total]], tipo, (t) => nav2(period, t, true)),
+      subtabs([["ingresos", "Ingresos", aggs.ingresos.total], ["gastos", "Gastos", aggs.gastos.total],
+               ["no-computables", "No computables", aggs["no-computables"].total]], tipo, (t) => nav2(period, t, true)),
       ...categoryBlock(aggs[tipo], tipo, { origin: "evolucion", from, to, months: n }).slice(1),
       tipo === "gastos" ? el("h2", { textContent: "Fijo frente a variable" }) : null,
       tipo === "gastos" ? el("div", { className: "card" }, [
@@ -1036,7 +1047,10 @@
       ]) : null,
       el("footer", { className: "note" }, [
         el("p", { textContent: `Solo meses cerrados: ${L.monthLabel(CUR)} está en curso y no se incluye.` }),
-        el("p", { textContent: "Importes netos de devoluciones." }),
+        tipo !== "no-computables" ? el("p", { textContent: "Importes netos de devoluciones." }) : null,
+        tipo === "no-computables" ? el("p", { textContent:
+          "Estos movimientos no cuentan como ingreso ni como gasto: traspasos entre cuentas propias, "
+          + "liquidaciones de tarjeta, ajustes de saldo, o dinero recibido y gastado a través de Bonusly." }) : null,
         coverageNote(from),
       ]),
     ];
