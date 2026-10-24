@@ -7,6 +7,8 @@ from finmcp.analytics import tagging
 from finmcp.analytics.anomalies import detect_unusual_charges
 from finmcp.analytics.bills import list_bills as _list_bills
 from finmcp.analytics.categories import category_of, spend_by_category
+from finmcp.analytics.categories import list_categories as _list_categories
+from finmcp.analytics.categories import rename_category as _rename_category
 from finmcp.analytics.summaries import monthly_summary
 from finmcp.db import models, queries
 from finmcp.db.session import SessionLocal, init_db
@@ -704,6 +706,25 @@ def list_category_rules() -> list[dict]:
             }
             for r in rows
         ]
+
+
+@mcp.tool()
+def list_categories() -> list[dict]:
+    """Categorías en uso: nº de reglas, de movimientos y de movimientos fijados a mano."""
+    with SessionLocal() as s:
+        return _list_categories(s)
+
+
+@mcp.tool()
+def rename_category(old: str, new: str, merge: bool = False, apply: bool = False) -> dict:
+    """Renombra una categoría en todas sus reglas y movimientos (también los fijados a mano).
+
+    No reaplica las reglas: el nombre no cambia qué regla gana. Si `new` ya
+    existe, exige `merge=True` (fusión). Sin `apply=True` solo simula y
+    devuelve los recuentos.
+    """
+    with SessionLocal() as s:
+        return _rename_category(s, old, new, merge=merge, apply=apply)
 
 
 @mcp.tool()

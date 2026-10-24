@@ -11,6 +11,8 @@ tags_app = typer.Typer(help="Catálogo de etiquetas y etiquetado de movimientos.
 app.add_typer(tags_app, name="tags")
 banks_app = typer.Typer(help="Bancos configurados (multi-banco vía Enable Banking).")
 app.add_typer(banks_app, name="banks")
+categories_app = typer.Typer(help="Categorías en uso: inventario y renombrado.")
+app.add_typer(categories_app, name="categories")
 
 
 def _resolve_bank(bank_id: str | None):
@@ -808,6 +810,55 @@ def rules_list() -> None:
             f"[{r['priority']}] '{r['pattern']}' ({r['field']}) -> {r['category']}{tags}{cond_txt}"
             f"{neutral_txt}{bill_txt}{account_txt}  (id={r['id']})"
         )
+
+
+@categories_app.command("list")
+def categories_list() -> None:
+    """Lista las categorías en uso con su nº de reglas y de movimientos."""
+    from finmcp.mcp.server import list_categories
+
+    rows = _query(list_categories)
+    if not rows:
+        typer.echo("Sin categorías.")
+        raise typer.Exit()
+    for r in rows:
+        manual_txt = f" ({r['manual']} manuales)" if r["manual"] else ""
+        typer.echo(
+            f"- {r['category']} · reglas {r['rules']} · movimientos {r['transactions']}"
+            f"{manual_txt}"
+        )
+
+
+@categories_app.command("rename")
+def categories_rename(
+    old: str = typer.Argument(..., help="Categoría actual (nombre exacto)"),
+    new: str = typer.Argument(..., help="Nombre nuevo"),
+    merge: bool = typer.Option(
+        False, "--merge", help="Permite fusionar con una categoría que ya existe"
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Aplica el cambio. Sin esta opción solo simula."
+    ),
+) -> None:
+    """Renombra una categoría en todas sus reglas y movimientos.
+
+    Incluye los movimientos fijados a mano (`recategorize`), que siguen fijados.
+    No reaplica las reglas: el nombre no cambia qué regla gana. Si la categoría
+    nueva ya existe hace falta --merge.
+    """
+    from finmcp.mcp.server import rename_category
+
+    r = _query(rename_category, old, new, merge, apply)
+    manual_txt = f" ({r['manual']} manuales)" if r["manual"] else ""
+    merge_txt = " · se fusiona con una categoría existente" if r["merge"] else ""
+    typer.echo(
+        f"«{r['old']}» -> «{r['new']}»: {r['rules']} reglas · "
+        f"{r['transactions']} movimientos{manual_txt}{merge_txt}"
+    )
+    if r["applied"]:
+        typer.echo("Hecho.")
+    else:
+        typer.echo("Simulación: no se ha modificado nada. Añade --apply para aplicar.")
 
 
 @tags_app.command("list")

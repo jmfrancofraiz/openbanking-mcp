@@ -156,6 +156,7 @@ funcionando en modo de un solo banco (`--bank` no es necesario).
 | `finmcp import-csv` | Importa movimientos desde un CSV (histórico anterior a 90 días) |
 | `finmcp categorize` | Reaplica tus reglas de categorización |
 | `finmcp rules add/update/remove/list/tag/untag/neutral/bill` | Añade, edita, elimina y lista reglas de categorización, sus etiquetas, sus condiciones de neutral/recibo y su cuenta (`--account`/`--bank`, opcional) |
+| `finmcp categories list` · `finmcp categories rename ANTIGUA NUEVA [--merge] [--apply]` | Lista las categorías en uso (reglas y movimientos) y renombra una en todas sus reglas y movimientos, también los fijados a mano (sin `--apply`, simula; `--merge` para fusionar con una existente) |
 | `finmcp neutral TX_ID...` | Marca movimientos como no computables (`--off` para desmarcar) |
 | `finmcp recategorize TX_ID CATEGORÍA [--is-bill/--no-is-bill]` | Fija a mano la categoría de un movimiento (y opcionalmente su condición de recibo); las reglas no lo volverán a tocar |
 | `finmcp skip-rules TX_ID...` | Desactiva las reglas para esos movimientos (`--off` para reactivarlas) |
@@ -174,9 +175,10 @@ Equivalentes a los comandos del CLI, salvo `auth` (solo CLI, requiere navegador)
 `import_csv` · `add_manual_account` · `set_manual_balance` · `remove_manual_account` · `categorize` · `add_category_rule` · `update_category_rule` · `remove_category_rules` · `list_category_rules` ·
 `add_rule_tags` · `remove_rule_tags` · `set_rule_neutral` · `set_rule_is_bill` · `list_tags` · `create_tag` ·
 `delete_tag` · `tag_transactions` · `untag_transactions` · `set_transactions_neutral` ·
-`recategorize_transaction` · `set_transactions_skip_rules` · `spend_by_tag_tool`
+`recategorize_transaction` · `set_transactions_skip_rules` · `spend_by_tag_tool` ·
+`list_categories` · `rename_category`
 
-> `import_csv` lee rutas del disco del servidor y `add_category_rule`/`update_category_rule`/`remove_category_rules`/`categorize`
+> `import_csv` lee rutas del disco del servidor y `add_category_rule`/`update_category_rule`/`remove_category_rules`/`rename_category`/`categorize`
 > escriben en SQLite: en modo `--http` define siempre `FINMCP_HTTP_TOKEN`.
 
 > Cargos inusuales usa **mediana + MAD** (robusto): un único pico no contamina
