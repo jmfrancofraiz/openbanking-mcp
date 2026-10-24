@@ -78,7 +78,8 @@ SECURITY_HEADERS = {
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 }
 
-KIND_PARAM = {"gastos": dashboard.EXPENSE, "ingresos": dashboard.INCOME}
+KIND_PARAM = {"gastos": dashboard.EXPENSE, "ingresos": dashboard.INCOME,
+              "no-computables": dashboard.NEUTRAL}
 # Pestaña Diario: tipo de movimiento y marca.
 TX_TYPE_PARAM = {"cargos": "debit", "abonos": "credit"}
 MARK_PARAM = {"sin-categoria": "uncategorized", "recibos": "bill",
@@ -251,7 +252,7 @@ def _month_param(request: Request, name: str) -> str:
 def _kind_param(request: Request) -> str:
     value = request.query_params.get("type", "")
     if value not in KIND_PARAM:
-        raise ParamError("«type» debe ser «gastos» o «ingresos».")
+        raise ParamError("«type» debe ser «gastos», «ingresos» o «no-computables».")
     return KIND_PARAM[value]
 
 

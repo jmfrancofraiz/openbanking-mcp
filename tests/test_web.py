@@ -27,6 +27,8 @@ def datos(make_tx):
             my_category="Moda y complementos")
     make_tx(30.00, type="credit", merchant="Devolución", booked_at=at(2026, 3, 15),
             my_category="Moda y complementos")
+    make_tx(500.00, description="Traspaso a cuenta de ahorro", booked_at=at(2026, 3, 20),
+            my_category="Traspasos internos", neutral=True)
     make_tx(3000.00, type="credit", description="Nómina", booked_at=at(2026, 3, 28),
             my_category="Ingresos - Nómina")
     make_tx(60.00, merchant="Supermercado", booked_at=at(2026, 4, 2),
@@ -64,6 +66,8 @@ def test_breakdown(client):
     assert body["expense"]["total"] == 170.0
     assert body["refunds"] == 30.0
     assert body["net"] == 2830.0
+    assert body["neutral"]["total"] == -500.0
+    assert [g["group"] for g in body["neutral"]["groups"]] == ["Traspasos internos"]
 
 
 def test_monthly_y_monthly_a_dia_d(client):
@@ -93,6 +97,18 @@ def test_transactions_por_categoria_y_subcategoria(client):
     assert [t["amount"] for t in by_group.json()["transactions"]] == [-80.0, 30.0]
     assert [t["date"] for t in by_cat.json()["transactions"]] == ["2026-03-05", "2026-04-02"]
     assert [t["category"] for t in income.json()["transactions"]] == ["Ingresos - Nómina"]
+
+
+def test_transactions_no_computables(client):
+    r = client.get("/api/transactions", params={
+        "from": "2026-03-01", "to": "2026-03-31", "type": "no-computables",
+    })
+
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["transactions"]) == 1
+    assert body["transactions"][0]["category"] == "Traspasos internos"
+    assert body["transactions"][0]["amount"] == -500.0
 
 
 @pytest.mark.parametrize(
