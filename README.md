@@ -42,9 +42,8 @@ El servidor MCP **lee de SQLite, nunca llama al banco en caliente**. La sincroni
 es un proceso aparte (`finmcp sync`, manual o por cron).
 
 > ¿Por qué Enable Banking? Es el agregador AIS **self-serve y gratis para uso personal**
-> que cubre la banca europea. Es el proveedor de todos los bancos. El segundo proveedor,
-> **Bonusly**, trata los puntos de reconocimiento de la empresa como una cuenta más
-> ([Bonusly](#bonusly-puntos-de-reconocimiento-como-cuenta)); ambos implementan `BankDataProvider`.
+> que cubre la banca europea. Es el proveedor de todos los bancos. Además, finmcp puede
+> sincronizar los puntos de [Bonusly](#bonusly-puntos-de-reconocimiento-como-cuenta) como una cuenta más.
 
 ## Paso a paso
 
@@ -220,106 +219,25 @@ cabecera `Authorization: Bearer <FINMCP_HTTP_TOKEN>`.
 
 ## Panel web (dashboard)
 
-Tercera superficie de finmcp, junto al CLI y al servidor MCP: un panel web **de consulta**,
-pensado primero para el móvil, para analizar ingresos, gastos y ahorro por categoría y periodo,
-con detalle hasta cada movimiento. No modifica tus datos: lo único que puede hacer es pedir una
-sincronización con los bancos (ver «Tirar para recargar o sincronizar»).
+Un panel web de consulta, pensado para el móvil, para ver saldos, movimientos, ingresos, gastos y
+ahorro. Es un servicio aparte del CLI y del servidor MCP que trabaja sobre la misma base de datos y
+la abre en solo lectura.
 
 ```bash
-finmcp web-pin                                     # fija el PIN (de 4 a 12 cifras); se pide dos veces
+finmcp web-pin                                     # fija el PIN (de 4 a 12 cifras)
 finmcp web --host 192.168.1.10                     # IP del equipo en tu red local; puerto 8790
 finmcp web --host 192.168.1.10 --host 100.x.y.z    # y además en su IP de Tailscale
 ```
 
-Abre `http://<IP>:8790/` en el navegador del móvil o del PC e introduce el PIN.
+Abre `http://<IP>:8790/` en el navegador e introduce el PIN.
 
-- **Diario** (la pestaña de apertura): el día a día, sin agregaciones.
-  - **Saldos:** el último saldo conocido de cada cuenta, con la hora de la foto y un semáforo de frescura (ámbar si falló el último sync, rojo si la foto tiene más de 36 h).
-    - **Total:** la suma de los últimos saldos de todas las cuentas, en cifra grande y alineada a la izquierda, sin rótulo (la calcula el servidor, en céntimos; solo aparece con dos o más cuentas). Debajo, en letra pequeña y con un semáforo delante, de cuántas cuentas es y la hora del saldo más antiguo, y avisa de las salvedades: una cuenta sin saldo no suma, una con el saldo desactualizado sí (con aviso) y las que solo dan «saldo disponible» (no contable) se nombran. El semáforo es el peor de todas las cuentas. Si los saldos están en monedas distintas no hay total.
-    - **Un solo bloque, compacto y sin líneas:** los saldos son una única tarjeta, con los colores de la tarjeta principal de Evolución (el degradado verde de la marca y texto blanco): el total arriba y debajo las cuentas en una rejilla de dos columnas, sin ninguna línea interior (solo el borde exterior; las celdas se distinguen por el espacio y la cuenta elegida por su fondo y un aro). Cada cuenta ocupa tres líneas (banco, cifra y, pequeña, terminación del IBAN y hora del saldo). Con todo en orden la sección mide unos 230 px en un móvil de 412 px de ancho (antes, 388 px con tarjetas sueltas). Si una cuenta tiene un aviso (sync fallida o saldo viejo), su celda crece lo que haga falta para el texto.
-    - **Animación:** al cargar la página, las cifras de esta sección ruedan como un cuentakilómetros hasta su valor, una sola vez por carga (filtrar, elegir una cuenta o volver del detalle no la repiten). Con «reducir movimiento» activado en el sistema, no hay animación.
-  - **Movimientos:** la lista plana de todos, también los no computables, del más reciente al más antiguo, por tramos.
-  - **Filtros:** cuenta, cargos o abonos, una marca (sin categoría, recibos, no computables, manuales), etiqueta, fechas y un buscador sin acentos que también mira el importe.
-  - **Saldo de cada día:** con una cuenta elegida, cada día muestra su saldo al cierre, calculado hacia atrás desde la última foto del banco y contrastado con todas las fotos reales.
-  - **Detalle:** al tocar un movimiento se ven sus datos originales del banco (contraparte, concepto íntegro, fechas, referencia y el JSON completo) y un botón «Copiar id».
-- **Mes**: ingresos y gastos del mes por categoría (donut y lista con minigráfica de 6 meses),
-  con detalle por subcategoría y movimientos. Se cambia de mes con las flechas, el selector o deslizando.
-  Toda lista de movimientos del panel (también las de Evolución y Tendencias) se abre con la fecha
-  descendente, lo más reciente primero; los botones de orden son «Fecha ↓», «Fecha ↑» e «Importe».
-- **Evolución**: *Mes a mes* (gasto del mes en curso frente al mes anterior y a las medias de 3 y
-  6 meses, a la misma fecha, y el ahorro de cada mes), *Acumulado* (3 meses, 6 meses, 1 año, año
-  actual o todo; solo meses cerrados) y *Periodo contra periodo* (mes, trimestre, semestre o año).
-- **Tendencias**: 12 meses de las categorías de gasto que elijas, con su tendencia.
+- **Diario:** el saldo de cada cuenta y el total, y la lista de todos los movimientos, con filtros y el detalle de cada uno.
+- **Mes:** ingresos y gastos del mes por categoría.
+- **Evolución:** el mes frente a los anteriores, los acumulados y la comparación entre periodos.
+- **Tendencias:** la evolución de 12 meses de las categorías de gasto que elijas.
 
-**Modo oscuro.** Automático, según el tema claro/oscuro del sistema operativo o del navegador
-(`prefers-color-scheme`); no hace falta tocar nada. Un botón ☀/☾ en la cabecera de **Diario**,
-**Evolución** y **Tendencias** (no en Mes ni en el detalle de un movimiento, que no llevan icono de
-cabecera propio: se alterna cambiando a una de esas tres pestañas) permite forzarlo con independencia
-del sistema, en el ciclo automático → oscuro → claro → automático; la elección se recuerda en el
-dispositivo (`localStorage`), nunca en el servidor.
-
-Criterios de cálculo (salvo en Diario, que no agrega): los movimientos neutrales no computan; son categorías de ingreso las que
-empiezan por «Ingresos», más «Otros ingresos» e «Intereses»; las devoluciones se restan del gasto
-de su categoría, y el ahorro coincide con el neto de `finmcp summary`. Toda comparación con el mes
-en curso se hace **a la misma fecha** (del día 1 al día de hoy de cada mes).
-
-**Tirar para recargar o sincronizar.** En el móvil, tirando hacia abajo desde arriba del todo de la pestaña
-**Diario** (la lista, con o sin filtros), lo que ocurre al soltar depende de lo largo que sea el tirón; el
-indicador de arriba lo va diciendo mientras se tira:
-
-- **Tirón corto** (menos de unos 200 px): no hace nada.
-- **Tirón mediano** (unos 200–370 px): **recarga la página** (la recarga nativa del navegador, que además
-  revalida el JavaScript y el CSS y conserva la ruta y los filtros). No habla con los bancos.
-- **Tirón largo** (más de unos 370 px): lanza una **sincronización** con los bancos y, cuando termina,
-  recarga la lista con los datos nuevos.
-
-Se decide por dónde está el dedo al soltar: se puede pasar de largo y volver atrás para elegir el mediano.
-La sincronización solo se dispara en Diario: en Mes, Evolución, Tendencias, las listas de movimientos de un
-periodo y el detalle de un movimiento el panel no captura el gesto y el navegador conserva el suyo. Un aviso
-resume el resultado de la sincronización («Sincronizado · 3 movimientos nuevos», o qué banco falló y por qué).
-
-- **Cómo:** `POST /api/sync` arranca `finmcp sync --from <hoy − 30 días>` (el mismo rango que el
-  cron diario) en un **proceso aparte**; el panel solo lo vigila y sigue abriendo la BD en solo
-  lectura. Mientras tanto, la interfaz consulta `GET /api/sync`.
-- **Una a la vez:** `finmcp sync` toma un bloqueo de fichero (`data/sync.lock`), también desde el
-  CLI, el servidor MCP y el cron. Si ya hay otra sincronización en curso, sale con código 75 y el
-  panel lo dice y muestra los datos actuales.
-- **Freno:** no se lanza otra si la última sincronización, **de cualquier origen**, terminó hace menos de
-  `FINMCP_WEB_SYNC_COOLDOWN` segundos (300 por defecto; `0` lo quita). PSD2 limita los accesos de cada
-  banco (el 429 es habitual) y un tirón repetido podría agotar el cupo del sync diario. Entonces el
-  panel solo recarga los datos y avisa de cuándo podrá volver a sincronizar.
-- **Límite:** una sincronización se cancela a los 300 s.
-- Exige el mismo PIN y la misma restricción de red que el resto de la API. Si la sesión caducó, el gesto lleva a
-  la pantalla del PIN. Sin la sincronización disponible (`meta.sync` falso) el panel tampoco captura el gesto en Diario.
-
-Seguridad:
-
-- Servicio aparte del servidor MCP, en otro puerto (8790; el MCP `--http` usa el 8000).
-- Abre la base de datos en **solo lectura** (SQLite `mode=ro`); los datos solo se consultan con
-  `GET`. Los únicos `POST` son entrar y salir con el PIN y `POST /api/sync` (solo JSON, tras el PIN),
-  que no escribe él mismo: lanza `finmcp sync` en otro proceso.
-- **Solo red local**: atiende clientes de la red local (loopback y rangos privados) y de Tailscale
-  si escucha en su IP; al resto responde 403. Se niega a escuchar en `0.0.0.0` o en una IP pública.
-  **No lo publiques en Internet** (ni con Tailscale Funnel ni redirigiendo puertos).
-- **PIN** (`finmcp web-pin`): `.env` guarda solo su huella (`FINMCP_WEB_PIN_HASH`, PBKDF2-SHA256
-  con sal). Al acertar, el navegador recibe una cookie de sesión firmada (`HttpOnly`,
-  `SameSite=Strict`) válida 30 días; cambiar el PIN cierra todas las sesiones. Tras 5 fallos
-  seguidos, cada nuevo fallo bloquea el acceso un tiempo creciente (30 s, 1 min, 2 min... hasta
-  1 h); reiniciar el servicio desbloquea. Sin PIN, el panel queda abierto a la red local (avisa al
-  arrancar). Por HTTP en la red local el PIN viaja sin cifrar por la Wi-Fi de casa; por Tailscale
-  va cifrado.
-- CSP estricta y sin recursos externos; la API no se guarda en caché y el navegador solo recuerda
-  preferencias, nunca cifras.
-
-Como servicio de usuario de systemd (Linux), con la plantilla `deploy/finmcp-web.service`:
-
-```bash
-sed -e "s|__PROJECT_DIR__|$PWD|g" -e "s|__LAN_IP__|192.168.1.10|g" \
-  deploy/finmcp-web.service > ~/.config/systemd/user/finmcp-web.service
-systemctl --user daemon-reload && systemctl --user enable --now finmcp-web
-loginctl enable-linger "$USER"     # para que arranque sin sesión abierta
-journalctl --user -u finmcp-web -f # registro
-```
+Las cifras siguen los criterios de `finmcp summary`: los movimientos no computables no cuentan y
+las devoluciones se restan del gasto de su categoría.
 
 ## Categorías personalizadas
 
@@ -462,43 +380,23 @@ finmcp import-csv movimientos.xlsx --iban ES9121000418450200051332
 
 ## Bonusly (puntos de reconocimiento como cuenta)
 
-Si la empresa usa [Bonusly](https://bonus.ly), finmcp puede tratar el saldo de puntos como una
-cuenta más, en euros, que se sincroniza con el resto:
+Si su empresa usa [Bonusly](https://bonus.ly), finmcp puede tratar su saldo de puntos como una
+cuenta más, en euros: los reconocimientos recibidos entran como ingresos y los canjes como
+gastos en el comercio de la recompensa (p. ej. una tarjeta regalo de Amazon).
 
-- **Ingresos** = reconocimientos recibidos (también los añadidos de otros compañeros y las
-  felicitaciones a grupos). Los de 0 puntos no se importan, y los que usted da tampoco (salen
-  de la asignación para regalar, no de su saldo).
-- **Gastos** = canjes de recompensas. El comercio es la marca de la tarjeta regalo
-  («€100 Amazon.es Gift Card» → «Amazon.es»), así que cada canje se categoriza con las reglas
-  de siempre, como cualquier otro gasto.
-- **Saldo** = puntos canjeables × `BONUSLY_EUR_PER_POINT` (€ por punto). Con dos decimales
-  como máximo, cada movimiento es un número exacto de céntimos y el saldo cuadra con la suma.
+1. En Bonusly, *Settings → API → Create token*, con los scopes `user:read`, `recognition:read`
+   y `rewards:read`. El token caduca (máximo un año): renuévelo cuando Bonusly le avise.
+2. En `.env`:
 
-Configuración (solo `.env`; no hay `auth`):
+   ```bash
+   BONUSLY_API_TOKEN=...          # el token
+   BONUSLY_EUR_PER_POINT=1.08     # valor de un punto en euros (2 decimales como máximo)
+   ```
 
-```bash
-BONUSLY_API_TOKEN=...          # Bonusly → Settings → API → Create token
-BONUSLY_EUR_PER_POINT=1.08     # valor de un punto en euros
-# BONUSLY_BANK_ID=Bonusly      # id del «banco» en finmcp
-```
+3. `finmcp banks list` mostrará el banco `Bonusly`, y `finmcp sync` lo incluirá con los demás.
+   No necesita `auth`. Para traer el histórico: `finmcp sync --bank Bonusly --from 2022-01-01`.
 
-El token debe llevar **solo** los scopes `user:read`, `recognition:read` y `rewards:read`, y
-caduca (máximo un año; Bonusly avisa por correo). Con él, `finmcp banks list` muestra el banco
-`Bonusly` y `finmcp sync` lo incluye (`--strategy` no aplica; los rangos largos se piden por
-tramos de un año). Un `401/403` en `finmcp sync` es un token caducado o sin scope.
-
-Detalles y límites conocidos:
-
-- La API es la de herramientas JSON-RPC de `https://bonus.ly/mcp`, que Bonusly declara en
-  acceso anticipado: si cambian una herramienta, el sync de Bonusly fallará con un error claro
-  (los bancos siguen).
-- `getRecognitionReceived` omite las felicitaciones a grupos grandes y `getRecognitionFeed` no
-  trae los añadidos: se unen ambas por id (juntas cuadran con el total ganado de Bonusly).
-- Bonusly solo da el precio **actual** de cada recompensa, no el que se pagó: el histórico de
-  canjes antiguos puede no cuadrar con el saldo. Se corrige con un único movimiento de ajuste
-  (`import-csv --account-id` + regla `--neutral`).
-- El mensaje del reconocimiento no va en la descripción (haría casar reglas ajenas y sus
-  etiquetas); se conserva en `raw_json`, visible en el detalle del movimiento del panel.
+Si `finmcp sync` da un error 401 o 403 de Bonusly, el token ha caducado o le falta algún scope.
 
 ## Sincronización programada (macOS / launchd)
 
