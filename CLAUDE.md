@@ -39,7 +39,9 @@ Manual accounts (accounts the bank does not expose via PSD2): `finmcp add-accoun
 `models.is_manual_account`); the IBAN is normalized (`util.normalize_iban`) and checked (`util.iban_is_valid`, mod 97), and must be
 unique. `finmcp set-balance ID AMOUNT [--at …]` (MCP `set_manual_balance`) adds a `Balance` snapshot (current = available; a bare
 date means 21:00 UTC that day) and refuses synced accounts. Movements come via `import-csv --iban` (the IBAN is normalized there
-too). `sync` never touches them (it only upserts the accounts the provider returns). Tests: `tests/test_manual_accounts.py`.
+too). `sync` never touches them (it only upserts the accounts the provider returns). `finmcp remove-account ID [--apply]`
+(MCP `remove_manual_account`, simulates without `apply`) deletes a manual account with no movements and no account-scoped
+rules, together with its balance snapshots. Tests: `tests/test_manual_accounts.py`.
 
 No linter or formatter is configured. CI (`.github/workflows/ci.yml`) runs `python -m pytest -q`
 on Python 3.11–3.13 and the dashboard's JS tests with Node. `requires-python >= 3.11`; the code uses `X | None` unions and
@@ -62,12 +64,27 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   back to a single legacy bank (`id="default"`) built from `ENABLEBANKING_ASPSP_NAME` if no
   indexed vars are set. `sync/service.run_sync` and `cli.py` iterate `settings.banks`; most
   MCP tools and `db/models.Account`/`SyncRun` carry a `bank_id` to disambiguate.
-- **Providers** (`src/finmcp/providers/`): Enable Banking (`enablebanking/`) is the only
-  implemented provider, though `providers/base.BankDataProvider` (a `Protocol`) exists so another
-  could be added later. Each subpackage has `auth.py` (consent/link flow + credentials),
-  `client.py` (HTTP, implements `BankDataProvider`) and `mapper.py` (provider JSON -> normalized
-  dataclasses in `types.py`). `factory.get_provider(bank)` always returns an `EnableBankingClient`
-  for the given `BankConfig`. Sync and analytics never import a concrete provider.
+- **Providers** (`src/finmcp/providers/`): two implement `providers/base.BankDataProvider` (a
+  `Protocol`): Enable Banking (`enablebanking/`: `auth.py` consent/link flow + credentials,
+  `client.py`, `mapper.py`) and **Bonusly** (`bonusly/`: `client.py`, `mapper.py`; no auth flow).
+  `BankConfig.provider` (`"enablebanking"` default | `"bonusly"`) picks the client in
+  `factory.get_provider(bank)`; `factory.is_linked(bank)` is the shared "can it sync?" check
+  (Enable Banking link store / Bonusly token) used by `banks list` and MCP `list_banks`. Sync and
+  analytics never import a concrete provider.
+- **Bonusly** (`providers/bonusly/`): `Settings.banks` appends `BankConfig(id=BONUSLY_BANK_ID or
+  "Bonusly", provider="bonusly")` when `BONUSLY_API_TOKEN` is set. The client posts JSON-RPC
+  `tools/call` to `https://bonus.ly/mcp` (bearer PAT; no `initialize` needed): `getPointsBalance`
+  (one call per sync, cached) -> one account `bonusly-<user_id>` (OTHR, EUR) whose balance is
+  `earned_balance × BONUSLY_EUR_PER_POINT`; income = union by id of `getRecognitionReceived`
+  (365-day windows; misses big group posts) and `getRecognitionFeed(current_user_only=["received"],
+  recognition_types=["peer"])` (newest first, stops past `from`; has no add-ons) — together they
+  match `lifetime_earnings`; expenses = `getMyRedemptions` (newest first, stops past `from`),
+  amount = `reward_details.price` (the CURRENT catalog price) × rate, merchant = gift-card brand
+  parsed from the name (`mapper.reward_merchant`). Dates are Europe/Madrid days. Ids:
+  `bonusly-rec-<id>`, `bonusly-red-<id>` (+`-refund` for declined/refunded states). Keep the rate
+  at ≤ 2 decimals so every amount is whole cents and `ledger.closing_balances` checks pass. The
+  recognition message stays out of `description` (it would trip unrelated rules and their tags).
+  Tests: `tests/test_bonusly_{mapper,client,cli}.py`, `tests/test_providers_factory.py`.
 - **Normalized types** (`providers/types.py`): `Transaction.amount` is always positive; the sign
   lives in `type` (`"debit" | "credit"`). Every mapper and the CSV importer must respect this,
   and all analytics rely on it.
