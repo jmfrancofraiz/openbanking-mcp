@@ -104,13 +104,20 @@ test("periodo contra periodo: recorte a la misma fecha (ejemplos de la especific
     [{ from: "2026-07-01", to: "2026-09-30" }, { from: "2026-04-01", to: "2026-06-30" }]);
 });
 
-test("accumulatedMonths: N meses, año actual y todo (solo meses cerrados)", () => {
+test("accumulatedMonths: 3/6/12 son de meses cerrados; año actual y todo añaden el mes en curso", () => {
   const closed = MONTHS.slice(0, -1); // 2025-11 … 2026-03
-  assert.deepEqual(L.accumulatedMonths("3", closed, "2026"), ["2026-01", "2026-02", "2026-03"]);
+  const current = "2026-04";
+  // 3/6/12: ventana fija de meses cerrados, sin el mes en curso aunque se informe.
+  assert.deepEqual(L.accumulatedMonths("3", closed, "2026", current), ["2026-01", "2026-02", "2026-03"]);
+  assert.deepEqual(L.accumulatedMonths("12", closed, "2026", current), closed);
+  // año actual y todo: meses cerrados + el mes en curso al final (parcial, hasta hoy).
+  assert.deepEqual(L.accumulatedMonths("ano", closed, "2026", current), ["2026-01", "2026-02", "2026-03", "2026-04"]);
+  assert.deepEqual(L.accumulatedMonths("todo", closed, "2026", current), [...closed, "2026-04"]);
+  // año actual con el mes en curso como único de ese año: se muestra igualmente (antes era un hueco vacío).
+  assert.deepEqual(L.accumulatedMonths("ano", ["2025-11", "2025-12"], "2026", "2026-01"), ["2026-01"]);
+  // sin `current` informado (compatibilidad): ni año actual ni todo lo añaden.
   assert.deepEqual(L.accumulatedMonths("ano", closed, "2026"), ["2026-01", "2026-02", "2026-03"]);
-  assert.deepEqual(L.accumulatedMonths("12", closed, "2026"), closed);
   assert.deepEqual(L.accumulatedMonths("todo", closed, "2026"), closed);
-  assert.deepEqual(L.accumulatedMonths("ano", ["2025-11", "2025-12"], "2026"), []);
 });
 
 test("paceRefs y verdict: ejemplo de la especificación (abril a día 10)", () => {

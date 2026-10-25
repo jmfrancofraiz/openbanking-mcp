@@ -172,7 +172,7 @@ h2 { font-family:Georgia,serif; font-weight:400; font-size:1.2rem; margin:22px 0
 .mrow2 .sv.loss { color:var(--bad); }
 .mrow2.inprog { border-style:dashed; }
 .mrow2.inprog .sv { color:var(--muted); }
-.mrow2 .tag { font-size:.68rem; font-weight:600; color:var(--warn); border:1px solid var(--warn); border-radius:999px; padding:0 6px; }
+.tag { font-size:.68rem; font-weight:600; color:var(--warn); border:1px solid var(--warn); border-radius:999px; padding:0 6px; }
 .sbar { grid-column:1 / -1; height:4px; margin-top:7px; border-radius:2px; background:var(--track); overflow:hidden; }
 .sbar i { display:block; height:100%; background:var(--good); opacity:.75; }
 

@@ -860,8 +860,15 @@
     const tipo = tipoOf(tipo0);
     const label = L.rangeLabel(from, to);
     const navKey = ["mes", "evolucion", "tendencias"].includes(origin) ? origin : origin === "acumulado" ? "evolucion" : "mes";
-    // Solo en Evolución › Acumulado (petición del Señor, 24-oct-2026): meses cerrados del periodo para la minigráfica mensual.
-    const periodMonths = origin === "acumulado" ? CLOSED.filter((m) => L.monthStart(m) >= from && L.monthEnd(m) <= to) : [];
+    // Solo en Evolución › Acumulado (petición del Señor, 24-oct-2026): meses del periodo para la
+    // minigráfica mensual. Meses cerrados dentro de [from,to], más el mes en curso si el periodo
+    // llega hasta hoy (año actual/todo, 25-oct-2026): `miniBars` ya pinta ese mes con la trama
+    // discontinua de «parcial» en cuanto detecta `CUR` en la lista, sin cambio adicional aquí.
+    const periodMonths = origin === "acumulado"
+      ? [...CLOSED.filter((m) => L.monthStart(m) >= from && L.monthEnd(m) <= to), ...(to >= L.monthStart(CUR) ? [CUR] : [])]
+      : [];
+    // Fin de un mes para construir un rango: hasta hoy si es el mes en curso (no inventa días futuros).
+    const monthEndFor = (m) => (m === CUR ? TODAY : L.monthEnd(m));
     if (kind === "g" && extra !== "mov") {
       const agg = aggsOf(await breakdownOf(from, to))[tipo];
       const g = agg.groups.find((x) => x.group === key);
@@ -870,7 +877,7 @@
       }
       const chartRows = periodMonths.length > 1 ? await txOf(from, to, tipo, "g", g.group) : null;
       const chart = chartRows ? monthlyChart(chartRows, periodMonths, tipo, g.group,
-        (m) => go(H("rango", origin, L.monthStart(m), L.monthEnd(m), tipo, "g", g.group, "mov"))) : null;
+        (m) => go(H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "g", g.group, "mov"))) : null;
       return [
         detailBar(L.shown(g.group), label),
         el("main", {}, [
@@ -897,8 +904,8 @@
     const isSub = kind === "c" && first && first.group !== key;
     const chart = periodMonths.length > 1 ? monthlyChart(rows, periodMonths, tipo, key,
       (m) => go(kind === "g"
-        ? H("rango", origin, L.monthStart(m), L.monthEnd(m), tipo, "g", key, "mov")
-        : H("rango", origin, L.monthStart(m), L.monthEnd(m), tipo, "c", key))) : null;
+        ? H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "g", key, "mov")
+        : H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "c", key))) : null;
     return [
       detailBar(isSub ? first.label : L.shown(key), isSub ? `${L.shown(first.group)} · ${label}` : label),
       el("main", {}, [
@@ -1000,7 +1007,8 @@
     const bar = (x, v, fill) => svg("rect", { x, y: Math.min(y(v), y(0)), width: bw, height: Math.max(1, Math.abs(y(v) - y(0))), rx: 2, fill });
     rows.forEach((r, i) => {
       const cx = x0 + i * colW;
-      const g = svg("g", { opacity: selected >= 0 && i !== selected ? 0.35 : 1 });
+      const dim = selected >= 0 && i !== selected;
+      const g = svg("g", { opacity: dim ? 0.35 : r.partial ? 0.6 : 1 });
       g.append(bar(cx + 3, r.income, INC));
       if (split) g.append(bar(cx + 4 + bw, r.expense, VARC), bar(cx + 4 + bw, Math.max(0, Math.min(r.bills, r.expense)), EXP));
       else g.append(bar(cx + 4 + bw, r.expense, EXP));
@@ -1023,9 +1031,13 @@
 
   function monthCard(r) {
     return el("div", { className: "card" }, [
-      el("div", { className: "dhead" }, [el("b", { textContent: L.monthLabel(r.month) }), el("span", { className: `v amt${r.net < 0 ? " negv" : ""}`, textContent: eur0.format(r.net) })]),
+      el("div", { className: "dhead" }, [
+        el("b", {}, r.partial ? [L.monthLabel(r.month), " ", el("span", { className: "tag", textContent: "en curso" })] : [L.monthLabel(r.month)]),
+        el("span", { className: `v amt${r.net < 0 ? " negv" : ""}`, textContent: eur0.format(r.net) }),
+      ]),
       el("div", { className: "dline" }, ["Ingresos ", amt(r.income), " · Gastos ", amt(r.expense), " (recibos ", amt(Math.min(r.bills, r.expense)), ")",
         r.income > 0 ? ` · tasa ${L.pct((r.net / r.income) * 100)}` : ""]),
+      r.partial ? el("div", { className: "dline", textContent: "Mes en curso: datos provisionales, solo hasta hoy." }) : null,
       el("button", { className: "link", type: "button", textContent: "Ver mes ›", onclick: () => go(H("mes", r.month, "gastos")) }),
     ]);
   }
@@ -1036,13 +1048,16 @@
     const year = CUR.slice(0, 4);
     const nav2 = (per, t, keep = false) => go(H("evolucion", "acumulado", per, t), { replace: true, keep });
     const periods = chipRow(ACC_PERIODS, period, (k) => nav2(k, tipo), "Periodo");
-    const months = L.accumulatedMonths(period, CLOSED, year);
+    // "ano" y "todo" incluyen el mes en curso (parcial, hasta hoy); los demás son de meses cerrados.
+    const months = L.accumulatedMonths(period, CLOSED, year, CUR);
     const n = months.length;
     if (!n) {
       return [periods, el("p", { className: "muted empty", textContent: period === "ano"
         ? `Aún no hay meses cerrados en ${year}: ${L.monthLabel(CUR)} está en curso.` : "Aún no hay meses cerrados." })];
     }
-    const from = L.monthStart(months[0]), to = L.monthEnd(months[n - 1]);
+    const includesCurrent = months[n - 1] === CUR;
+    const closedCount = includesCurrent ? n - 1 : n;
+    const from = L.monthStart(months[0]), to = includesCurrent ? TODAY : L.monthEnd(months[n - 1]);
     const [full, b] = await Promise.all([monthlyRows(), breakdownOf(from, to)]);
     const by = new Map(full.map((r) => [r.month, r]));
     const rows = months.map((m) => by.get(m)).filter(Boolean);
@@ -1075,7 +1090,10 @@
       periods,
       el("section", { className: "hero" }, [
         el("div", { className: "lead", textContent: `${period === "ano" ? "Año actual" : "Acumulado"} · ${L.rangeLabel(from, to)}` }),
-        el("div", { className: "sub", textContent: `${n} ${n === 1 ? "mes cerrado" : "meses cerrados"}${inc > 0 ? ` · tasa de ahorro ${L.pct((net / inc) * 100)}` : ""}` }),
+        el("div", { className: "sub", textContent: includesCurrent
+          ? `${closedCount} ${closedCount === 1 ? "mes cerrado" : "meses cerrados"} + ${L.monthName(CUR)} en curso`
+            + `${inc > 0 ? ` · tasa de ahorro ${L.pct((net / inc) * 100)}` : ""}`
+          : `${n} ${n === 1 ? "mes cerrado" : "meses cerrados"}${inc > 0 ? ` · tasa de ahorro ${L.pct((net / inc) * 100)}` : ""}` }),
         el("div", { className: "hstats" }, [stat("Ingresos", inc), stat("Gastos", exp), stat("Ahorro", net)]),
         el("div", { className: "sub avg" }, ["Al mes: ingresos ", amt(inc / n), " · gastos ", amt(exp / n), " · ahorro ", amt(net / n)]),
       ]),
@@ -1094,7 +1112,9 @@
         el("div", { className: "dline", textContent: "Recibos: cargos marcados como recibo (domiciliaciones, suscripciones…)." }),
       ]) : null,
       el("footer", { className: "note" }, [
-        el("p", { textContent: `Solo meses cerrados: ${L.monthLabel(CUR)} está en curso y no se incluye.` }),
+        el("p", { textContent: includesCurrent
+          ? `Incluye ${L.monthName(CUR)}, en curso: datos solo hasta hoy. Las medias «al mes» y «€/mes» se calculan sobre los ${n} meses del periodo, el en curso incluido, por lo que están provisionalmente a la baja.`
+          : `Solo meses cerrados: ${L.monthLabel(CUR)} está en curso y no se incluye.` }),
         tipo !== "no-computables" ? el("p", { textContent: "Importes netos de devoluciones." }) : null,
         tipo === "no-computables" ? el("p", { textContent:
           "Estos movimientos no cuentan como ingreso ni como gasto: traspasos entre cuentas propias, "

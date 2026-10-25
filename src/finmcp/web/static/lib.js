@@ -265,10 +265,15 @@
     return { from: monthStart(per.all[0]), to: monthEnd(per.avail[per.avail.length - 1]) };
   }
 
-  // Meses cerrados de un periodo del Acumulado: "3", "6", "12", "ano" (año en curso) o "todo".
-  function accumulatedMonths(period, closed, year) {
-    if (period === "todo") return closed.slice();
-    if (period === "ano") return closed.filter((m) => m.startsWith(`${year}-`));
+  // Meses de un periodo del Acumulado: "3", "6", "12", "ano" (año en curso) o "todo".
+  // "ano" y "todo" añaden al final el mes en curso (`current`), parcial a hoy; los demás
+  // periodos son de meses cerrados únicamente (ventana fija de los últimos N meses cerrados).
+  function accumulatedMonths(period, closed, year, current) {
+    if (period === "todo") return current ? [...closed, current] : closed.slice();
+    if (period === "ano") {
+      const closedYear = closed.filter((m) => m.startsWith(`${year}-`));
+      return current && current.startsWith(`${year}-`) ? [...closedYear, current] : closedYear;
+    }
     return closed.slice(-Number(period));
   }
 
