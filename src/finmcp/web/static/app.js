@@ -510,7 +510,7 @@
 
   // Un bloque único con todos los saldos (`.saldos`): arriba el total, a todo el ancho, y debajo las cuentas en una rejilla de
   // dos columnas (`.bgrid`), todo separado por líneas finas (sin tarjetas sueltas). Cada celda de cuenta es un botón que filtra
-  // por esa cuenta; el total no lo es.
+  // por esa cuenta; togglear varias las combina (no se excluyen entre sí); el total no es un filtro.
   //
   // Celda de cuenta, en tres líneas: banco, cifra (con «saldo disponible» a su lado si el banco no da el contable) y, pequeña,
   // la terminación del IBAN (o el nombre de la cuenta) con la frescura del saldo.
@@ -539,11 +539,12 @@
     ]);
   }
 
-  // `total` solo con dos o más cuentas (con una repetiría su propia celda).
-  function saldosBlock(accounts, total, sel, onPick) {
+  // `total` solo con dos o más cuentas (con una repetiría su propia celda). `selIds`: Set con
+  // los ids de las cuentas elegidas (varias a la vez; togglear una no destogglea las demás).
+  function saldosBlock(accounts, total, selIds, onPick) {
     return el("div", { className: "saldos", attrs: { role: "group", "aria-label": "Saldos por cuenta" } }, [
       total && accounts.length > 1 ? totalRow(total) : null,
-      el("div", { className: "bgrid" }, accounts.map((a, i) => balanceCell(a, sel === a, () => onPick(a), i + 1))),
+      el("div", { className: "bgrid" }, accounts.map((a, i) => balanceCell(a, selIds.has(a.id), () => onPick(a), i + 1))),
     ]);
   }
 
@@ -595,8 +596,13 @@
     const [accRes, tagRes] = await Promise.all([api("accounts"), api("tags")]);
     const accounts = accRes.accounts;
     let cur = L.diaryFilters(seg);
-    const sel = cur.cuenta ? accounts.find((a) => a.id === cur.cuenta) || null : null;
-    if (!sel) delete cur.cuenta;
+    // Varias cuentas a la vez: `sel` es la lista (0, 1 o N) de cuentas elegidas, en el orden en
+    // que están en `accounts`. Ids de la ruta que ya no existen (cuenta borrada/fusionada) se
+    // descartan en silencio en vez de romper el filtro.
+    const sel = accounts.filter((a) => L.cuentaIds(cur).includes(a.id));
+    const selIds = new Set(sel.map((a) => a.id));
+    const validCuenta = sel.map((a) => a.id).join(",");
+    if (validCuenta) cur.cuenta = validCuenta; else delete cur.cuenta;
     const fetchFirst = async (f) => {
       const page = await ledgerPage(f);
       // Copias: las páginas siguientes se añaden a `rows`, y la respuesta original sigue en la caché.
@@ -612,14 +618,16 @@
       go(diaryHash(nf), { replace: true, keep: true });
     };
 
-    // Lista: cabecera por día (con el saldo al cierre si hay una cuenta elegida) y carga progresiva.
+    // Lista: cabecera por día (con el saldo al cierre si hay EXACTAMENTE una cuenta elegida:
+    // con varias mezcladas, el saldo calculado deja de tener un significado único) y carga progresiva.
     const listBox = el("div", { className: "tx-list" });
     const moreBtn = el("button", { className: "more", type: "button", textContent: "Cargar más" });
     const sentinel = el("div", { className: "sentinel", attrs: { "aria-hidden": "true" } });
+    const oneSel = sel.length === 1;
     let lastDay = null;
     const dayHead = (d) => {
-      const cl = sel ? diary.closing[d] : undefined;
-      const upTo = sel && diary.balance ? diary.balance.check.suspect_through : null;
+      const cl = oneSel ? diary.closing[d] : undefined;
+      const upTo = oneSel && diary.balance ? diary.balance.check.suspect_through : null;
       return el("div", { className: "day dayb" }, [el("span", { textContent: L.dayHeading(d, TODAY) }),
         cl === undefined ? null : el("span", { className: `cl amt${upTo && d <= upTo ? " suspect" : ""}`, textContent: `saldo ${eur.format(cl)}` })]);
     };
@@ -627,7 +635,7 @@
       const out = [];
       for (const t of rows) {
         if (t.date !== lastDay) { out.push(dayHead(t.date)); lastDay = t.date; }
-        out.push(ledgerRow(t, !sel));
+        out.push(ledgerRow(t, !oneSel));
       }
       listBox.append(...out);
     };
@@ -728,10 +736,11 @@
       topbar("Diario"),
       el("main", {}, [
         el("h2", { className: "h2first", textContent: "Saldos" }),
-        saldosBlock(accounts, accRes.total, sel, (a) => setF({ cuenta: sel === a ? "" : a.id })),
+        saldosBlock(accounts, accRes.total, selIds, (a) => setF({ cuenta: L.toggleCuenta(cur, a.id) })),
         syncAlerts(accounts),
-        el("h2", { textContent: sel ? `Movimientos · ${sel.bank} ${tailOf(sel)}` : "Movimientos" }),
-        sel ? closingNote(sel, diary.balance) : null,
+        el("h2", { textContent: sel.length === 1 ? `Movimientos · ${sel[0].bank} ${tailOf(sel[0])}`
+          : sel.length > 1 ? `Movimientos · ${sel.length} cuentas` : "Movimientos" }),
+        oneSel ? closingNote(sel[0], diary.balance) : null,
         search,
         subtabs(TIPOS, cur.tipo || "todos", (k) => setF({ tipo: k === "todos" ? "" : k }), "small"),
         el("div", { className: "chips" }, MARCAS.map(([k, l]) => el("button", { type: "button", className: `chip${cur.marca === k ? " on" : ""}`,
@@ -741,8 +750,8 @@
           el("button", { type: "button", className: `chip${extraN ? " on" : ""}`, textContent: `Más filtros${extraN ? ` (${extraN})` : ""} ${diaryExtra || extraN ? "▴" : "▾"}`,
             attrs: { "aria-expanded": String(Boolean(diaryExtra || extraN)) },
             onclick: (e) => { diaryExtra = xf.classList.toggle("hidden") === false; e.currentTarget.textContent = `Más filtros${extraN ? ` (${extraN})` : ""} ${diaryExtra ? "▴" : "▾"}`; } }),
-          sel ? el("button", { type: "button", className: "chip on", textContent: `${sel.bank} ${tailOf(sel)} ✕`, attrs: { "aria-label": "Ver todas las cuentas" },
-            onclick: () => setF({ cuenta: "" }) }) : null,
+          ...sel.map((a) => el("button", { type: "button", className: "chip on", textContent: `${a.bank} ${tailOf(a)} ✕`, attrs: { "aria-label": `Quitar ${a.bank} ${tailOf(a)}` },
+            onclick: () => setF({ cuenta: L.toggleCuenta(cur, a.id) }) })),
           anyFilter ? el("button", { type: "button", className: "chip", textContent: "Quitar filtros", onclick: () => go("#/diario", { replace: true, keep: true }) }) : null,
         ]),
         xf,
@@ -750,7 +759,7 @@
         el("footer", { className: "note" }, [
           el("p", { textContent: "Todos los movimientos de todas las cuentas, también los que no computan como ingreso ni gasto (traspasos entre cuentas propias, liquidaciones de tarjeta…)." }),
           el("p", { textContent: "El banco solo da la fecha de cada movimiento, no la hora: dentro de un mismo día el orden no es el real." }),
-          el("p", { textContent: "Toque una cuenta para ver solo sus movimientos y su saldo al cierre de cada día." }),
+          el("p", { textContent: "Toque una o varias cuentas para ver solo sus movimientos, agregados; togglear una no destogglea las demás. Con una sola elegida, también se ve su saldo al cierre de cada día." }),
           PIN ? el("button", { className: "lockbtn", type: "button", textContent: "Bloquear el panel", onclick: lockPanel }) : null,
         ]),
       ]),

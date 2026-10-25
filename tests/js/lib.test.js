@@ -213,6 +213,20 @@ test("Diario: filtros en la ruta ↔ parámetros de la API", () => {
   assert.deepEqual(L.diaryFilters(L.parseHash(hash)[1]), f);
 });
 
+test("Diario: varias cuentas a la vez (togglear una no destogglea las demás)", () => {
+  assert.deepEqual(L.cuentaIds({}), []);
+  assert.deepEqual(L.cuentaIds({ cuenta: "acc1" }), ["acc1"]);
+  assert.deepEqual(L.cuentaIds({ cuenta: "acc1,acc3" }), ["acc1", "acc3"]);
+  // Añadir una segunda cuenta conserva la primera.
+  assert.equal(L.toggleCuenta({ cuenta: "acc1" }, "acc3"), "acc1,acc3");
+  // Togglear de nuevo una ya elegida la quita, sin tocar las demás.
+  assert.equal(L.toggleCuenta({ cuenta: "acc1,acc3" }, "acc1"), "acc3");
+  // Desde vacío, elegir la primera.
+  assert.equal(L.toggleCuenta({}, "acc1"), "acc1");
+  // El filtro combinado viaja a la API como un único «account» separado por comas.
+  assert.deepEqual(L.ledgerParams({ cuenta: "acc1,acc3" }), { account: "acc1,acc3" });
+});
+
 test("tirar: resistencia, tope y zonas (mediano recarga la página, largo sincroniza)", () => {
   assert.equal(L.pullDistance(-30), 0);                 // hacia arriba no es tirar
   assert.equal(L.pullDistance(0), 0);

@@ -344,7 +344,7 @@ def encode_cursor(t: models.Transaction) -> str:
 def movements(
     session: Session,
     *,
-    account: str | None = None,
+    account: str | list[str] | None = None,
     kind: str | None = None,
     mark: str | None = None,
     tag: str | None = None,
@@ -356,17 +356,21 @@ def movements(
 ) -> dict:
     """Todos los movimientos (también los no computables), del más reciente al más antiguo.
 
-    Filtros opcionales: cuenta, tipo (`debit`/`credit`), una marca (`MARKS`), etiqueta,
-    fechas (ambas incluidas) y texto (todas las palabras, sin distinguir mayúsculas ni
-    acentos, en comercio, concepto, categoría, banco, etiquetas o importe). `next` es el
-    cursor de la página siguiente, o None si no hay más. Con `account`, `closing` trae el
-    saldo calculado al cierre de cada día de la página (ver `closing_balances`).
+    Filtros opcionales: una o varias cuentas (`account`: un id, o una lista para verlas
+    agregadas — el Diario permite togglear varias cuentas a la vez), tipo (`debit`/`credit`),
+    una marca (`MARKS`), etiqueta, fechas (ambas incluidas) y texto (todas las palabras, sin
+    distinguir mayúsculas ni acentos, en comercio, concepto, categoría, banco, etiquetas o
+    importe). `next` es el cursor de la página siguiente, o None si no hay más. Con
+    exactamente UNA cuenta en `account`, `closing` trae el saldo calculado al cierre de cada
+    día de la página (ver `closing_balances`); con varias o ninguna, `closing` es None (el
+    saldo al cierre calculado no tiene un significado único al mezclar cuentas).
     """
+    account_ids = [account] if isinstance(account, str) else (list(account) if account else [])
     T = models.Transaction
     banks = dict(session.query(models.Account.id, models.Account.bank_id).all())
     q = session.query(T).options(selectinload(T.tag_links).selectinload(models.TransactionTag.tag))
-    if account:
-        q = q.filter(T.account_id == account)
+    if account_ids:
+        q = q.filter(T.account_id.in_(account_ids))
     if kind:
         q = q.filter(T.type == kind)
     if mark == "uncategorized":
@@ -407,8 +411,8 @@ def movements(
     rows = [_row(t, banks) for t in found]
     out = {"transactions": rows, "next": encode_cursor(found[-1]) if more and found else None,
            "closing": None, "balance": None}
-    if account:
-        cb = closing_balances(session, account)
+    if len(account_ids) == 1:
+        cb = closing_balances(session, account_ids[0])
         if cb:
             page_days = {r["date"] for r in rows}
             out["closing"] = {d: v for d, v in cb["closing"].items() if d in page_days}

@@ -423,14 +423,17 @@ def create_app(
         return JSONResponse({"tags": query(ledger.tags_in_use)})
 
     def api_ledger(request: Request) -> JSONResponse:
-        account = request.query_params.get("account") or None
-        if account is not None and not _ID_RE.match(account):
-            raise ParamError("«account» no es válido.")
+        account_raw = request.query_params.get("account") or None
+        accounts: list[str] | None = None
+        if account_raw is not None:
+            accounts = list(dict.fromkeys(p.strip() for p in account_raw.split(",") if p.strip()))
+            if not accounts or any(not _ID_RE.match(a) for a in accounts):
+                raise ParamError("«account» no es válido.")
         start, end = _optional_date(request, "from"), _optional_date(request, "to")
         if start and end and start > end:
             raise ParamError("«from» no puede ser posterior a «to».")
         params = {
-            "account": account,
+            "account": accounts,
             "kind": _choice_param(request, "type", TX_TYPE_PARAM),
             "mark": _choice_param(request, "mark", MARK_PARAM),
             "tag": _text_param(request, "tag", 64),
@@ -442,7 +445,7 @@ def create_app(
         }
 
         def run(session):
-            if account is not None and session.get(models.Account, account) is None:
+            if accounts is not None and any(session.get(models.Account, a) is None for a in accounts):
                 raise ParamError("«account»: cuenta desconocida.")
             return ledger.movements(session, **params)
 

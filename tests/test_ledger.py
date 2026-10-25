@@ -311,6 +311,28 @@ def test_movements_con_cuenta_trae_el_saldo_de_los_dias_de_la_pagina(session, sa
     assert page["balance"]["check"]["ok"] == 2
 
 
+def test_movements_account_admite_una_lista_para_verlas_agregadas(session, cuentas, make_tx):
+    # El Diario permite togglear varias cuentas a la vez (sin excluirse entre sí): el filtro
+    # `account` admite una lista de ids, combinados con OR.
+    make_tx(10, booked_at=at(2026, 10, 18), account_id="acc1")
+    make_tx(20, booked_at=at(2026, 10, 19), account_id="acc2")
+    make_tx(30, booked_at=at(2026, 10, 20), account_id="acc3")
+
+    page = ledger.movements(session, account=["acc1", "acc3"])
+
+    assert ids(page) == ["tx3", "tx1"]  # acc2 queda fuera; orden por fecha descendente
+    # Con más de una cuenta el saldo al cierre deja de tener un significado único: no se calcula.
+    assert page["closing"] is None and page["balance"] is None
+
+
+def test_movements_account_con_una_sola_cuenta_en_lista_se_comporta_como_con_un_id_suelto(session, saldos):
+    by_list = ledger.movements(session, account=["acc1"], limit=2)
+    by_str = ledger.movements(session, account="acc1", limit=2)
+
+    assert by_list == by_str
+    assert by_list["closing"] == {"2026-10-20": 1000.0, "2026-10-19": 1040.0}  # una sola cuenta: sí hay saldo al cierre
+
+
 # --- detalle ------------------------------------------------------------------------
 
 

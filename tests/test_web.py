@@ -333,6 +333,24 @@ def test_api_ledger_filtros_cursor_y_saldo_por_cuenta(diario):
     assert acc["balance"]["check"]["ok"] == 1
 
 
+def test_api_ledger_account_admite_varias_cuentas_separadas_por_comas(diario, session, make_tx):
+    # El bloque de saldos del Diario permite togglear varias cuentas a la vez: el parámetro
+    # «account» acepta una lista separada por comas, combinadas con OR (sin excluirse entre sí).
+    from finmcp.db.models import Account
+
+    session.add(Account(id="acc2", bank_id="BBVA", name="Cuenta BBVA", type="CACC", currency="EUR"))
+    make_tx(99, description="BBVA aparte", booked_at=at(2026, 4, 9).replace(tzinfo=None), account_id="acc2")
+    session.commit()
+
+    only_acc1 = diario.get("/api/ledger", params={"account": "acc1"}).json()
+    both = diario.get("/api/ledger", params={"account": "acc1,acc2"}).json()
+
+    assert len(only_acc1["transactions"]) == 3  # las tres de la fixture `diario`, todas en acc1
+    assert len(both["transactions"]) == 4       # + la nueva de acc2
+    # Con dos cuentas el saldo al cierre deja de tener un significado único: no se calcula.
+    assert both["closing"] is None and both["balance"] is None
+
+
 def test_api_movement(diario):
     ok = diario.get("/api/movement", params={"id": "tx1"})
     missing = diario.get("/api/movement", params={"id": "nada"})
@@ -356,6 +374,8 @@ def test_api_movement(diario):
         ("/api/ledger", {"q": "x" * 101}),
         ("/api/ledger", {"account": "no-existe"}),
         ("/api/ledger", {"account": "../etc"}),
+        ("/api/ledger", {"account": "acc1,no-existe"}),  # una cuenta válida no salva a una desconocida
+        ("/api/ledger", {"account": ",,"}),  # solo separadores: ninguna cuenta real
         ("/api/movement", {}),
         ("/api/movement", {"id": "a b"}),
     ],

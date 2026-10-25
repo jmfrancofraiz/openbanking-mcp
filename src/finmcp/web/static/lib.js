@@ -193,6 +193,18 @@
   const diaryQuery = (f) => new URLSearchParams(DIARY_KEYS.filter((k) => f[k]).map((k) => [k, f[k]])).toString();
   const ledgerParams = (f) => Object.fromEntries(DIARY_KEYS.filter((k) => f[k]).map((k) => [DIARY_API[k], f[k]]));
 
+  // Varias cuentas a la vez en el Diario (bloque de saldos): `cuenta` guarda los ids elegidos
+  // separados por comas (p. ej. "acc1,acc3"), en el orden en que se togglearon. `toggleCuenta`
+  // añade el id si no estaba o lo quita si ya estaba, sin afectar a los demás (togglear una
+  // cuenta nunca destogglea otra).
+  const cuentaIds = (f) => (f.cuenta ? f.cuenta.split(",").map((s) => s.trim()).filter(Boolean) : []);
+  function toggleCuenta(f, id) {
+    const ids = cuentaIds(f);
+    const i = ids.indexOf(id);
+    if (i === -1) ids.push(id); else ids.splice(i, 1);
+    return ids.join(",");
+  }
+
   // Sectores del donut: las n−1 mayores con importe positivo y «Resto (N)» si hay más de n.
   function topN(groups, n) {
     const pos = groups.filter((g) => g.total > 0);
@@ -359,7 +371,7 @@
     ymOf, daysIn, monthStart, monthEnd, upTo, monthLabel, monthName, monthShort, monthInitial,
     dayLabel, dayShort, cap, rangeLabel, addDays, dayHeading, dayLong, localStamp, whenLabel,
     colorFor, share, shown, cleanTitle, titleOf, signedEur, topN, delta, parseHash,
-    DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams,
+    DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams, cuentaIds, toggleCuenta,
     PULL, pullDistance, pullZone, waitLabel, syncResult, viewOf, pullEnabled,
     totalNote, figureChars, TAPE_LEN, odoTape, rollDelay,
     periodsOf, comparisonCut, periodRange, accumulatedMonths,
