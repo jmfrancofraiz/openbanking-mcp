@@ -2,7 +2,7 @@
 /* Panel finmcp · interfaz (variante B «Relato del mes»).
    Diario (pestaña de apertura): último saldo de cada cuenta y lista plana de todos los movimientos, sin agregaciones.
    Mes: ingresos y gastos del mes seleccionado, sin comparaciones (solo minigráficas de 6 meses).
-   Evolución: «Mes a mes», «Acumulado» y «Periodo contra periodo». Tendencias: una tarjeta por categoría
+   Evolución: «Ahorro mensual», «Análisis por categoría» y «Periodo contra periodo». Tendencias: una tarjeta por categoría
    (de gasto o de ingreso, a elección).
    Los importes llegan calculados de la API de solo lectura (/api/*); aquí solo se presentan.
    Única acción: tirar hacia abajo desde arriba del todo de la lista del Diario pide sincronizar con los bancos y recarga los datos. */
@@ -918,7 +918,7 @@
     ];
   }
 
-  /* ---------- Evolución › Mes a mes ---------- */
+  /* ---------- Evolución › Ahorro mensual ---------- */
 
   function trendPill(d) {
     if (d.flat) return el("span", { className: "trend flat", textContent: "≈ igual" });
@@ -1239,7 +1239,7 @@
     return [
       topbar("Evolución"),
       el("main", {}, [
-        subtabs([["meses", "Mes a mes"], ["acumulado", "Acumulado"], ["periodo", "Periodo contra periodo"]], mode,
+        subtabs([["meses", "Ahorro mensual"], ["acumulado", "Análisis por categoría"], ["periodo", "Periodo contra periodo"]], mode,
           (k) => go(H("evolucion", k), { replace: true }), "tabs2 tabs3"),
         ...body,
       ]),
