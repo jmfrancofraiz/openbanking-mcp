@@ -14,8 +14,19 @@
     "#0c8599", "#a9a20f", "#364fc7", "#5c940d", "#e67700", "#862e9c", "#495057"];
   const REST = "#adb5bd";
 
-  const eur = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" });
-  const eur0 = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  // El locale es-ES de Intl.NumberFormat solo agrupa en millares a partir de 10.000 (su regla de
+  // agrupación exige 2+ dígitos en el primer grupo): 1234,56 salía sin punto, 12345,67 sí lo llevaba.
+  // El Señor pidió el punto también de 1.000 a 9.999 (25-oct-2026). `useGrouping:true` debería
+  // forzarlo, pero solo en motores con la especificación unificada de Intl.NumberFormat (2023);
+  // el propio Node de este repo (v18, V8 sin esa parte del estándar) lo ignora igual que lo
+  // ignoraría un navegador viejo. Se agrupa a mano sobre el texto ya formateado, con la expresión
+  // regular clásica de separador de millar, para que el resultado sea idéntico en cualquier motor
+  // (comprobado: no toca una cifra que Intl ya agrupó, como «10.000,00»).
+  const groupThousands = (s) => s.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+  const eurFmt = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" });
+  const eur0Fmt = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  const eur = { format: (v) => groupThousands(eurFmt.format(v)) };
+  const eur0 = { format: (v) => groupThousands(eur0Fmt.format(v)) };
   const pct = (v) => `${v.toLocaleString("es-ES", { maximumFractionDigits: 1 })} %`;
 
   /* ---------- fechas (cadenas AAAA-MM y AAAA-MM-DD) ---------- */

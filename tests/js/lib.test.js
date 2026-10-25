@@ -198,6 +198,17 @@ test("Diario: importe con signo y título del movimiento", () => {
   assert.equal(L.titleOf({ merchant: null, description: "" }), "—");
 });
 
+test("eur/eur0: separador de millar también por debajo de 10.000 (useGrouping:true)", () => {
+  // Sin useGrouping:true, el locale es-ES solo agrupa a partir de 10.000 (exige 2+ dígitos en el
+  // primer grupo): 1234,56 salía sin punto. El Señor pidió el punto también entre 1.000 y 9.999.
+  assert.equal(L.eur.format(1234.56), "1.234,56\u00a0€");
+  assert.equal(L.eur.format(9310.35), "9.310,35\u00a0€");
+  assert.equal(L.eur.format(999.5), "999,50\u00a0€"); // por debajo de 1.000 no hay nada que agrupar
+  assert.equal(L.eur.format(12345.67), "12.345,67\u00a0€"); // ya lo llevaba antes; sigue igual
+  assert.equal(L.eur0.format(9999.99), "10.000\u00a0€");
+  assert.equal(L.signedEur(1234.56), "+1.234,56\u00a0€");
+});
+
 test("Diario: filtros en la ruta ↔ parámetros de la API", () => {
   const f = L.diaryFilters("cuenta=acc1&tipo=cargos&marca=recibos&q=caf%C3%A9+vigo&otro=x&desde=");
   assert.deepEqual(f, { cuenta: "acc1", tipo: "cargos", marca: "recibos", q: "café vigo" });
