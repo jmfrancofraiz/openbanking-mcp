@@ -508,9 +508,11 @@
     }));
   }
 
-  // Un bloque único con todos los saldos (`.saldos`): arriba el total, a todo el ancho, y debajo las cuentas en una rejilla de
-  // dos columnas (`.bgrid`), todo separado por líneas finas (sin tarjetas sueltas). Cada celda de cuenta es un botón que filtra
-  // por esa cuenta; togglear varias las combina (no se excluyen entre sí); el total no es un filtro.
+  // Un bloque único con todos los saldos (`.saldos`): arriba el total, a todo el ancho, y debajo las cuentas como
+  // subtarjetas traslúcidas en una rejilla de dos columnas (`.bgrid`) — mismo estilo que las `.hstat` de la cabecera
+  // de Evolución › Ahorro mensual (25-oct-2026, petición del Señor; antes iban a borde a borde, sin hueco ni fondo
+  // propio). Cada celda de cuenta es un botón que filtra por esa cuenta; togglear varias las combina (no se excluyen
+  // entre sí); el total no es un filtro y no es una subtarjeta (va directo sobre el degradado, como el resto del hero).
   //
   // Celda de cuenta, en tres líneas: banco, cifra (con «saldo disponible» a su lado si el banco no da el contable) y, pequeña,
   // la terminación del IBAN (o el nombre de la cuenta) con la frescura del saldo.
