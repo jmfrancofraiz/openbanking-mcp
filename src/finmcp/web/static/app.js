@@ -903,6 +903,15 @@
       if (!g) {
         return [detailBar(L.shown(key), label), el("main", {}, el("p", { className: "muted empty", textContent: "Sin movimientos en este periodo." })), nav(navKey)];
       }
+      // Mediana de los últimos 12 meses cerrados, igual que en Mes (28-oct-2026, petición del
+      // Señor: verla también al entrar en la categoría, no solo en el fondo de su fila de la
+      // lista). Solo tiene sentido comparando UN mes (origin «mes»); en Acumulado/Tendencias/
+      // Periodo el total ya es de varios meses y no hay «mes mostrado» con el que pedir la
+      // referencia.
+      const refs = origin === "mes" ? await referencesOf(from.slice(0, 7)) : null;
+      const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
+      const ref = refs && refs.months > 0 ? refs[refKey][g.group] : undefined;
+      const pct = L.refPct(g.total, ref);
       const chartRows = periodMonths.length > 1 ? await txOf(from, to, tipo, "g", g.group) : null;
       const chart = chartRows ? monthlyChart(chartRows, periodMonths, tipo, g.group,
         (m) => go(H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "g", g.group, "mov"))) : null;
@@ -910,7 +919,9 @@
         detailBar(L.shown(g.group), label),
         el("main", {}, [
           el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(g.total) }),
-            el("div", { className: "muted", textContent: `${g.count} movimientos · ${L.share(g.total, agg.total)} % de los ${word(tipo)}` })]),
+            el("div", { className: "muted", textContent: `${g.count} movimientos · ${L.share(g.total, agg.total)} % de los ${word(tipo)}` }),
+            pct !== null ? el("div", { className: "muted", textContent:
+              `Mediana de los últimos ${refs.months} meses cerrados: ${eur0.format(ref)} (${Math.round(pct)} %)` }) : null]),
           ...(chart || []),
           el("h2", { textContent: "Por subcategoría" }),
           el("div", { className: "cards" }, g.categories.map((c) => el("button", { className: "gcard", type: "button",
@@ -930,6 +941,16 @@
     const net = sum(rows.map((t) => t.amount));
     const first = rows[0];
     const isSub = kind === "c" && first && first.group !== key;
+    const total = nz((tipo === "ingresos" || tipo === "no-computables") ? net : -net);
+    // Mismo tratamiento que arriba: solo cuando esta vista «c» es en realidad una categoría
+    // entera con una única subcategoría (catHref enruta directo a «c» en ese caso — `!isSub`),
+    // y solo para un único mes (origin «mes»). Una subcategoría genuina (llegada desde «Por
+    // subcategoría») no lleva mediana: su histórico es demasiado irregular para ser útil (ver
+    // skill «web-panel.md»).
+    const refs = (kind === "c" && !isSub && origin === "mes") ? await referencesOf(from.slice(0, 7)) : null;
+    const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
+    const ref = refs && refs.months > 0 ? refs[refKey][key] : undefined;
+    const pct = L.refPct(total, ref);
     const chart = periodMonths.length > 1 ? monthlyChart(rows, periodMonths, tipo, key,
       (m) => go(kind === "g"
         ? H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "g", key, "mov")
@@ -937,8 +958,10 @@
     return [
       detailBar(isSub ? first.label : L.shown(key), isSub ? `${L.shown(first.group)} · ${label}` : label),
       el("main", {}, [
-        el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(nz((tipo === "ingresos" || tipo === "no-computables") ? net : -net)) }),
-          el("div", { className: "muted", textContent: `${rows.length} movimientos` })]),
+        el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(total) }),
+          el("div", { className: "muted", textContent: `${rows.length} movimientos` }),
+          pct !== null ? el("div", { className: "muted", textContent:
+            `Mediana de los últimos ${refs.months} meses cerrados: ${eur0.format(ref)} (${Math.round(pct)} %)` }) : null]),
         ...(chart || []),
         ...txPanel(rows, tipo, kind === "g"),
       ]),
