@@ -312,6 +312,20 @@
       : H("rango", ctx.origin, ctx.from, ctx.to, tipo, "c", g.categories[0].category);
   }
 
+  // Barra de la mediana de 12 meses al entrar en una categoría (28-oct-2026, petición del Señor:
+  // «algo más visual» que solo texto) — misma `refFill` que tiñe el fondo de su fila en la lista
+  // de Mes, aquí como barra propia bajo el total, con su leyenda corta debajo. `null` sin
+  // referencia útil (la llamada ya decide cuándo pedirla: un único mes, y no una subcategoría
+  // genuina).
+  function refGauge(color, pct, months, ref) {
+    if (pct === null || pct === undefined) return null;
+    return el("div", {}, [
+      el("div", { className: "refbar", style: { background: L.refFill(color, pct) } }),
+      el("div", { className: "refcap muted",
+        textContent: `Mediana ${months} meses: ${eur0.format(ref)} (${Math.round(pct)} %)` }),
+    ]);
+  }
+
   function sliceCard(g, total, tipo, href) {
     const top = g.categories.slice(0, 3);
     return el("div", { className: "card" }, [
@@ -920,8 +934,7 @@
         el("main", {}, [
           el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(g.total) }),
             el("div", { className: "muted", textContent: `${g.count} movimientos · ${L.share(g.total, agg.total)} % de los ${word(tipo)}` }),
-            pct !== null ? el("div", { className: "muted", textContent:
-              `Mediana de los últimos ${refs.months} meses cerrados: ${eur0.format(ref)} (${Math.round(pct)} %)` }) : null]),
+            refGauge(L.colorFor(g.group), pct, refs ? refs.months : null, ref)]),
           ...(chart || []),
           el("h2", { textContent: "Por subcategoría" }),
           el("div", { className: "cards" }, g.categories.map((c) => el("button", { className: "gcard", type: "button",
@@ -960,8 +973,7 @@
       el("main", {}, [
         el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(total) }),
           el("div", { className: "muted", textContent: `${rows.length} movimientos` }),
-          pct !== null ? el("div", { className: "muted", textContent:
-            `Mediana de los últimos ${refs.months} meses cerrados: ${eur0.format(ref)} (${Math.round(pct)} %)` }) : null]),
+          refGauge(L.colorFor(key), pct, refs ? refs.months : null, ref)]),
         ...(chart || []),
         ...txPanel(rows, tipo, kind === "g"),
       ]),
