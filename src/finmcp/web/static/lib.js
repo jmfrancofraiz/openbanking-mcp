@@ -264,7 +264,10 @@
   // marca, dentro de ese relleno, el punto en el que se habría quedado la mediana: a su
   // izquierda, lo típico; a su derecha, el exceso. Sin escala ni techo artificial, la posición de
   // la raya (100 / pct, en % del ancho) expresa la magnitud exacta del exceso en cualquier rango
-  // (p. ej. a 434 % la raya queda cerca del borde izquierdo: casi toda la fila es exceso).
+  // (p. ej. a 434 % la raya queda cerca del borde izquierdo: casi toda la fila es exceso). La
+  // raya usa el MISMO tono de la categoría que el relleno, pero mucho más saturado (alpha 0.85
+  // frente al 0.22 del relleno) para que se note sobre él sin introducir un color ajeno (el
+  // Señor rechazó blanco/var(--card): quería que la raya «hablara el mismo idioma» de color).
   function refFill(color, pct) {
     if (pct === null || pct === undefined) return null;
     const tint = fadeHex(color, 0.22);
@@ -273,7 +276,8 @@
       return `linear-gradient(to right, ${tint} 0%, ${tint} ${stop}%, var(--card) ${stop}%, var(--card) 100%)`;
     }
     const mark = Math.max(0, Math.min(100, (100 / pct) * 100));
-    const dots = "repeating-linear-gradient(to bottom, var(--card) 0, var(--card) 2px, transparent 2px, transparent 5px)";
+    const markColor = fadeHex(color, 0.85);
+    const dots = `repeating-linear-gradient(to bottom, ${markColor} 0, ${markColor} 2px, transparent 2px, transparent 5px)`;
     return `${dots} ${mark.toFixed(2)}% 0 / 2px 100% no-repeat, linear-gradient(to right, ${tint}, ${tint})`;
   }
 

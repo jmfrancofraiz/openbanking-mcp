@@ -62,9 +62,12 @@ test("refFill: relleno 0–100 % con color degradado; null sin pct", () => {
 
 test("refFill: por encima del 100 %, fila sólida con raya de puntos en la marca de la mediana", () => {
   const over = L.refFill("#2f6fdf", 200); // gasto el doble de lo habitual: marca al 50 %
-  assert.equal(over, "repeating-linear-gradient(to bottom, var(--card) 0, var(--card) 2px, "
-    + "transparent 2px, transparent 5px) 50.00% 0 / 2px 100% no-repeat, "
+  assert.equal(over, "repeating-linear-gradient(to bottom, rgba(47, 111, 223, 0.85) 0, "
+    + "rgba(47, 111, 223, 0.85) 2px, transparent 2px, transparent 5px) 50.00% 0 / 2px 100% no-repeat, "
     + "linear-gradient(to right, rgba(47, 111, 223, 0.22), rgba(47, 111, 223, 0.22))");
+  // la raya es del mismo tono que el relleno, solo que más saturada (0.85 frente a 0.22).
+  assert.match(over, /rgba\(47, 111, 223, 0\.85\)/);
+  assert.doesNotMatch(over, /var\(--card\)/); // el Señor rechazó blanco: ha de ser el mismo color
   // la marca es 100/pct: a más exceso, más cerca del borde izquierdo (menos «sliver» típico).
   assert.match(L.refFill("#2f6fdf", 400), /\) 25\.00% 0 \/ 2px 100% no-repeat/);
   assert.match(L.refFill("#2f6fdf", 101), /\) 99\.01% 0 \/ 2px 100% no-repeat/);
