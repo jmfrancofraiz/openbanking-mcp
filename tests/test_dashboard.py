@@ -244,6 +244,54 @@ def test_references_ventana_configurable(session, make_tx):
     assert refs[d.EXPENSE]["Alimentación"] == 35.0
 
 
+# --- all_groups ----------------------------------------------------------------
+
+
+def test_all_groups_incluye_categorias_sin_movimientos_este_mes(session, make_tx):
+    """Una regla sin movimientos todavía (p. ej. recién creada) también cuenta."""
+    from finmcp.db.models import CategoryRule
+
+    make_tx(10.0, booked_at=at(2026, 3, 2), my_category="Ocio")
+    make_tx(500.0, booked_at=at(2026, 3, 3), my_category="Traspasos internos", neutral=True)
+    make_tx(3000.0, type="credit", booked_at=at(2026, 3, 4), my_category="Ingresos - Nómina")
+    session.add(CategoryRule(pattern="reparaciones", category="Vivienda - Reparaciones"))
+    session.add(CategoryRule(pattern="ajuste", category="Ajustes de saldo", neutral=True))
+    session.commit()
+
+    groups = d.all_groups(session)
+
+    assert groups["expense"] == ["Ocio", "Vivienda"]  # de la regla, sin ningún movimiento
+    assert groups["income"] == ["Ingresos - Nómina"]
+    assert groups["neutral"] == ["Ajustes de saldo", "Traspasos internos"]
+
+
+def test_all_groups_no_duplica_una_categoria_con_regla_y_movimientos(session, make_tx):
+    from finmcp.db.models import CategoryRule
+
+    session.add(CategoryRule(pattern="super", category="Alimentación - Supermercado"))
+    session.commit()
+    make_tx(10.0, booked_at=at(2026, 3, 2), my_category="Alimentación - Supermercado")
+
+    groups = d.all_groups(session)
+
+    assert groups["expense"] == ["Alimentación"]
+
+
+def test_all_groups_misma_categoria_computable_y_neutral_aparece_en_ambas(session, make_tx):
+    """Restauración pagada con Bonusly queda `neutral`; la misma pagada normal, no."""
+    make_tx(20.0, booked_at=at(2026, 3, 2), my_category="Restauración")
+    make_tx(15.0, booked_at=at(2026, 3, 3), my_category="Restauración", neutral=True)
+
+    groups = d.all_groups(session)
+
+    assert groups["expense"] == ["Restauración"]
+    assert groups["neutral"] == ["Restauración"]
+
+
+def test_all_groups_sin_datos(session):
+    assert d.all_groups(session) == {"income": [], "expense": [], "neutral": []}
+
+
 # --- transactions ------------------------------------------------------------
 
 

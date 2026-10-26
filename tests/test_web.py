@@ -96,6 +96,16 @@ def test_references(client):
     assert body["income"]["Ingresos - Nómina"] == 3000.0
 
 
+def test_groups(client):
+    r = client.get("/api/groups")
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["expense"] == ["Alimentación", "Moda y complementos"]
+    assert body["income"] == ["Ingresos - Nómina"]
+    assert body["neutral"] == ["Traspasos internos"]
+
+
 def test_transactions_por_categoria_y_subcategoria(client):
     base = {"from": "2026-03-01", "to": "2026-04-30", "type": "gastos"}
     by_group = client.get("/api/transactions", params={**base, "group": "Moda y complementos"})

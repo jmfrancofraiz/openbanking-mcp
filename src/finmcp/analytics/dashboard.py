@@ -294,6 +294,31 @@ def references(session: Session, to_month: str, window: int = REFERENCE_WINDOW) 
     }
 
 
+def all_groups(session: Session) -> dict[str, list[str]]:
+    """Categorías de primer nivel conocidas en todo el histórico (reglas + movimientos),
+    con independencia de si han tenido movimientos en el periodo que se esté mirando.
+
+    Fuente para la pestaña Mes (petición del Señor, 26-oct-2026): mostrar siempre el
+    catálogo completo de categorías en vez de solo las que ha movido el mes mostrado.
+    Cada pareja (categoría, `neutral`) se clasifica por separado, como hace `breakdown()`
+    con cada movimiento: una misma categoría puede tener historial computable Y no
+    computable a la vez (p. ej. «Restauración» es gasto normal salvo cuando la paga
+    Bonusly, que queda `neutral`), así que puede aparecer en dos listas a la vez.
+    """
+    Rule, Tx = models.CategoryRule, models.Transaction
+    out: dict[str, set[str]] = {INCOME: set(), EXPENSE: set(), NEUTRAL: set()}
+    pairs = set(session.query(Rule.category, Rule.neutral).distinct())
+    pairs |= set(
+        session.query(Tx.my_category, Tx.neutral)
+        .filter(Tx.my_category.is_not(None), Tx.my_category != "")
+        .distinct()
+    )
+    for cat, neutral in pairs:
+        kind = NEUTRAL if neutral else kind_of(cat)
+        out[kind].add(group_of(cat))
+    return {kind: sorted(names, key=str.lower) for kind, names in out.items()}
+
+
 def transactions(
     session: Session,
     start: date,

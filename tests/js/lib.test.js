@@ -83,6 +83,32 @@ test("topN agrupa en «Resto» y descarta importes no positivos", () => {
   assert.equal(L.topN(groups.slice(0, 3), 7).length, 3);
 });
 
+test("withAllGroups: añade a 0 € las categorías sin movimientos este periodo (pestaña Mes)", () => {
+  const agg = {
+    total: 120, count: 2,
+    groups: [
+      { group: "Alimentación", total: 100, count: 1, categories: [{ category: "Alimentación - Supermercado", label: "Supermercado", total: 100, count: 1 }] },
+      { group: "Restauración", total: 20, count: 1, categories: [{ category: "Restauración", label: "General", total: 20, count: 1 }] },
+    ],
+  };
+  const out = L.withAllGroups(agg, ["Alimentación", "Restauración", "Vivienda", "Ocio"]);
+  assert.equal(out.total, 120); // no toca el total ni el count del periodo
+  assert.equal(out.count, 2);
+  assert.equal(out.groups.length, 4);
+  const added = out.groups.find((g) => g.group === "Vivienda");
+  assert.deepEqual(added, { group: "Vivienda", total: 0, count: 0, categories: [] });
+  // las existentes no se duplican ni se alteran
+  assert.equal(out.groups.filter((g) => g.group === "Alimentación").length, 1);
+  assert.deepEqual(out.groups.find((g) => g.group === "Alimentación"), agg.groups[0]);
+});
+
+test("withAllGroups: sin nombres, o con todos ya presentes, devuelve el agg tal cual", () => {
+  const agg = { total: 20, count: 1, groups: [{ group: "Ocio", total: 20, count: 1, categories: [] }] };
+  assert.equal(L.withAllGroups(agg, []), agg);
+  assert.equal(L.withAllGroups(agg, null), agg);
+  assert.equal(L.withAllGroups(agg, ["Ocio"]), agg);
+});
+
 test("presentación: porcentaje, nombre de ingreso y título limpio", () => {
   assert.equal(L.share(50, 1070), 5);
   assert.equal(L.share(-10, 100), 0);

@@ -226,6 +226,21 @@
       { label: `Resto (${tail.length})`, total: tail.reduce((a, g) => a + g.total, 0), rest: true, color: REST }];
   }
 
+  // Añade a `agg` (de /api/breakdown) las categorías de primer nivel de `names` (de
+  // /api/groups) que no han tenido movimientos en el periodo, con total 0 y sin
+  // subcategorías; no toca `total`/`count` del periodo, solo la lista `groups` (pestaña
+  // Mes, petición del Señor, 26-oct-2026: catálogo completo siempre, no solo lo movido).
+  function withAllGroups(agg, names) {
+    if (!names || !names.length) return agg;
+    const present = new Set(agg.groups.map((g) => g.group));
+    const missing = names.filter((n) => !present.has(n))
+      .map((n) => ({ group: n, total: 0, count: 0, categories: [] }));
+    if (!missing.length) return agg;
+    const groups = [...agg.groups, ...missing]
+      .sort((a, b) => (b.total - a.total) || a.group.localeCompare(b.group, "es"));
+    return { ...agg, groups };
+  }
+
   // Variación frente a una referencia. kind «cost»: subir es peor; «gain»: subir es mejor.
   // Sin cambio si |variación| < máx(5 €, 3 % de la referencia).
   function delta(cur, ref, kind) {
@@ -426,7 +441,7 @@
     ymOf, daysIn, monthStart, monthEnd, upTo, monthLabel, monthName, monthShort, monthInitial,
     dayLabel, dayShort, cap, rangeLabel, addDays, dayHeading, dayLong, localStamp, whenLabel,
     colorFor, share, shown, cleanTitle, titleOf, signedEur, topN, delta, parseHash,
-    refPct, fadeHex, refFill,
+    refPct, fadeHex, refFill, withAllGroups,
     DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams, cuentaIds, toggleCuenta,
     PULL, pullDistance, pullZone, waitLabel, syncResult, viewOf, pullEnabled,
     totalNote, figureChars, TAPE_LEN, odoTape, rollDelay,

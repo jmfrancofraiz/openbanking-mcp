@@ -404,6 +404,9 @@ def create_app(
         month = _month_param(request, "to")
         return JSONResponse(query(lambda s: dashboard.references(s, month)))
 
+    def api_groups(request: Request) -> JSONResponse:
+        return JSONResponse(query(dashboard.all_groups))
+
     def api_transactions(request: Request) -> JSONResponse:
         start, end = _range_params(request)
         kind = _kind_param(request)
@@ -482,6 +485,7 @@ def create_app(
             Route("/api/breakdown", api_breakdown),
             Route("/api/series", api_series),
             Route("/api/references", api_references),
+            Route("/api/groups", api_groups),
             Route("/api/transactions", api_transactions),
             Route("/api/accounts", api_accounts),
             Route("/api/tags", api_tags),

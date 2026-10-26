@@ -105,6 +105,7 @@
   const monthlyRows = (day) => api("monthly", day ? { day } : {}).then((b) => b.months);
   const seriesOf = (from, to) => api("series", { from, to });
   const referencesOf = (to) => api("references", { to });
+  const groupsOf = () => api("groups");
   const txOf = (from, to, tipo, kind, key) =>
     api("transactions", { from, to, type: tipo, [kind === "c" ? "category" : "group"]: key }).then((b) => b.transactions);
 
@@ -307,9 +308,11 @@
   }
 
   function catHref(ctx, tipo, g) {
-    return g.categories.length > 1
-      ? H("rango", ctx.origin, ctx.from, ctx.to, tipo, "g", g.group)
-      : H("rango", ctx.origin, ctx.from, ctx.to, tipo, "c", g.categories[0].category);
+    // Con length === 0 (categoría sin movimientos este mes, pestaña Mes) va por «g»: `rangeView`
+    // ya sabe mostrar «Sin movimientos en este periodo» cuando no encuentra el grupo.
+    return g.categories.length === 1
+      ? H("rango", ctx.origin, ctx.from, ctx.to, tipo, "c", g.categories[0].category)
+      : H("rango", ctx.origin, ctx.from, ctx.to, tipo, "g", g.group);
   }
 
   // Barra de la mediana de 12 meses al entrar en una categoría (28-oct-2026, petición del Señor:
@@ -386,9 +389,10 @@
       ]);
     };
     const paintList = () => {
-      list.replaceChildren(...(all ? agg.groups : agg.groups.slice(0, 8)).map(card));
+      const showAll = all || ctx.origin === "mes";
+      list.replaceChildren(...(showAll ? agg.groups : agg.groups.slice(0, 8)).map(card));
       more.textContent = all ? "Ver menos" : `Ver las ${agg.groups.length - 8} categorías restantes`;
-      more.classList.toggle("hidden", agg.groups.length <= 8);
+      more.classList.toggle("hidden", ctx.origin === "mes" || agg.groups.length <= 8);
     };
     more.addEventListener("click", () => { all = !all; paintList(); });
     paintDonut();
@@ -864,14 +868,17 @@
     const from = L.monthStart(ym), to = L.monthEnd(ym);
     const i = MONTHS.indexOf(ym);
     const sm = MONTHS.slice(Math.max(0, i - 5), i + 1);
-    const [b, ser, refsBody] = await Promise.all([breakdownOf(from, to), sm.length > 1 ? seriesOf(sm[0], ym) : null,
-      referencesOf(ym)]);
+    const [b, ser, refsBody, allGroups] = await Promise.all([breakdownOf(from, to), sm.length > 1 ? seriesOf(sm[0], ym) : null,
+      referencesOf(ym), groupsOf()]);
     const aggs = aggsOf(b);
     const sp = ser ? { months: ser.months,
       values: tipo === "ingresos" ? ser.income : tipo === "no-computables" ? ser.neutral : ser.expense,
       partial: ym === CUR } : null;
     const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
     const refs = refsBody.months > 0 ? { months: refsBody.months, byGroup: refsBody[refKey] } : null;
+    // Catálogo completo de categorías de primer nivel (petición del Señor, 26-oct-2026):
+    // la pestaña Mes muestra siempre todas, no solo las que han tenido movimientos este mes.
+    aggs[tipo] = L.withAllGroups(aggs[tipo], allGroups[refKey]);
     return [
       monthBar(ym, tipo),
       el("main", {}, [
