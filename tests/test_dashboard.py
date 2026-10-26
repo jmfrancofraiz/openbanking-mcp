@@ -212,6 +212,38 @@ def test_series_incluye_neutral(session, ejemplo):
     assert s["neutral"]["Traspasos internos"] == [-500.00, 0.0]
 
 
+# --- references ----------------------------------------------------------------
+
+
+def test_references_mediana_de_cerrados_excluye_el_mes_pedido(session, make_tx):
+    """La mediana se calcula sobre los meses CERRADOS; el mes pedido no entra."""
+    make_tx(100.00, merchant="Super", booked_at=at(2026, 1, 15), my_category="Alimentación - Supermercado")
+    make_tx(150.00, merchant="Super", booked_at=at(2026, 2, 15), my_category="Alimentación - Supermercado")
+    make_tx(500.00, merchant="Super", booked_at=at(2026, 3, 15), my_category="Alimentación - Supermercado")
+    make_tx(999.00, merchant="Super", booked_at=at(2026, 4, 5), my_category="Alimentación - Supermercado")
+
+    refs = d.references(session, "2026-04")
+
+    assert refs["months"] == 3
+    assert refs[d.EXPENSE]["Alimentación"] == 150.0
+
+
+def test_references_sin_meses_cerrados_devuelve_vacio(session, make_tx):
+    make_tx(50.00, merchant="Super", booked_at=at(2026, 4, 5), my_category="Alimentación - Supermercado")
+
+    assert d.references(session, "2026-04") == {"months": 0, d.INCOME: {}, d.EXPENSE: {}, d.NEUTRAL: {}}
+
+
+def test_references_ventana_configurable(session, make_tx):
+    for i, amount in enumerate([10.0, 20.0, 30.0, 40.0], start=1):
+        make_tx(amount, merchant="Super", booked_at=at(2026, i, 15), my_category="Alimentación - Supermercado")
+
+    refs = d.references(session, "2026-05", window=2)  # cerrados: ene-abr; ventana de 2 -> mar, abr
+
+    assert refs["months"] == 2
+    assert refs[d.EXPENSE]["Alimentación"] == 35.0
+
+
 # --- transactions ------------------------------------------------------------
 
 

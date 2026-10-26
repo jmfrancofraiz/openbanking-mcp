@@ -86,6 +86,16 @@ def test_series(client):
     assert r.json()["expense"]["Alimentación"] == [120.0, 60.0]
 
 
+def test_references(client):
+    r = client.get("/api/references", params={"to": "2026-04"})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["months"] == 1  # único mes cerrado disponible: marzo
+    assert body["expense"]["Alimentación"] == 120.0
+    assert body["income"]["Ingresos - Nómina"] == 3000.0
+
+
 def test_transactions_por_categoria_y_subcategoria(client):
     base = {"from": "2026-03-01", "to": "2026-04-30", "type": "gastos"}
     by_group = client.get("/api/transactions", params={**base, "group": "Moda y complementos"})

@@ -17,6 +17,7 @@ Jerarquía: la «categoría» del panel (`group`) es el texto anterior al primer
 from __future__ import annotations
 
 import calendar
+import statistics
 from datetime import date, datetime, time, timezone
 
 from sqlalchemy import func
@@ -96,6 +97,12 @@ def month_range(first: date, last: date) -> list[str]:
         out.append(f"{y:04d}-{m:02d}")
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
     return out
+
+
+def _shift_month(value: date, delta: int) -> date:
+    """El día 1 del mes `delta` meses antes (negativo) o después de `value`."""
+    total = value.year * 12 + (value.month - 1) + delta
+    return date(total // 12, total % 12 + 1, 1)
 
 
 def _day_start(value: date) -> datetime:
@@ -256,6 +263,34 @@ def series(session: Session, start_month: str, end_month: str) -> dict:
         INCOME: {g: [_round(v) for v in vals] for g, vals in out[INCOME].items()},
         EXPENSE: {g: [_round(v) for v in vals] for g, vals in out[EXPENSE].items()},
         NEUTRAL: {g: [_round(v) for v in vals] for g, vals in out[NEUTRAL].items()},
+    }
+
+
+REFERENCE_WINDOW = 12
+
+
+def references(session: Session, to_month: str, window: int = REFERENCE_WINDOW) -> dict:
+    """Mediana de cada categoría del panel en los `window` meses CERRADOS anteriores a `to_month`.
+
+    Sirve de valor habitual con el que medir el consumo de `to_month` (pestaña Mes, gauge de
+    categorías): por eso `to_month` NUNCA entra en su propio cálculo — si está en curso, su cifra
+    parcial sesgaría a la baja la referencia contra la que se compara. Con menos meses cerrados
+    disponibles que `window` se usan los que haya; con ninguno, no hay referencia posible.
+    """
+    end = parse_month(to_month)
+    last_closed = _shift_month(end, -1)
+    last_closed_key = month_key(last_closed)
+    first = _first_booked(session)
+    if first is None or last_closed_key < month_key(first):
+        return {"months": 0, INCOME: {}, EXPENSE: {}, NEUTRAL: {}}
+    start = _shift_month(last_closed, -(window - 1))
+    start_key = max(month_key(start), month_key(first))
+    ser = series(session, start_key, last_closed_key)
+    return {
+        "months": len(ser["months"]),
+        INCOME: {g: _round(statistics.median(vals)) for g, vals in ser[INCOME].items()},
+        EXPENSE: {g: _round(statistics.median(vals)) for g, vals in ser[EXPENSE].items()},
+        NEUTRAL: {g: _round(statistics.median(vals)) for g, vals in ser[NEUTRAL].items()},
     }
 
 

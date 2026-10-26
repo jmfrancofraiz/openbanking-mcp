@@ -400,6 +400,10 @@ def create_app(
             raise ParamError("«from» no puede ser posterior a «to».")
         return JSONResponse(query(lambda s: dashboard.series(s, start, end)))
 
+    def api_references(request: Request) -> JSONResponse:
+        month = _month_param(request, "to")
+        return JSONResponse(query(lambda s: dashboard.references(s, month)))
+
     def api_transactions(request: Request) -> JSONResponse:
         start, end = _range_params(request)
         kind = _kind_param(request)
@@ -477,6 +481,7 @@ def create_app(
             Route("/api/monthly", api_monthly),
             Route("/api/breakdown", api_breakdown),
             Route("/api/series", api_series),
+            Route("/api/references", api_references),
             Route("/api/transactions", api_transactions),
             Route("/api/accounts", api_accounts),
             Route("/api/tags", api_tags),
