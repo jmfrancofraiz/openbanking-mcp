@@ -49,13 +49,27 @@ test("fadeHex: hex de la paleta a rgba con alpha", () => {
   assert.equal(L.fadeHex("#2f6fdf", 0.22), "rgba(47, 111, 223, 0.22)");
 });
 
-test("refFill: degradado de izquierda a derecha, recortado a 0–100 %, null sin pct", () => {
+test("refFill: relleno 0–100 % con color degradado; null sin pct", () => {
   assert.equal(L.refFill("#2f6fdf", null), null);
   const half = L.refFill("#2f6fdf", 50);
   assert.equal(half, "linear-gradient(to right, rgba(47, 111, 223, 0.22) 0%, "
     + "rgba(47, 111, 223, 0.22) 50%, var(--card) 50%, var(--card) 100%)");
-  assert.match(L.refFill("#2f6fdf", 130), /\) 100%, var\(--card\) 100%\)$/); // >100 %: se recorta a 100
+  const full = L.refFill("#2f6fdf", 100);
+  assert.equal(full, "linear-gradient(to right, rgba(47, 111, 223, 0.22) 0%, "
+    + "rgba(47, 111, 223, 0.22) 100%, var(--card) 100%, var(--card) 100%)");
   assert.match(L.refFill("#2f6fdf", -5), /var\(--card\) 0%, var\(--card\) 100%\)$/);
+});
+
+test("refFill: por encima del 100 %, fila sólida con raya de puntos en la marca de la mediana", () => {
+  const over = L.refFill("#2f6fdf", 200); // gasto el doble de lo habitual: marca al 50 %
+  assert.equal(over, "repeating-linear-gradient(to bottom, var(--card) 0, var(--card) 2px, "
+    + "transparent 2px, transparent 5px) 50.00% 0 / 2px 100% no-repeat, "
+    + "linear-gradient(to right, rgba(47, 111, 223, 0.22), rgba(47, 111, 223, 0.22))");
+  // la marca es 100/pct: a más exceso, más cerca del borde izquierdo (menos «sliver» típico).
+  assert.match(L.refFill("#2f6fdf", 400), /\) 25\.00% 0 \/ 2px 100% no-repeat/);
+  assert.match(L.refFill("#2f6fdf", 101), /\) 99\.01% 0 \/ 2px 100% no-repeat/);
+  // nunca sin color de relleno, aunque el exceso sea extremo (434 %, caso real del Señor).
+  assert.match(L.refFill("#2f6fdf", 434), /linear-gradient\(to right, rgba\(47, 111, 223, 0\.22\), rgba\(47, 111, 223, 0\.22\)\)$/);
 });
 
 test("topN agrupa en «Resto» y descarta importes no positivos", () => {

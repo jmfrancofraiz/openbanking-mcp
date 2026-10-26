@@ -256,12 +256,25 @@
   // Fondo de una fila-gauge: relleno de izquierda a derecha hasta `pct` (de `refPct`) con el
   // color de la categoría muy degradado, y var(--card) al resto (respeta el tema oscuro/claro,
   // que no retoca la paleta categórica). `pct` nulo no pinta nada (deja el fondo normal de la
-  // tarjeta). El relleno se recorta a 0–100 %; un consumo >100 % sigue mostrando la fila llena.
+  // tarjeta).
+  //
+  // Por encima del 100 % la fila ya no representa la mediana sino el gasto real: se rellena
+  // ENTERA de un único color sólido (el Señor rechazó un reescalado con margen — daba la falsa
+  // impresión de que aún quedaba sitio para crecer hasta el borde) y una RAYA VERTICAL DE PUNTOS
+  // marca, dentro de ese relleno, el punto en el que se habría quedado la mediana: a su
+  // izquierda, lo típico; a su derecha, el exceso. Sin escala ni techo artificial, la posición de
+  // la raya (100 / pct, en % del ancho) expresa la magnitud exacta del exceso en cualquier rango
+  // (p. ej. a 434 % la raya queda cerca del borde izquierdo: casi toda la fila es exceso).
   function refFill(color, pct) {
     if (pct === null || pct === undefined) return null;
-    const stop = Math.max(0, Math.min(100, pct));
     const tint = fadeHex(color, 0.22);
-    return `linear-gradient(to right, ${tint} 0%, ${tint} ${stop}%, var(--card) ${stop}%, var(--card) 100%)`;
+    if (pct <= 100) {
+      const stop = Math.max(0, pct);
+      return `linear-gradient(to right, ${tint} 0%, ${tint} ${stop}%, var(--card) ${stop}%, var(--card) 100%)`;
+    }
+    const mark = Math.max(0, Math.min(100, (100 / pct) * 100));
+    const dots = "repeating-linear-gradient(to bottom, var(--card) 0, var(--card) 2px, transparent 2px, transparent 5px)";
+    return `${dots} ${mark.toFixed(2)}% 0 / 2px 100% no-repeat, linear-gradient(to right, ${tint}, ${tint})`;
   }
 
   function parseHash(hash) {
