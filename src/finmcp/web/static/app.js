@@ -388,11 +388,22 @@
         el("span", { className: `v${g.total < 0 ? " neg" : ""}` }, [amt(g.total), ctx.spark ? sparkOf(ctx.spark, g.group) : null]),
       ]);
     };
+    // En Mes, lo truncado no es un corte arbitrario de 8: son las categorías SIN movimiento
+    // este periodo (añadidas por `withAllGroups`, `count === 0`), ocultas tras «Ver resto de
+    // categorías» (26-oct-2026, petición del Señor) — las que sí se movieron se ven siempre,
+    // sin importar cuántas sean. Fuera de Mes (Acumulado) sigue el corte de 8 de siempre.
     const paintList = () => {
-      const showAll = all || ctx.origin === "mes";
-      list.replaceChildren(...(showAll ? agg.groups : agg.groups.slice(0, 8)).map(card));
+      if (ctx.origin === "mes") {
+        const real = agg.groups.filter((g) => g.count > 0);
+        const zero = agg.groups.filter((g) => g.count === 0);
+        list.replaceChildren(...(all ? agg.groups : real).map(card));
+        more.textContent = all ? "Ver menos" : "Ver resto de categorías";
+        more.classList.toggle("hidden", zero.length === 0);
+        return;
+      }
+      list.replaceChildren(...(all ? agg.groups : agg.groups.slice(0, 8)).map(card));
       more.textContent = all ? "Ver menos" : `Ver las ${agg.groups.length - 8} categorías restantes`;
-      more.classList.toggle("hidden", ctx.origin === "mes" || agg.groups.length <= 8);
+      more.classList.toggle("hidden", agg.groups.length <= 8);
     };
     more.addEventListener("click", () => { all = !all; paintList(); });
     paintDonut();
@@ -920,10 +931,12 @@
     const monthEndFor = (m) => (m === CUR ? TODAY : L.monthEnd(m));
     if (kind === "g" && extra !== "mov") {
       const agg = aggsOf(await breakdownOf(from, to))[tipo];
-      const g = agg.groups.find((x) => x.group === key);
-      if (!g) {
-        return [detailBar(L.shown(key), label), el("main", {}, el("p", { className: "muted empty", textContent: "Sin movimientos en este periodo." })), nav(navKey)];
-      }
+      const found = agg.groups.find((x) => x.group === key);
+      // Sin movimientos este periodo (categoría a 0 € de la pestaña Mes): se sigue mostrando la
+      // ficha, con un `g` «vacío», para poder ver la mediana de abajo — es el objetivo de este
+      // cambio (26-oct-2026, petición del Señor): ver el importe habitual aunque la categoría
+      // no se haya movido, en vez del antiguo «Sin movimientos en este periodo.» a secas.
+      const g = found || { group: key, total: 0, count: 0, categories: [] };
       // Mediana de los últimos 12 meses cerrados, igual que en Mes (28-oct-2026, petición del
       // Señor: verla también al entrar en la categoría, no solo en el fondo de su fila de la
       // lista). Solo tiene sentido comparando UN mes (origin «mes»); en Acumulado/Tendencias/
@@ -931,28 +944,30 @@
       // referencia.
       const refs = origin === "mes" ? await referencesOf(from.slice(0, 7)) : null;
       const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
-      const ref = refs && refs.months > 0 ? refs[refKey][g.group] : undefined;
+      const ref = refs && refs.months > 0 ? refs[refKey][key] : undefined;
       const pct = L.refPct(g.total, ref);
-      const chartRows = periodMonths.length > 1 ? await txOf(from, to, tipo, "g", g.group) : null;
+      const chartRows = found && periodMonths.length > 1 ? await txOf(from, to, tipo, "g", g.group) : null;
       const chart = chartRows ? monthlyChart(chartRows, periodMonths, tipo, g.group,
         (m) => go(H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "g", g.group, "mov"))) : null;
       return [
-        detailBar(L.shown(g.group), label),
+        detailBar(L.shown(key), label),
         el("main", {}, [
           el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(g.total) }),
-            el("div", { className: "muted", textContent: `${g.count} movimientos · ${L.share(g.total, agg.total)} % de los ${word(tipo)}` }),
-            refGauge(L.colorFor(g.group), pct, refs ? refs.months : null, ref)]),
+            el("div", { className: "muted", textContent: found
+              ? `${g.count} movimientos · ${L.share(g.total, agg.total)} % de los ${word(tipo)}`
+              : "Sin movimientos en este periodo." }),
+            refGauge(L.colorFor(key), pct, refs ? refs.months : null, ref)]),
           ...(chart || []),
-          el("h2", { textContent: "Por subcategoría" }),
-          el("div", { className: "cards" }, g.categories.map((c) => el("button", { className: "gcard", type: "button",
+          found ? el("h2", { textContent: "Por subcategoría" }) : null,
+          found ? el("div", { className: "cards" }, g.categories.map((c) => el("button", { className: "gcard", type: "button",
             onclick: () => go(H("rango", origin, from, to, tipo, "c", c.category)) }, [
             el("span", { className: "dot", style: { background: L.colorFor(c.category) } }),
             el("span", { className: "n", textContent: c.label }),
             el("span", { className: "s", textContent: `${L.share(c.total, g.total)} % · ${c.count} mov.` }),
             el("span", { className: `v${c.total < 0 ? " neg" : ""}` }, amt(c.total)),
-          ]))),
-          el("button", { className: "link", type: "button", textContent: `Ver los ${g.count} movimientos`,
-            onclick: () => go(H("rango", origin, from, to, tipo, "g", g.group, "mov")) }),
+          ]))) : null,
+          found ? el("button", { className: "link", type: "button", textContent: `Ver los ${g.count} movimientos`,
+            onclick: () => go(H("rango", origin, from, to, tipo, "g", g.group, "mov")) }) : null,
         ]),
         nav(navKey),
       ];
