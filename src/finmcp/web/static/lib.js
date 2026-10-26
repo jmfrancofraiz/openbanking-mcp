@@ -237,6 +237,33 @@
     return { diff, pct: p, flat, tone };
   }
 
+  // Gauge de categoría (Mes): % consumido de la mediana de los últimos N meses cerrados
+  // (`ref`, de /api/references) frente a la cifra actual del mes (`total`). `null` si no hay
+  // referencia útil: sin histórico (`ref` undefined) o mediana ≤ 0 (no se puede expresar como %,
+  // caso abierto de la especificación — p. ej. una categoría que solo ha traído devoluciones).
+  function refPct(total, ref) {
+    if (ref === undefined || ref === null || ref <= 0) return null;
+    return (total / ref) * 100;
+  }
+
+  // Hex de la paleta -> rgba muy degradado (alpha baja), para rellenos de fondo tipo progreso
+  // que no compitan con el texto de la fila.
+  function fadeHex(hex, alpha) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+  }
+
+  // Fondo de una fila-gauge: relleno de izquierda a derecha hasta `pct` (de `refPct`) con el
+  // color de la categoría muy degradado, y var(--card) al resto (respeta el tema oscuro/claro,
+  // que no retoca la paleta categórica). `pct` nulo no pinta nada (deja el fondo normal de la
+  // tarjeta). El relleno se recorta a 0–100 %; un consumo >100 % sigue mostrando la fila llena.
+  function refFill(color, pct) {
+    if (pct === null || pct === undefined) return null;
+    const stop = Math.max(0, Math.min(100, pct));
+    const tint = fadeHex(color, 0.22);
+    return `linear-gradient(to right, ${tint} 0%, ${tint} ${stop}%, var(--card) ${stop}%, var(--card) 100%)`;
+  }
+
   function parseHash(hash) {
     return String(hash || "").replace(/^#\/?/, "").split("/").filter(Boolean).map((x) => {
       try { return decodeURIComponent(x); } catch { return x; }
@@ -382,6 +409,7 @@
     ymOf, daysIn, monthStart, monthEnd, upTo, monthLabel, monthName, monthShort, monthInitial,
     dayLabel, dayShort, cap, rangeLabel, addDays, dayHeading, dayLong, localStamp, whenLabel,
     colorFor, share, shown, cleanTitle, titleOf, signedEur, topN, delta, parseHash,
+    refPct, fadeHex, refFill,
     DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams, cuentaIds, toggleCuenta,
     PULL, pullDistance, pullZone, waitLabel, syncResult, viewOf, pullEnabled,
     totalNote, figureChars, TAPE_LEN, odoTape, rollDelay,

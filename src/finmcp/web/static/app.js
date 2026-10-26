@@ -104,6 +104,7 @@
   const breakdownOf = (from, to) => api("breakdown", { from, to });
   const monthlyRows = (day) => api("monthly", day ? { day } : {}).then((b) => b.months);
   const seriesOf = (from, to) => api("series", { from, to });
+  const referencesOf = (to) => api("references", { to });
   const txOf = (from, to, tipo, kind, key) =>
     api("transactions", { from, to, type: tipo, [kind === "c" ? "category" : "group"]: key }).then((b) => b.transactions);
 
@@ -352,13 +353,24 @@
       detail.replaceChildren(g ? sliceCard(g, agg.total, tipo, catHref(ctx, tipo, g))
         : el("div", { className: "card" }, el("div", { className: "dline", textContent: "Agrupa las categorías menores; están en la lista de abajo." })));
     };
-    const card = (g) => el("button", { className: "gcard", type: "button", onclick: () => go(catHref(ctx, tipo, g)) }, [
-      el("span", { className: "dot", style: { background: L.colorFor(g.group) } }),
-      el("span", { className: "n", textContent: L.shown(g.group) }),
-      el("span", { className: "s", textContent: [`${L.share(g.total, agg.total)} %`, `${g.count} mov.`,
-        ctx.months > 1 ? `${eur0.format(g.total / ctx.months)}/mes` : null].filter(Boolean).join(" · ") }),
-      el("span", { className: `v${g.total < 0 ? " neg" : ""}` }, [amt(g.total), ctx.spark ? sparkOf(ctx.spark, g.group) : null]),
-    ]);
+    const card = (g) => {
+      const color = L.colorFor(g.group);
+      const pct = ctx.refs ? L.refPct(g.total, ctx.refs.byGroup[g.group]) : null;
+      const fill = L.refFill(color, pct);
+      return el("button", {
+        className: "gcard", type: "button", onclick: () => go(catHref(ctx, tipo, g)),
+        style: fill ? { background: fill } : null,
+        attrs: pct !== null ? { "aria-label": `${L.shown(g.group)}: ${eur0.format(g.total)}, `
+          + `${Math.round(pct)} % de la mediana de los últimos ${ctx.refs.months} meses cerrados `
+          + `(${eur0.format(ctx.refs.byGroup[g.group])})` } : {},
+      }, [
+        el("span", { className: "dot", style: { background: color } }),
+        el("span", { className: "n", textContent: L.shown(g.group) }),
+        el("span", { className: "s", textContent: [`${L.share(g.total, agg.total)} %`, `${g.count} mov.`,
+          ctx.months > 1 ? `${eur0.format(g.total / ctx.months)}/mes` : null].filter(Boolean).join(" · ") }),
+        el("span", { className: `v${g.total < 0 ? " neg" : ""}` }, [amt(g.total), ctx.spark ? sparkOf(ctx.spark, g.group) : null]),
+      ]);
+    };
     const paintList = () => {
       list.replaceChildren(...(all ? agg.groups : agg.groups.slice(0, 8)).map(card));
       more.textContent = all ? "Ver menos" : `Ver las ${agg.groups.length - 8} categorías restantes`;
@@ -376,6 +388,8 @@
       sp ? el("p", { className: "muted lead2", textContent: `Minigráfica: últimos ${sp.months.length} meses `
         + `(${L.monthInitial(sp.months[0])}–${L.monthInitial(sp.months[sp.months.length - 1])})`
         + (sp.partial ? `; tramo discontinuo: mes en curso, a día ${CUT.day}.` : ".") }) : null,
+      ctx.refs ? el("p", { className: "muted lead2", textContent: `Fondo de cada fila: % consumido de la mediana `
+        + `de los últimos ${ctx.refs.months} meses cerrados para esa categoría.` }) : null,
       list, more,
     ];
   }
@@ -836,18 +850,21 @@
     const from = L.monthStart(ym), to = L.monthEnd(ym);
     const i = MONTHS.indexOf(ym);
     const sm = MONTHS.slice(Math.max(0, i - 5), i + 1);
-    const [b, ser] = await Promise.all([breakdownOf(from, to), sm.length > 1 ? seriesOf(sm[0], ym) : null]);
+    const [b, ser, refsBody] = await Promise.all([breakdownOf(from, to), sm.length > 1 ? seriesOf(sm[0], ym) : null,
+      referencesOf(ym)]);
     const aggs = aggsOf(b);
     const sp = ser ? { months: ser.months,
       values: tipo === "ingresos" ? ser.income : tipo === "no-computables" ? ser.neutral : ser.expense,
       partial: ym === CUR } : null;
+    const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
+    const refs = refsBody.months > 0 ? { months: refsBody.months, byGroup: refsBody[refKey] } : null;
     return [
       monthBar(ym, tipo),
       el("main", {}, [
         subtabs([["ingresos", "Ingresos", aggs.ingresos.total], ["gastos", "Gastos", aggs.gastos.total],
                  ["no-computables", "No computables", aggs["no-computables"].total]], tipo,
           (t) => go(H("mes", ym, t), { replace: true })),
-        ...categoryBlock(aggs[tipo], tipo, { origin: "mes", from, to, months: 1, spark: sp }),
+        ...categoryBlock(aggs[tipo], tipo, { origin: "mes", from, to, months: 1, spark: sp, refs }),
         el("footer", { className: "note" }, [
           ym === CUR ? el("p", { textContent: `Mes en curso: movimientos hasta el día ${CUT.day}.` }) : null,
           tipo === "gastos" && b.refunds > 0 ? el("p", {}, ["Las devoluciones (", amt(b.refunds), ") se han descontado del gasto de su categoría."]) : null,

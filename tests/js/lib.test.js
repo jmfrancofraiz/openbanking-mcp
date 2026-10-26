@@ -37,6 +37,27 @@ test("delta: umbral de «sin cambio» y tono según el tipo", () => {
   assert.equal(L.delta(10, null, "cost"), null);
 });
 
+test("refPct: % de consumo de la mediana; null sin referencia útil", () => {
+  assert.equal(L.refPct(73, 100), 73);
+  assert.equal(L.refPct(130, 100), 130); // puede superar el 100 %: se informa, no se recorta
+  assert.equal(L.refPct(50, undefined), null); // sin histórico
+  assert.equal(L.refPct(50, 0), null); // referencia 0: % no definible
+  assert.equal(L.refPct(50, -10), null); // referencia negativa: tampoco
+});
+
+test("fadeHex: hex de la paleta a rgba con alpha", () => {
+  assert.equal(L.fadeHex("#2f6fdf", 0.22), "rgba(47, 111, 223, 0.22)");
+});
+
+test("refFill: degradado de izquierda a derecha, recortado a 0–100 %, null sin pct", () => {
+  assert.equal(L.refFill("#2f6fdf", null), null);
+  const half = L.refFill("#2f6fdf", 50);
+  assert.equal(half, "linear-gradient(to right, rgba(47, 111, 223, 0.22) 0%, "
+    + "rgba(47, 111, 223, 0.22) 50%, var(--card) 50%, var(--card) 100%)");
+  assert.match(L.refFill("#2f6fdf", 130), /\) 100%, var\(--card\) 100%\)$/); // >100 %: se recorta a 100
+  assert.match(L.refFill("#2f6fdf", -5), /var\(--card\) 0%, var\(--card\) 100%\)$/);
+});
+
 test("topN agrupa en «Resto» y descarta importes no positivos", () => {
   const groups = [9, 8, 7, 6, 5, 4, 3, 2, -1].map((t, i) => ({ group: `G${i}`, total: t }));
   const slices = L.topN(groups, 7);
