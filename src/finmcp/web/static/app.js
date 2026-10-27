@@ -937,6 +937,13 @@
       // cambio (26-oct-2026, petición del Señor): ver el importe habitual aunque la categoría
       // no se haya movido, en vez del antiguo «Sin movimientos en este periodo.» a secas.
       const g = found || { group: key, total: 0, count: 0, categories: [] };
+      // «General» (una categoría sin « - », igual a su propio grupo) no es una subcategoría real:
+      // no es un valor que exista en ninguna regla ni movimiento, es la AUSENCIA de uno
+      // (`subcategory_label` la pone cuando no hay nada más concreto). El Señor no quiere verla
+      // como una tarjeta sintética más de «Por subcategoría» (26-oct-2026): esa entrada se saca
+      // de la lista y sus movimientos se listan aparte, en la misma vista, bajo «Sin subcategoría».
+      const subcats = g.categories.filter((c) => c.category !== g.group);
+      const bare = g.categories.find((c) => c.category === g.group);
       // Mediana de los últimos 12 meses cerrados, igual que en Mes (28-oct-2026, petición del
       // Señor: verla también al entrar en la categoría, no solo en el fondo de su fila de la
       // lista). Solo tiene sentido comparando UN mes (origin «mes»); en Acumulado/Tendencias/
@@ -946,7 +953,10 @@
       const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
       const ref = refs && refs.months > 0 ? refs[refKey][key] : undefined;
       const pct = L.refPct(g.total, ref);
-      const chartRows = found && periodMonths.length > 1 ? await txOf(from, to, tipo, "g", g.group) : null;
+      const [chartRows, bareRows] = await Promise.all([
+        found && periodMonths.length > 1 ? txOf(from, to, tipo, "g", g.group) : null,
+        bare ? txOf(from, to, tipo, "c", g.group) : null,
+      ]);
       const chart = chartRows ? monthlyChart(chartRows, periodMonths, tipo, g.group,
         (m) => go(H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "g", g.group, "mov"))) : null;
       return [
@@ -958,14 +968,16 @@
               : "Sin movimientos en este periodo." }),
             refGauge(L.colorFor(key), pct, refs ? refs.months : null, ref)]),
           ...(chart || []),
-          found ? el("h2", { textContent: "Por subcategoría" }) : null,
-          found ? el("div", { className: "cards" }, g.categories.map((c) => el("button", { className: "gcard", type: "button",
+          subcats.length ? el("h2", { textContent: "Por subcategoría" }) : null,
+          subcats.length ? el("div", { className: "cards" }, subcats.map((c) => el("button", { className: "gcard", type: "button",
             onclick: () => go(H("rango", origin, from, to, tipo, "c", c.category)) }, [
             el("span", { className: "dot", style: { background: L.colorFor(c.category) } }),
             el("span", { className: "n", textContent: c.label }),
             el("span", { className: "s", textContent: `${L.share(c.total, g.total)} % · ${c.count} mov.` }),
             el("span", { className: `v${c.total < 0 ? " neg" : ""}` }, amt(c.total)),
           ]))) : null,
+          bareRows ? el("h2", { textContent: "Sin subcategoría" }) : null,
+          ...(bareRows ? txPanel(bareRows, tipo, false) : []),
           found ? el("button", { className: "link", type: "button", textContent: `Ver los ${g.count} movimientos`,
             onclick: () => go(H("rango", origin, from, to, tipo, "g", g.group, "mov")) }) : null,
         ]),
