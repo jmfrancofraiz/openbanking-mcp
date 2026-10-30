@@ -178,17 +178,13 @@ h2 { font-family:Georgia,serif; font-weight:400; font-size:1.2rem; margin:22px 0
 .sbar { grid-column:1 / -1; height:4px; margin-top:7px; border-radius:2px; background:var(--track); overflow:hidden; }
 .sbar i { display:block; height:100%; background:var(--good); opacity:.75; }
 
-/* tendencias */
-.tcard { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px; margin-bottom:10px; }
-.tcard .h { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
-.tcard .h b { font-size:1.02rem; }
-.tcard .t { font-size:.8rem; white-space:nowrap; }
-.tcard .s { font-size:.8rem; color:var(--muted); margin:2px 0 6px; }
+/* gráfica «Por mes» (barras de una serie mensual) */
+.tstat { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin:0 0 6px; }
+.tstat .s { font-size:.8rem; color:var(--muted); }
+.tstat .t { font-size:.8rem; font-weight:600; white-space:nowrap; }
 .mini { display:block; width:100%; height:auto; }
 .tsel { font-size:.85rem; margin-top:4px; display:flex; justify-content:space-between; align-items:center; gap:8px; min-height:36px; }
 .tsel button { border:0; background:none; color:var(--accent-text); font-weight:600; cursor:pointer; min-height:36px; }
-.selrow { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
-.dot2 { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
 .backdrop { position:fixed; inset:0; z-index:30; background:#0006; display:flex; align-items:flex-end; }
 .sheet { width:100%; max-height:80vh; overflow-y:auto; background:var(--bg); border-radius:18px 18px 0 0; padding:8px 14px 18px; }
 .sheet .grab { width:40px; height:4px; border-radius:2px; background:var(--line); margin:4px auto 6px; }

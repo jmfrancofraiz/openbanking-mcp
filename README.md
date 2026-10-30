@@ -235,8 +235,8 @@ Abre `http://<IP>:8790/` en el navegador e introduce el PIN.
 
 - **Diario:** el saldo de cada cuenta y el total, y la lista de todos los movimientos, con filtros y el detalle de cada uno.
 - **Mes:** ingresos y gastos del mes por categoría.
-- **Evolución:** el mes frente a los anteriores, los acumulados y la comparación entre periodos.
-- **Tendencias:** la evolución de 12 meses de las categorías de gasto o de ingreso que elijas.
+- **Ahorro:** el gasto del mes en curso frente a los anteriores, y los ingresos, gastos y ahorro de cada mes.
+- **Evolución:** el análisis por categoría de un periodo y la comparación entre periodos.
 
 Las cifras siguen los criterios de `finmcp summary`: los movimientos no computables no cuentan y
 las devoluciones se restan del gasto de su categoría.

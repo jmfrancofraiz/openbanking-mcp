@@ -368,14 +368,37 @@ test("tirar para sincronizar: solo la lista del Diario (y lo que cae en ella) pu
     assert.equal(L.pullEnabled(v(h)), true, h);
   }
   // El resto de vistas, no: pestañas, listas de movimientos de un periodo y detalle de un movimiento.
-  const otras = { "#/mes/2026-10/gastos": "mes", "#/mes": "mes", "#/evolucion": "evolucion", "#/evolucion/acumulado": "evolucion",
-    "#/tendencias": "tendencias", "#/rango/tendencias/2026-09-01/2026-09-30/gastos/g/Vivienda/mov": "rango",
+  const otras = { "#/mes/2026-10/gastos": "mes", "#/mes": "mes", "#/ahorro": "ahorro", "#/evolucion": "evolucion",
+    "#/evolucion/acumulado": "evolucion", "#/evolucion/periodo/mes": "evolucion",
+    "#/rango/acumulado/2026-09-01/2026-09-30/gastos/g/Vivienda/mov": "rango",
     "#/diario/mov/abc-123": "movimiento" };
   for (const [h, view] of Object.entries(otras)) {
     assert.equal(v(h), view, h);
     assert.equal(L.pullEnabled(v(h)), false, h);
   }
   assert.equal(L.pullEnabled(""), false); // cargando, error o PIN: nada en pantalla
+});
+
+test("rutas antiguas: Ahorro mensual (antes en Evolución) y Tendencias (retirada) siguen abriendo algo con sentido", () => {
+  const v = (hash) => L.viewOf(L.parseHash(hash));
+  assert.equal(v("#/evolucion/meses"), "ahorro");                 // la subpestaña es ahora la pestaña Ahorro
+  assert.equal(v("#/tendencias"), "evolucion");                   // su gráfica vive en Evolución › Análisis por categoría
+  assert.equal(v("#/rango/tendencias/2026-09-01/2026-09-30/gastos/g/Vivienda/mov"), "rango"); // enlaces viejos a movimientos
+  for (const h of ["#/ahorro", "#/evolucion/meses", "#/tendencias"]) assert.equal(L.pullEnabled(v(h)), false, h);
+});
+
+test("seriesStats: media, último y máximo solo de los meses cerrados (el mes en curso no cuenta)", () => {
+  const months = ["2026-06", "2026-07", "2026-08", "2026-09", "2026-10"];
+  const st = L.seriesStats([100, 300, 300, 200, 999], months, "2026-10");
+  assert.deepEqual(st.closed, [100, 300, 300, 200]);
+  assert.equal(st.avg, 225);
+  assert.equal(st.last, 200);
+  assert.equal(st.max, 300);
+  assert.equal(st.maxMonth, "2026-07");                           // a igualdad, el primero
+  // Sin mes en curso en la serie, cuentan todos; valores ausentes valen 0.
+  assert.deepEqual(L.seriesStats([5, undefined], ["2026-01", "2026-02"], "2026-10").closed, [5, 0]);
+  // Solo el mes en curso: no hay cifras.
+  assert.equal(L.seriesStats([50], ["2026-10"], "2026-10"), null);
 });
 
 test("saldos: la cifra se parte en dígitos que ruedan y símbolos fijos", () => {

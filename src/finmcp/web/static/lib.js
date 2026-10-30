@@ -314,11 +314,15 @@
     });
   }
 
-  // Vista que pinta una ruta (ya con parseHash): «mes», «evolucion», «tendencias», «rango» (movimientos de un periodo),
+  // Vista que pinta una ruta (ya con parseHash): «mes», «ahorro», «evolucion», «rango» (movimientos de un periodo),
   // «movimiento» (detalle del Diario) o «diario» (la lista, que además es la de las rutas desconocidas o incompletas).
+  // Rutas antiguas: «#/evolucion/meses» (Ahorro mensual era una subpestaña de Evolución) pinta Ahorro, y
+  // «#/tendencias» (pestaña retirada; su gráfica está en Evolución › Análisis por categoría) pinta Evolución.
   function viewOf(p) {
     const top = p[0] || "diario";
-    if (top === "mes" || top === "evolucion" || top === "tendencias") return top;
+    if (top === "mes" || top === "ahorro") return top;
+    if (top === "evolucion") return p[1] === "meses" ? "ahorro" : "evolucion";
+    if (top === "tendencias") return "evolucion";
     if (top === "rango" && p.length >= 7) return "rango";
     if (top === "diario" && p[1] === "mov" && p[2]) return "movimiento";
     return "diario";
@@ -409,6 +413,19 @@
     return `${cap(parts.join(" · "))}.`;
   }
 
+  // Cifras de una serie mensual sobre sus meses CERRADOS (el mes en curso es parcial y no cuenta):
+  // media, último mes cerrado, máximo y su mes. `closed` son esos valores, en orden, para `trendOf`.
+  // `null` si no hay ningún mes cerrado.
+  function seriesStats(vals, months, current) {
+    const closed = months.map((m, i) => [m, vals[i] || 0]).filter(([m]) => m !== current);
+    if (!closed.length) return null;
+    const xs = closed.map(([, v]) => v);
+    let maxI = 0;
+    xs.forEach((v, i) => { if (v > xs[maxI]) maxI = i; });
+    return { closed: xs, avg: xs.reduce((a, v) => a + v, 0) / xs.length, last: xs[xs.length - 1],
+      max: xs[maxI], maxMonth: closed[maxI][0] };
+  }
+
   // Tendencia de una categoría: media de los 3 últimos meses cerrados frente a los anteriores (hasta 9).
   // `invert`: para categorías de ingreso, subir es «better» y bajar es «worse» (al revés que en gasto).
   function trendOf(closedVals, invert = false) {
@@ -458,7 +475,7 @@
     PULL, pullDistance, pullZone, waitLabel, syncResult, viewOf, pullEnabled,
     totalNote, figureChars, TAPE_LEN, odoTape, rollDelay,
     periodsOf, comparisonCut, periodRange, accumulatedMonths,
-    PACE_REFS, paceRefs, verdict, trendOf, diffGroups, diffSubcategories,
+    PACE_REFS, paceRefs, verdict, seriesStats, trendOf, diffGroups, diffSubcategories,
     nextTheme, isDarkTheme,
   };
 });

@@ -2,8 +2,8 @@
 /* Panel finmcp · interfaz (variante B «Relato del mes»).
    Diario (pestaña de apertura): último saldo de cada cuenta y lista plana de todos los movimientos, sin agregaciones.
    Mes: ingresos y gastos del mes seleccionado, sin comparaciones (solo minigráficas de 6 meses).
-   Evolución: «Ahorro mensual», «Análisis por categoría» y «Periodo contra periodo». Tendencias: una tarjeta por categoría
-   (de gasto o de ingreso, a elección).
+   Ahorro: ritmo de gasto del mes en curso, ingresos y gastos por mes y el ahorro de cada mes.
+   Evolución: «Análisis por categoría» y «Periodo contra periodo».
    Los importes llegan calculados de la API de solo lectura (/api/*); aquí solo se presentan.
    Única acción: tirar hacia abajo desde arriba del todo de la lista del Diario pide sincronizar con los bancos y recarga los datos. */
 (() => {
@@ -13,7 +13,8 @@
   const SVGNS = "http://www.w3.org/2000/svg";
   const INC = "#147a70", EXP = "#c0663b", VARC = "#e8b89c";
   // En el dispositivo solo se guardan preferencias, nunca cifras.
-  const PREF = { split: "finmcp.split", trend: "finmcp.trend" };
+  const PREF = { split: "finmcp.split" };
+  try { localStorage.removeItem("finmcp.trend"); } catch { /* selección de la antigua pestaña Tendencias, ya retirada */ }
   const THEME_KEY = "finmcp.theme";
 
   // Colores de gráficos SVG dibujados a mano: no siguen la cascada CSS (son atributos `fill`/`stroke`,
@@ -156,8 +157,8 @@
     return el("nav", { className: "nav" }, [
       item("diario", "Diario", "M9 6h12M9 12h12M9 18h12M3.5 5.5h1v1h-1zM3.5 11.5h1v1h-1zM3.5 17.5h1v1h-1z", "#/diario"),
       item("mes", "Mes", "M12 3a9 9 0 1 0 9 9h-9zM15 3.5A9 9 0 0 1 20.5 9H15z", H("mes", CUR, "gastos")),
+      item("ahorro", "Ahorro", "M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.16 3.16 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1zM15.5 10a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0M2 8v1a2 2 0 0 0 2 2h1", "#/ahorro"),
       item("evolucion", "Evolución", "M5 20V11M11 20V5M17 20v-7M3 20h18", "#/evolucion"),
-      item("tendencias", "Tendencias", "M3 16l5-5 4 4 8-8M3 20h18", "#/tendencias"),
     ]);
   }
 
@@ -423,8 +424,9 @@
     ];
   }
 
-  // Barras mensuales de una categoría o subcategoría (Evolución › Acumulado), al estilo de Tendencias:
-  // una barra por mes del periodo y media discontinua. Al tocar una barra:
+  // Barras mensuales de una categoría o subcategoría (Evolución › Análisis por categoría): una barra por mes del
+  // periodo (el mes en curso, rayado), media discontinua de los meses cerrados y, encima, sus cifras (media, último
+  // mes, máximo) y la tendencia (lo que aportaba la antigua pestaña Tendencias). Al tocar una barra:
   //  · sin `onPick` (ficha de la categoría, sin lista debajo): enlace «Ver movimientos ›» de ese mes (`onMonth`);
   //  · con `onPick(mes|null)` (pantalla de movimientos, con la lista debajo): avisa del mes elegido para que la
   //    lista lo resalte y atenúe el resto, sin salir de la pantalla; tocarla otra vez o «Quitar» lo deshace.
@@ -434,19 +436,32 @@
     if (months.length < 2) return null; // un solo mes: no aporta nada mostrar una gráfica
     const sign = tipo === "gastos" ? -1 : 1; // igual criterio que el total de la cabecera (ghead)
     let vals = L.monthlyTotals(rows, months, sign);
-    const avgOf = () => vals.reduce((a, v) => a + v, 0) / vals.length;
+    const statsOf = () => L.seriesStats(vals, months, CUR);
+    const avgOf = () => { const st = statsOf(); return st ? st.avg : 0; };
     const color = L.colorFor(colorKey);
     let sel = -1;
     const chartBox = el("div", { className: "chart-scroll", attrs: { "data-noswipe": "1" } });
+    const statLine = el("div", { className: "tstat" });
     const selLine = el("div", { className: "tsel" });
     const pick = (i) => { sel = i; paintChart(); paintSel(); if (onPick) onPick(sel >= 0 ? months[sel] : null); };
+    // Cifras de los meses cerrados y tendencia (3 últimos frente a los anteriores del periodo). En No computables
+    // no hay tendencia: subir o bajar no es ni mejor ni peor.
+    const paintStats = () => {
+      const st = statsOf();
+      const tr = st && tipo !== "no-computables" ? L.trendOf(st.closed, tipo === "ingresos") : null;
+      statLine.replaceChildren(...(st ? [
+        el("span", { className: "s" }, ["Media ", amt(st.avg), "/mes · último mes ", amt(st.last),
+          " · máx. ", amt(st.max), ` (${L.monthShort(st.maxMonth)})`]),
+        tr && tr.text ? el("span", { className: `t ${tr.tone}`, textContent: tr.text }) : null,
+      ].filter(Boolean) : []));
+    };
     const paintSel = () => {
       const action = !onPick
         ? (Math.abs(vals[sel]) >= 0.005 ? el("button", { type: "button", textContent: "Ver movimientos ›",
             onclick: () => onMonth(months[sel]) }) : "")
         : el("button", { type: "button", textContent: "Quitar", onclick: () => pick(-1) });
       selLine.replaceChildren(sel >= 0
-        ? el("span", {}, [`${L.monthLabel(months[sel])}: `, amt(vals[sel]), action])
+        ? el("span", {}, [`${L.monthLabel(months[sel])}${months[sel] === CUR ? ` (a día ${CUT.day})` : ""}: `, amt(vals[sel]), action])
         : el("span", { className: "muted", textContent: onPick
           ? "Toque una barra para resaltar ese mes en la lista." : "Toque una barra para ver ese mes." }));
     };
@@ -458,10 +473,11 @@
       chartBox.scrollLeft = left;
     };
     paintChart();
+    paintStats();
     paintSel();
     requestAnimationFrame(() => { chartBox.scrollLeft = chartBox.scrollWidth; }); // meses recientes a la vista
-    const update = (newRows) => { vals = L.monthlyTotals(newRows, months, sign); paintChart(); paintSel(); };
-    return { nodes: [el("h2", { textContent: "Por mes" }), el("div", { className: "card" }, [chartBox, selLine])], update };
+    const update = (newRows) => { vals = L.monthlyTotals(newRows, months, sign); paintChart(); paintStats(); paintSel(); };
+    return { nodes: [el("h2", { textContent: "Por mes" }), el("div", { className: "card" }, [statLine, chartBox, selLine])], update };
   }
 
   // `hl` (AAAA-MM, opcional): mes resaltado; los movimientos de otros meses —y sus cabeceras de día— se
@@ -937,7 +953,9 @@
     const [, origin, from, to, tipo0, kind, key, extra] = p;
     const tipo = tipoOf(tipo0);
     const label = L.rangeLabel(from, to);
-    const navKey = ["mes", "evolucion", "tendencias"].includes(origin) ? origin : origin === "acumulado" ? "evolucion" : "mes";
+    // Pestaña de la barra inferior que se marca. «acumulado» es Evolución › Análisis por categoría; «tendencias»
+    // (enlaces de la pestaña retirada) también cae en Evolución, donde está ahora su gráfica.
+    const navKey = ["evolucion", "acumulado", "tendencias"].includes(origin) ? "evolucion" : "mes";
     // Solo en Evolución › Acumulado (petición del Señor, 24-oct-2026): meses del periodo para la
     // minigráfica mensual. Meses cerrados dentro de [from,to], más el mes en curso si el periodo
     // llega hasta hoy (año actual/todo, 25-oct-2026): `miniBars` ya pinta ese mes con la trama
@@ -964,8 +982,8 @@
       const bare = g.categories.find((c) => c.category === g.group);
       // Mediana de los últimos 12 meses cerrados, igual que en Mes (28-oct-2026, petición del
       // Señor: verla también al entrar en la categoría, no solo en el fondo de su fila de la
-      // lista). Solo tiene sentido comparando UN mes (origin «mes»); en Acumulado/Tendencias/
-      // Periodo el total ya es de varios meses y no hay «mes mostrado» con el que pedir la
+      // lista). Solo tiene sentido comparando UN mes (origin «mes»); en Acumulado o Periodo
+      // el total ya es de varios meses y no hay «mes mostrado» con el que pedir la
       // referencia.
       const refs = origin === "mes" ? await referencesOf(from.slice(0, 7)) : null;
       const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
@@ -1037,7 +1055,7 @@
     ];
   }
 
-  /* ---------- Evolución › Ahorro mensual ---------- */
+  /* ---------- Ahorro: ritmo del mes en curso, ingresos y gastos por mes y ahorro de cada mes ---------- */
 
   function trendPill(d) {
     if (d.flat) return el("span", { className: "trend flat", textContent: "≈ igual" });
@@ -1096,8 +1114,11 @@
       list.push(monthRow(r));
     }
     const refSpan = (r) => (r.n === 1 ? L.monthLabel(r.ms[0]) : `${L.monthInitial(r.ms[0])}–${L.monthShort(r.ms[r.ms.length - 1])}`);
+    // Gráfica de todos los meses, de más antiguo a más reciente (con desplazamiento lateral, abierta en los últimos).
+    const chartRows = MONTHS.map((m) => fullBy.get(m)).filter(Boolean);
     return [
       hero,
+      ...incomeExpenseChart(chartRows),
       el("h2", { textContent: "Ahorro mes a mes" }),
       el("p", { className: "muted lead2" }, ["Ahorro medio: ", amt(avgNet), ` al mes en ${closedRows.length} meses cerrados. Toque un mes para ver su detalle.`]),
       ...list,
@@ -1109,7 +1130,11 @@
     ];
   }
 
-  /* ---------- Evolución › Acumulado ---------- */
+  async function savingsView() {
+    return [topbar("Ahorro"), el("main", {}, await paceView()), nav("ahorro")];
+  }
+
+  /* ---------- Ahorro › Ingresos y gastos por mes ---------- */
 
   function barsChart(rows, { split, selected, onSelect }) {
     const colW = rows.length <= 13 ? Math.max(27, Math.min(64, Math.floor(320 / rows.length))) : 30;
@@ -1161,6 +1186,35 @@
     ]);
   }
 
+  // Ingresos, gastos (o recibos + variable, con «Separar recibos») y ahorro de cada mes; tocar un mes da sus cifras.
+  function incomeExpenseChart(rows) {
+    let split = localStorage.getItem(PREF.split) === "1";
+    let selIdx = -1;
+    const chartBox = el("div", { className: "chart-scroll", attrs: { "data-noswipe": "1" } });
+    const legend = el("div", { className: "legend2" });
+    const selBox = el("div", { className: "detail" });
+    const paintChart = () => {
+      const left = chartBox.scrollLeft; // repintar (tocar un mes, separar recibos) no debe mover el desplazamiento lateral
+      chartBox.replaceChildren(barsChart(rows, { split, selected: selIdx, onSelect: (i) => { selIdx = selIdx === i ? -1 : i; paintChart(); } }));
+      chartBox.scrollLeft = left;
+      selBox.replaceChildren(selIdx >= 0 ? monthCard(rows[selIdx]) : el("p", { className: "hint2", textContent: "Toque un mes para ver sus cifras." }));
+      legend.replaceChildren(...[
+        el("span", {}, [el("i", { style: { background: INC } }), "Ingresos"]),
+        el("span", {}, [el("i", { style: { background: EXP } }), split ? "Recibos" : "Gastos"]),
+        split ? el("span", {}, [el("i", { style: { background: VARC } }), "Variable"]) : null,
+        el("span", { textContent: "● Ahorro" }),
+        el("button", { type: "button", className: `switch${split ? " on" : ""}`, textContent: split ? "Recibos ✓" : "Separar recibos",
+          attrs: { "aria-pressed": String(split) },
+          onclick: () => { split = !split; localStorage.setItem(PREF.split, split ? "1" : "0"); paintChart(); } }),
+      ].filter(Boolean));
+    };
+    paintChart();
+    requestAnimationFrame(() => { chartBox.scrollLeft = chartBox.scrollWidth; }); // meses recientes a la vista
+    return [el("h2", { textContent: "Ingresos y gastos por mes" }), el("div", { className: "chart-card" }, [legend, chartBox]), selBox];
+  }
+
+  /* ---------- Evolución › Análisis por categoría (ruta «acumulado») ---------- */
+
   async function accumulatedView(p) {
     const period = ACC_PERIODS.some(([k]) => k === p[2]) ? p[2] : "3";
     const tipo = tipoOf(p[3]);
@@ -1177,32 +1231,9 @@
     const includesCurrent = months[n - 1] === CUR;
     const closedCount = includesCurrent ? n - 1 : n;
     const from = L.monthStart(months[0]), to = includesCurrent ? TODAY : L.monthEnd(months[n - 1]);
-    const [full, b] = await Promise.all([monthlyRows(), breakdownOf(from, to)]);
-    const by = new Map(full.map((r) => [r.month, r]));
-    const rows = months.map((m) => by.get(m)).filter(Boolean);
+    const b = await breakdownOf(from, to);
     const aggs = aggsOf(b);
     const inc = b.income.total, exp = b.expense.total, net = b.net, bills = b.bills;
-
-    let split = localStorage.getItem(PREF.split) === "1";
-    let selIdx = -1;
-    const chartBox = el("div", { className: "chart-scroll", attrs: { "data-noswipe": "1" } });
-    const legend = el("div", { className: "legend2" });
-    const selBox = el("div", { className: "detail" });
-    const paintChart = () => {
-      chartBox.replaceChildren(barsChart(rows, { split, selected: selIdx, onSelect: (i) => { selIdx = selIdx === i ? -1 : i; paintChart(); } }));
-      selBox.replaceChildren(selIdx >= 0 ? monthCard(rows[selIdx]) : el("p", { className: "hint2", textContent: "Toque un mes para ver sus cifras." }));
-      legend.replaceChildren(...[
-        el("span", {}, [el("i", { style: { background: INC } }), "Ingresos"]),
-        el("span", {}, [el("i", { style: { background: EXP } }), split ? "Recibos" : "Gastos"]),
-        split ? el("span", {}, [el("i", { style: { background: VARC } }), "Variable"]) : null,
-        el("span", { textContent: "● Ahorro" }),
-        el("button", { type: "button", className: `switch${split ? " on" : ""}`, textContent: split ? "Recibos ✓" : "Separar recibos",
-          attrs: { "aria-pressed": String(split) },
-          onclick: () => { split = !split; localStorage.setItem(PREF.split, split ? "1" : "0"); paintChart(); } }),
-      ].filter(Boolean));
-    };
-    paintChart();
-    requestAnimationFrame(() => { chartBox.scrollLeft = chartBox.scrollWidth; });
     const stat = (t, v) => el("div", { className: "hstat" }, [el("span", { className: "t", textContent: t }), el("span", { className: "v amt", textContent: eur0.format(v) })]);
     const billsPct = exp > 0 ? Math.max(0, Math.min(100, (bills / exp) * 100)) : 0;
     return [
@@ -1216,9 +1247,6 @@
         el("div", { className: "hstats" }, [stat("Ingresos", inc), stat("Gastos", exp), stat("Ahorro", net)]),
         el("div", { className: "sub avg" }, ["Al mes: ingresos ", amt(inc / n), " · gastos ", amt(exp / n), " · ahorro ", amt(net / n)]),
       ]),
-      el("h2", { textContent: "Ingresos y gastos por mes" }),
-      el("div", { className: "chart-card" }, [legend, chartBox]),
-      selBox,
       el("h2", { textContent: "Acumulado por categoría" }),
       subtabs([["ingresos", "Ingresos", aggs.ingresos.total], ["gastos", "Gastos", aggs.gastos.total],
                ["no-computables", "No computables", aggs["no-computables"].total]], tipo, (t) => nav2(period, t, true)),
@@ -1353,12 +1381,12 @@
   }
 
   async function evolutionView(p) {
-    const mode = ["acumulado", "periodo"].includes(p[1]) ? p[1] : "meses";
-    const body = mode === "periodo" ? await periodView(p) : mode === "acumulado" ? await accumulatedView(p) : await paceView();
+    const mode = p[1] === "periodo" ? "periodo" : "acumulado";
+    const body = mode === "periodo" ? await periodView(p) : await accumulatedView(p);
     return [
       topbar("Evolución"),
       el("main", {}, [
-        subtabs([["meses", "Ahorro mensual"], ["acumulado", "Análisis por categoría"], ["periodo", "Periodo contra periodo"]], mode,
+        subtabs([["acumulado", "Análisis por categoría"], ["periodo", "Periodo contra periodo"]], mode,
           (k) => go(H("evolucion", k), { replace: true }), "tabs2 tabs3"),
         ...body,
       ]),
@@ -1366,16 +1394,12 @@
     ];
   }
 
-  /* ---------- Tendencias ---------- */
-
-  let trendSel = null;
-  try { trendSel = JSON.parse(localStorage.getItem(PREF.trend) || "null"); } catch { trendSel = null; }
-  const trendPick = {};
+  /* ---------- barras de una serie mensual (gráfica «Por mes» de Evolución › Análisis por categoría) ---------- */
 
   function miniBars(vals, months, { color, avg, selected, onSelect, scroll = false }) {
     // `scroll`: con muchos meses (p. ej. Acumulado › Todo), ensancha el SVG más allá del contenedor
     // (fijando su anchura real, no solo el viewBox) para que las barras no se aplasten; el contenedor
-    // debe tener `chart-scroll`. Con pocos meses (Tendencias, 13 siempre) no cambia nada.
+    // debe tener `chart-scroll`. Con pocos meses no cambia nada.
     const n = vals.length;
     const w = scroll ? Math.max(330, n * 22) : 330, h = 96, padT = 8, padB = 16;
     const colW = (w - 8) / n, bw = Math.min(16, colW - 6);
@@ -1401,86 +1425,6 @@
       root.append(hit);
     });
     return root;
-  }
-
-  function openPicker(options, totals, nMonths, kindOf, onPick) {
-    const close = () => sheet.remove();
-    const card = (g) => el("button", { className: "gcard", type: "button", onclick: () => { close(); onPick(g); } }, [
-      el("span", { className: "dot", style: { background: L.colorFor(g) } }), el("span", { className: "n", textContent: g }),
-      el("span", { className: "s" }, [`${nMonths} meses: `, amt(totals[g])]),
-      el("span", { className: "v" }, [amt(totals[g] / Math.max(1, nMonths)), el("span", { className: "s", textContent: "al mes" })]),
-    ]);
-    const section = (title, opts) => (opts.length
-      ? [el("h2", { textContent: title }), el("div", { className: "cards" }, opts.map(card))] : []);
-    const expenseOpts = options.filter((g) => kindOf(g) === "gastos");
-    const incomeOpts = options.filter((g) => kindOf(g) === "ingresos");
-    const sheet = el("div", { className: "backdrop", onclick: (e) => { if (e.target === e.currentTarget) close(); } }, el("div", { className: "sheet", attrs: { role: "dialog", "aria-label": "Añadir categoría" } }, [
-      el("div", { className: "grab" }),
-      el("h2", { textContent: "Añadir categoría" }),
-      options.length ? el("div", {}, [...section("Gastos", expenseOpts), ...section("Ingresos", incomeOpts)])
-        : el("p", { className: "muted", textContent: "No quedan más categorías." }),
-    ]));
-    document.body.append(sheet);
-  }
-
-  async function trendsView() {
-    const last12 = CLOSED.slice(-12);
-    const months = [...last12, CUR];
-    const ser = await seriesOf(months[0], CUR);
-    const idx = new Map(ser.months.map((m, i) => [m, i]));
-    const kindOf = (g) => (g in ser.income ? "ingresos" : "gastos");
-    const seriesFor = (g) => (kindOf(g) === "ingresos" ? ser.income : ser.expense);
-    const gv = (g, m) => { const s = seriesFor(g)[g]; return (s ? s[idx.get(m)] : 0) || 0; };
-    const allGroups = [...new Set([...Object.keys(ser.income), ...Object.keys(ser.expense)])];
-    const tot12 = Object.fromEntries(allGroups.map((g) => [g, sum(last12.map((m) => gv(g, m)))]));
-    const ranked = allGroups.filter((g) => tot12[g] > 0).sort((a, b) => tot12[b] - tot12[a]);
-    // Por defecto, las 5 categorías de gasto de mayor importe (como siempre); el ingreso se añade a mano.
-    if (!Array.isArray(trendSel)) trendSel = ranked.filter((g) => kindOf(g) === "gastos").slice(0, 5);
-    trendSel = trendSel.filter((g) => allGroups.includes(g));
-    const save = () => localStorage.setItem(PREF.trend, JSON.stringify(trendSel));
-    const card = (g) => {
-      const kind = kindOf(g);
-      const vals = months.map((m) => gv(g, m));
-      const closedVals = vals.slice(0, -1);
-      const avg = closedVals.length ? sum(closedVals) / closedVals.length : 0;
-      const tr = L.trendOf(closedVals, kind === "ingresos");
-      const maxI = closedVals.length ? closedVals.indexOf(Math.max(...closedVals)) : -1;
-      const pick = trendPick[g];
-      const selLine = el("div", { className: "tsel" });
-      if (pick !== undefined) {
-        const m = months[pick];
-        selLine.append(el("span", {}, [L.monthLabel(m) + (m === CUR ? ` (a día ${CUT.day})` : "") + ": ", amt(vals[pick])]),
-          Math.abs(vals[pick]) >= 0.005 ? el("button", { type: "button", textContent: "Ver movimientos ›",
-            onclick: () => go(H("rango", "tendencias", L.monthStart(m), L.monthEnd(m), kind, "g", g, "mov")) }) : "");
-      } else {
-        selLine.append(el("span", { className: "muted", textContent: "Toque una barra para ver ese mes." }));
-      }
-      return el("div", { className: "tcard" }, [
-        el("div", { className: "h" }, [el("b", { textContent: g }), el("span", { className: `t ${tr.tone}`, textContent: tr.text })]),
-        closedVals.length ? el("div", { className: "s" }, ["Media ", amt(avg), "/mes · último mes ", amt(closedVals[closedVals.length - 1]),
-          " · máx. ", amt(closedVals[maxI]), ` (${L.monthInitial(months[maxI])})`]) : null,
-        el("div", { attrs: { "data-noswipe": "1" } }, miniBars(vals, months, { color: L.colorFor(g), avg, selected: pick,
-          onSelect: (i) => { trendPick[g] = trendPick[g] === i ? undefined : i; render({ keep: true }); } })),
-        selLine,
-      ]);
-    };
-    return [
-      topbar("Tendencias"),
-      el("main", {}, [
-        el("div", { className: "selrow" }, [
-          ...trendSel.map((g) => el("button", { type: "button", className: "chip on", attrs: { "aria-label": `Quitar ${g}` },
-            onclick: () => { trendSel = trendSel.filter((x) => x !== g); save(); render({ keep: true }); } },
-          [el("span", { className: "dot2", style: { background: L.colorFor(g) } }), `${g} ✕`])),
-          el("button", { type: "button", className: "chip", textContent: "＋ Añadir",
-            onclick: () => openPicker(ranked.filter((g) => !trendSel.includes(g)), tot12, last12.length, kindOf,
-              (g) => { trendSel = [...trendSel, g]; save(); render({ keep: true }); }) }),
-        ]),
-        trendSel.length ? null : el("p", { className: "muted empty", textContent: "Añada una categoría para ver su evolución." }),
-        ...trendSel.map(card),
-        el("footer", { className: "note" }, [el("p", { textContent: `Últimos ${last12.length} meses cerrados y ${L.monthLabel(CUR)} a día ${CUT.day} (rayado). Cada tarjeta tiene su propia escala; la línea discontinua es la media de los meses cerrados.` })]),
-      ]),
-      nav("tendencias"),
-    ];
   }
 
   /* ---------- PIN ---------- */
@@ -1705,8 +1649,8 @@
     let view, shown = "";
     try {
       if (kind === "mes") view = await monthView(MONTHS.includes(p[1]) ? p[1] : CUR, tipoOf(p[2]));
+      else if (kind === "ahorro") view = await savingsView();
       else if (kind === "evolucion") view = await evolutionView(p);
-      else if (kind === "tendencias") view = await trendsView();
       else if (kind === "rango") view = await rangeView(p);
       else if (kind === "movimiento") view = await movementView(p[2]);
       else view = await diaryView(top === "diario" ? p[1] : "");
