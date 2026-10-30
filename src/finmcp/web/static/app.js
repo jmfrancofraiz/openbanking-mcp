@@ -1114,6 +1114,18 @@
     const mergeRows = (rows) => rows.forEach((r) => fullBy.set(r.month, r));
     mergeRows(await monthlyRows(undefined, `${oldestYear}-01`));
 
+    // «Ahorro medio» bajo «Ahorro mes a mes»: SIEMPRE los últimos 2 meses cerrados (30-oct-2026,
+    // petición del Señor: ni toda la BD ni el año cargado, una cifra fija y reciente), ajeno a
+    // cuántos años tenga expandida la lista de abajo. Normalmente ya están en el año en curso
+    // recién pedido (`mergeRows` de arriba); solo en enero/febrero hace falta un año anterior, y
+    // entonces se pide aparte, acotado a esos meses concretos (nunca toda la historia).
+    const avgMonths = CLOSED.slice(-2);
+    const missingAvg = avgMonths.filter((m) => !fullBy.has(m));
+    if (missingAvg.length) mergeRows(await monthlyRows(undefined, missingAvg[0], missingAvg[missingAvg.length - 1]));
+    const avgNet = avgMonths.length
+      ? sum(avgMonths.map((m) => (fullBy.get(m) ? fullBy.get(m).net : 0))) / avgMonths.length
+      : 0;
+
     const refSpan = (r) => (r.n === 1 ? L.monthLabel(r.ms[0]) : `${L.monthInitial(r.ms[0])}–${L.monthShort(r.ms[r.ms.length - 1])}`);
     const monthRow = (r, maxNet) => el("button", { className: `mrow2${r.partial ? " inprog" : ""}`, type: "button", onclick: () => go(H("mes", r.month, "gastos")) }, [
       el("span", { className: "ml" }, [
@@ -1137,7 +1149,6 @@
         .filter((r) => r.month);
       const closedRows = rows.filter((r) => !r.partial);
       const maxNet = Math.max(...closedRows.map((r) => r.net), 1);
-      const avgNet = closedRows.length ? sum(closedRows.map((r) => r.net)) / closedRows.length : 0;
       const list = [];
       let year = null;
       for (const r of rows) {
@@ -1180,7 +1191,7 @@
       body.replaceChildren(...[
         ...incomeExpenseChart(chartRows),
         el("h2", { textContent: "Ahorro mes a mes" }),
-        el("p", { className: "muted lead2" }, ["Ahorro medio: ", amt(avgNet), ` al mes en ${closedRows.length} meses cerrados. Toque un mes para ver su detalle.`]),
+        el("p", { className: "muted lead2" }, [`Ahorro medio de los últimos ${avgMonths.length} meses cerrados: `, amt(avgNet), ". Toque un mes para ver su detalle."]),
         ...list,
         moreBtn,
       ].filter(Boolean));
