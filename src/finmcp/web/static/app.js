@@ -1114,12 +1114,13 @@
     const mergeRows = (rows) => rows.forEach((r) => fullBy.set(r.month, r));
     mergeRows(await monthlyRows(undefined, `${oldestYear}-01`));
 
-    // «Ahorro medio» bajo «Ahorro mes a mes»: SIEMPRE los últimos 2 meses cerrados (30-oct-2026,
+    // «Ahorro medio» bajo «Ahorro mes a mes»: SIEMPRE los últimos 12 meses cerrados (30-oct-2026,
     // petición del Señor: ni toda la BD ni el año cargado, una cifra fija y reciente), ajeno a
-    // cuántos años tenga expandida la lista de abajo. Normalmente ya están en el año en curso
-    // recién pedido (`mergeRows` de arriba); solo en enero/febrero hace falta un año anterior, y
-    // entonces se pide aparte, acotado a esos meses concretos (nunca toda la historia).
-    const avgMonths = CLOSED.slice(-2);
+    // cuántos años tenga expandida la lista de abajo. Lo normal es que una parte ya esté en el
+    // año en curso recién pedido (`mergeRows` de arriba) y falten unos pocos meses del año
+    // anterior (justo los que faltan hasta completar 12, nunca toda su historia): esos se piden
+    // aparte, acotados a esos meses concretos.
+    const avgMonths = CLOSED.slice(-12);
     const missingAvg = avgMonths.filter((m) => !fullBy.has(m));
     if (missingAvg.length) mergeRows(await monthlyRows(undefined, missingAvg[0], missingAvg[missingAvg.length - 1]));
     const avgNet = avgMonths.length
