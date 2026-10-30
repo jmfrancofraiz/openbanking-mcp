@@ -241,6 +241,18 @@
     return { ...agg, groups };
   }
 
+  // Total por mes de una lista de movimientos (`date` AAAA-MM-DD, `amount` con signo del banco),
+  // en el orden de `months`; los meses sin movimientos valen 0 y los movimientos fuera de
+  // `months` no cuentan. `sign` −1 invierte el signo (gastos: un cargo suma en positivo).
+  function monthlyTotals(rows, months, sign = 1) {
+    const byMonth = new Map(months.map((m) => [m, 0]));
+    for (const t of rows) {
+      const m = t.date.slice(0, 7);
+      if (byMonth.has(m)) byMonth.set(m, byMonth.get(m) + t.amount);
+    }
+    return months.map((m) => sign * byMonth.get(m) + 0); // «+ 0»: un mes vacío da 0, no −0
+  }
+
   // Variación frente a una referencia. kind «cost»: subir es peor; «gain»: subir es mejor.
   // Sin cambio si |variación| < máx(5 €, 3 % de la referencia).
   function delta(cur, ref, kind) {
@@ -441,7 +453,7 @@
     ymOf, daysIn, monthStart, monthEnd, upTo, monthLabel, monthName, monthShort, monthInitial,
     dayLabel, dayShort, cap, rangeLabel, addDays, dayHeading, dayLong, localStamp, whenLabel,
     colorFor, share, shown, cleanTitle, titleOf, signedEur, topN, delta, parseHash,
-    refPct, fadeHex, refFill, withAllGroups,
+    refPct, fadeHex, refFill, withAllGroups, monthlyTotals,
     DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams, cuentaIds, toggleCuenta,
     PULL, pullDistance, pullZone, waitLabel, syncResult, viewOf, pullEnabled,
     totalNote, figureChars, TAPE_LEN, odoTape, rollDelay,

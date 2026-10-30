@@ -425,16 +425,13 @@
 
   // Barras mensuales de una categoría o subcategoría (Evolución › Acumulado), al estilo de Tendencias:
   // una barra por mes del periodo, media discontinua y, al tocar una barra, enlace a sus movimientos.
+  // Devuelve `{ nodes, update }`: `update(rows)` la recalcula con otro conjunto de movimientos (p. ej. lo
+  // que deja a la vista el buscador de la lista de abajo), conservando el mes seleccionado.
   function monthlyChart(rows, months, tipo, colorKey, onMonth) {
     if (months.length < 2) return null; // un solo mes: no aporta nada mostrar una gráfica
-    const byMonth = new Map(months.map((m) => [m, 0]));
-    for (const t of rows) {
-      const m = t.date.slice(0, 7);
-      if (byMonth.has(m)) byMonth.set(m, byMonth.get(m) + t.amount);
-    }
     const sign = tipo === "gastos" ? -1 : 1; // igual criterio que el total de la cabecera (ghead)
-    const vals = months.map((m) => sign * byMonth.get(m));
-    const avg = vals.reduce((a, v) => a + v, 0) / vals.length;
+    let vals = L.monthlyTotals(rows, months, sign);
+    const avgOf = () => vals.reduce((a, v) => a + v, 0) / vals.length;
     const color = L.colorFor(colorKey);
     let sel = -1;
     const chartBox = el("div", { className: "chart-scroll", attrs: { "data-noswipe": "1" } });
@@ -447,13 +444,16 @@
         : el("span", { className: "muted", textContent: "Toque una barra para ver ese mes." }));
     };
     const paintChart = () => {
-      chartBox.replaceChildren(miniBars(vals, months, { color, avg, selected: sel, scroll: true,
+      const left = chartBox.scrollLeft; // repintar no debe mover el desplazamiento horizontal
+      chartBox.replaceChildren(miniBars(vals, months, { color, avg: avgOf(), selected: sel, scroll: true,
         onSelect: (i) => { sel = sel === i ? -1 : i; paintChart(); paintSel(); } }));
+      chartBox.scrollLeft = left;
     };
     paintChart();
     paintSel();
     requestAnimationFrame(() => { chartBox.scrollLeft = chartBox.scrollWidth; }); // meses recientes a la vista
-    return [el("h2", { textContent: "Por mes" }), el("div", { className: "card" }, [chartBox, selLine])];
+    const update = (newRows) => { vals = L.monthlyTotals(newRows, months, sign); paintChart(); paintSel(); };
+    return { nodes: [el("h2", { textContent: "Por mes" }), el("div", { className: "card" }, [chartBox, selLine])], update };
   }
 
   function txList(rows, { byDay = true, showCat = false, income = false } = {}) {
@@ -482,8 +482,11 @@
 
   // Movimientos: buscador + orden + lista por días + resumen fijo con el total de lo filtrado.
   // Se abre siempre con la fecha descendente (lo más reciente primero), como el Diario.
-  function txPanel(rows, tipo, showCat) {
+  // `onFilter(filtrados)`: si se pasa, se le avisa cada vez que cambia el texto del buscador con los
+  // movimientos que quedan a la vista (p. ej. para recalcular la gráfica «Por mes» de encima).
+  function txPanel(rows, tipo, showCat, onFilter) {
     let sort = "desc";
+    let lastQ = "";
     // «income»: signo natural (sin invertir) y sin etiqueta «devolución/abono» — vale tanto para
     // Ingresos como para No computables (estos no tienen semántica de devolución).
     const income = tipo === "ingresos" || tipo === "no-computables";
@@ -495,6 +498,7 @@
     const paint = () => {
       const q = input.value.trim().toLowerCase();
       let r = rows.filter((t) => !q || [t.merchant, t.description, t.category, ...t.tags].join(" ").toLowerCase().includes(q));
+      if (onFilter && q !== lastQ) { lastQ = q; onFilter(r); }
       if (sort === "desc") r = [...r].reverse();
       if (sort === "amount") r = [...r].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
       const net = sum(r.map((t) => t.amount));
@@ -967,7 +971,7 @@
               ? `${g.count} movimientos · ${L.share(g.total, agg.total)} % de los ${word(tipo)}`
               : "Sin movimientos en este periodo." }),
             refGauge(L.colorFor(key), pct, refs ? refs.months : null, ref)]),
-          ...(chart || []),
+          ...(chart ? chart.nodes : []),
           subcats.length ? el("h2", { textContent: "Por subcategoría" }) : null,
           subcats.length ? el("div", { className: "cards" }, subcats.map((c) => el("button", { className: "gcard", type: "button",
             onclick: () => go(H("rango", origin, from, to, tipo, "c", c.category)) }, [
@@ -1008,8 +1012,10 @@
         el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(total) }),
           el("div", { className: "muted", textContent: `${rows.length} movimientos` }),
           refGauge(L.colorFor(key), pct, refs ? refs.months : null, ref)]),
-        ...(chart || []),
-        ...txPanel(rows, tipo, kind === "g"),
+        ...(chart ? chart.nodes : []),
+        // La gráfica «Por mes» sigue al buscador de la lista: solo suma los movimientos a la vista
+        // (petición del Señor, 30-oct-2026).
+        ...txPanel(rows, tipo, kind === "g", chart ? chart.update : undefined),
       ]),
       nav(navKey),
     ];

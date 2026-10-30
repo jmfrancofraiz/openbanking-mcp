@@ -420,3 +420,15 @@ test("saldos: el aviso del total dice de cuántas cuentas es y qué salvedades t
   assert.ok(L.totalNote({ ...base, disponible: ["Revolut"] }, today).length <= 65);
 });
 
+test("monthlyTotals: suma por mes en el orden dado, con signo y sin meses ajenos", () => {
+  const months = ["2026-07", "2026-08", "2026-09"];
+  const rows = [
+    { date: "2026-07-03", amount: -10 }, { date: "2026-07-20", amount: -5.5 },
+    { date: "2026-09-01", amount: 2 }, // devolución: resta del gasto
+    { date: "2026-06-30", amount: -99 }, // fuera de los meses: no cuenta
+  ];
+  assert.deepEqual(L.monthlyTotals(rows, months, -1), [15.5, 0, -2]);
+  assert.deepEqual(L.monthlyTotals(rows, months), [-15.5, 0, 2]);
+  // Filtrado vacío (el buscador no deja nada a la vista): todos los meses a 0, mismo largo.
+  assert.deepEqual(L.monthlyTotals([], months, -1), [0, 0, 0]);
+});
