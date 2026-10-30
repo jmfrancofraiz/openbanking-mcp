@@ -317,22 +317,23 @@
   // Rutas antiguas (ya con parseHash) → la ruta vigente que las sustituye, o null si la ruta ya es vigente:
   //  · «#/evolucion» y «#/evolucion/meses»: Ahorro mensual, que era la subpestaña por defecto de Evolución → Ahorro;
   //  · «#/evolucion/acumulado/<periodo>/<tipo>»: Análisis por categoría → Categorías con ese periodo;
+  //  · «#/evolucion/periodo/…»: Periodo contra periodo → Comparar, con los mismos periodos;
   //  · «#/tendencias»: pestaña retirada; su gráfica es la «Por mes» de cada categoría → Categorías, 1 año.
   function legacyRoute(p) {
     const [top, sub, ...rest] = p;
     if (top === "tendencias") return ["categorias", "12", "gastos"];
     if (top !== "evolucion") return null;
     if (sub === "acumulado") return ["categorias", ...rest];
-    if (sub === undefined || sub === "meses") return ["ahorro"];
-    return null;
+    if (sub === "periodo") return ["comparar", ...rest];
+    return ["ahorro"];
   }
 
   // Vista que pinta una ruta vigente (ya con parseHash): «mes» y «categorias» (pestaña Categorías: un mes o varios
-  // acumulados), «ahorro», «evolucion», «rango» (movimientos de un periodo), «movimiento» (detalle del Diario) o
+  // acumulados), «ahorro», «comparar», «rango» (movimientos de un periodo), «movimiento» (detalle del Diario) o
   // «diario» (la lista, que además es la de las rutas desconocidas o incompletas).
   function viewOf(p) {
     const top = p[0] || "diario";
-    if (top === "mes" || top === "categorias" || top === "ahorro" || top === "evolucion") return top;
+    if (top === "mes" || top === "categorias" || top === "ahorro" || top === "comparar") return top;
     if (top === "rango" && p.length >= 7) return "rango";
     if (top === "diario" && p[1] === "mov" && p[2]) return "movimiento";
     return "diario";

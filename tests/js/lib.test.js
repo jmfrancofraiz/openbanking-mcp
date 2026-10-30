@@ -369,7 +369,7 @@ test("tirar para sincronizar: solo la lista del Diario (y lo que cae en ella) pu
   }
   // El resto de vistas, no: pestañas, listas de movimientos de un periodo y detalle de un movimiento.
   const otras = { "#/mes/2026-10/gastos": "mes", "#/mes": "mes", "#/categorias/12/gastos": "categorias", "#/ahorro": "ahorro",
-    "#/evolucion/periodo": "evolucion", "#/evolucion/periodo/mes": "evolucion",
+    "#/comparar": "comparar", "#/comparar/trimestre/2026-T4/2026-T3/gastos": "comparar",
     "#/rango/acumulado/2026-09-01/2026-09-30/gastos/g/Vivienda/mov": "rango",
     "#/diario/mov/abc-123": "movimiento" };
   for (const [h, view] of Object.entries(otras)) {
@@ -385,11 +385,13 @@ test("rutas antiguas: se sustituyen por la pestaña que heredó su contenido", (
   assert.deepEqual(moved("#/evolucion/meses"), ["ahorro"]);
   assert.deepEqual(moved("#/evolucion/acumulado/12/ingresos"), ["categorias", "12", "ingresos"]); // conserva periodo y tipo
   assert.deepEqual(moved("#/evolucion/acumulado"), ["categorias"]);
+  assert.deepEqual(moved("#/evolucion/periodo/ano/2026/2025/ingresos"), ["comparar", "ano", "2026", "2025", "ingresos"]);
+  assert.deepEqual(moved("#/evolucion/periodo"), ["comparar"]);
   assert.deepEqual(moved("#/tendencias"), ["categorias", "12", "gastos"]); // su gráfica: «Por mes» de cada categoría
   // Las vigentes no se tocan (tampoco los enlaces viejos a movimientos: «rango» admite cualquier origen).
-  for (const h of ["", "#/diario", "#/mes/2026-10/gastos", "#/categorias/6/gastos", "#/ahorro", "#/evolucion/periodo/mes",
+  for (const h of ["", "#/diario", "#/mes/2026-10/gastos", "#/categorias/6/gastos", "#/ahorro", "#/comparar/mes",
     "#/rango/tendencias/2026-09-01/2026-09-30/gastos/g/Vivienda/mov"]) assert.equal(moved(h), null, h);
-  for (const h of ["#/categorias/3/gastos", "#/ahorro"]) assert.equal(L.pullEnabled(L.viewOf(L.parseHash(h))), false, h);
+  for (const h of ["#/categorias/3/gastos", "#/ahorro", "#/comparar"]) assert.equal(L.pullEnabled(L.viewOf(L.parseHash(h))), false, h);
 });
 
 test("seriesStats: media, último y máximo solo de los meses cerrados (el mes en curso no cuenta)", () => {

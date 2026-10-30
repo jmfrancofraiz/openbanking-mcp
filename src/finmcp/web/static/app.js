@@ -4,7 +4,7 @@
    Categorías: ingresos, gastos y no computables por categoría de un mes (con su barra ‹ ›, minigráficas de 6 meses y
    mediana de referencia) o de varios meses acumulados (3 y 6 meses, 1 año, año actual, todo).
    Ahorro: ritmo de gasto del mes en curso, ingresos y gastos por mes y el ahorro de cada mes.
-   Evolución: «Periodo contra periodo».
+   Comparar: un periodo frente a otro (mes, trimestre, semestre o año), a la misma fecha si alguno está en curso.
    Los importes llegan calculados de la API de solo lectura (/api/*); aquí solo se presentan.
    Única acción: tirar hacia abajo desde arriba del todo de la lista del Diario pide sincronizar con los bancos y recarga los datos. */
 (() => {
@@ -164,7 +164,7 @@
       item("diario", "Diario", "M9 6h12M9 12h12M9 18h12M3.5 5.5h1v1h-1zM3.5 11.5h1v1h-1zM3.5 17.5h1v1h-1z", "#/diario"),
       item("categorias", "Categorías", "M12 3a9 9 0 1 0 9 9h-9zM15 3.5A9 9 0 0 1 20.5 9H15z", H("mes", CUR, "gastos")),
       item("ahorro", "Ahorro", "M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.16 3.16 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1zM15.5 10a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0M2 8v1a2 2 0 0 0 2 2h1", "#/ahorro"),
-      item("evolucion", "Evolución", "M5 20V11M11 20V5M17 20v-7M3 20h18", "#/evolucion/periodo"),
+      item("comparar", "Comparar", "M4 8h15M15 4l4 4-4 4M20 16H5M9 12l-4 4 4 4", "#/comparar"),
     ]);
   }
 
@@ -968,9 +968,9 @@
     const [, origin, from, to, tipo0, kind, key, extra] = p;
     const tipo = tipoOf(tipo0);
     const label = L.rangeLabel(from, to);
-    // Pestaña de la barra inferior que se marca: «evolucion» viene de Periodo contra periodo; el resto («mes»,
-    // «acumulado» y los enlaces viejos de «tendencias»), de Categorías.
-    const navKey = origin === "evolucion" ? "evolucion" : "categorias";
+    // Pestaña de la barra inferior que se marca: «comparar» (y el antiguo «evolucion») viene de Comparar; el resto
+    // («mes», «acumulado» y los enlaces viejos de «tendencias»), de Categorías.
+    const navKey = origin === "comparar" || origin === "evolucion" ? "comparar" : "categorias";
     // Solo en Categorías con varios meses, origen «acumulado» (petición del Señor, 24-oct-2026): meses del periodo para la
     // minigráfica mensual. Meses cerrados dentro de [from,to], más el mes en curso si el periodo
     // llega hasta hoy (año actual/todo, 25-oct-2026): `miniBars` ya pinta ese mes con la trama
@@ -1288,16 +1288,16 @@
     ]);
   }
 
-  /* ---------- Evolución › Periodo contra periodo ---------- */
+  /* ---------- Comparar: #/comparar/<tipo de periodo>/<periodo>/<frente a>/<ingresos|gastos> ---------- */
 
   async function periodView(p) {
-    const type = PERIOD_TYPES.some(([k]) => k === p[2]) ? p[2] : "mes";
-    const tipo = tipoOf(p[5]);
+    const type = PERIOD_TYPES.some(([k]) => k === p[1]) ? p[1] : "mes";
+    const tipo = tipoOf(p[4]);
     const pers = L.periodsOf(type, MONTHS, CUR);
-    const A = pers.find((x) => x.id === p[3]) || pers[pers.length - 1];
+    const A = pers.find((x) => x.id === p[2]) || pers[pers.length - 1];
     const iA = pers.indexOf(A);
-    const B = pers.find((x) => x.id === p[4] && x.id !== A.id) || pers[iA - 1] || pers[iA + 1];
-    const nav2 = (t, a, b, tp, keep = false) => go(H("evolucion", "periodo", t, a, b, tp), { replace: true, keep });
+    const B = pers.find((x) => x.id === p[3] && x.id !== A.id) || pers[iA - 1] || pers[iA + 1];
+    const nav2 = (t, a, b, tp, keep = false) => go(H("comparar", t, a, b, tp), { replace: true, keep });
     const typeTabs = subtabs(PERIOD_TYPES, type, (k) => nav2(k, "-", "-", tipo), "small");
     if (!B) return [typeTabs, el("p", { className: "muted empty", textContent: "No hay otro periodo con el que comparar." })];
 
@@ -1356,9 +1356,9 @@
             el("span", { className: toneOf(s.va, s.vb) }, [s.d >= 0 ? "+" : "−", amt(Math.abs(s.d)), el("span", { className: "muted" }, ["  (", amt(s.va), " / ", amt(s.vb), ")"])])])) : []),
           el("div", { className: "btns" }, [
             x.a ? el("button", { className: "link", type: "button", textContent: `Movimientos ${short(A)} ›`,
-              onclick: (e) => { e.stopPropagation(); go(H("rango", "evolucion", rA.from, rA.to, tipo, "g", x.k, "mov")); } }) : null,
+              onclick: (e) => { e.stopPropagation(); go(H("rango", "comparar", rA.from, rA.to, tipo, "g", x.k, "mov")); } }) : null,
             x.b ? el("button", { className: "link", type: "button", textContent: `Movimientos ${short(B)} ›`,
-              onclick: (e) => { e.stopPropagation(); go(H("rango", "evolucion", rB.from, rB.to, tipo, "g", x.k, "mov")); } }) : null,
+              onclick: (e) => { e.stopPropagation(); go(H("rango", "comparar", rB.from, rB.to, tipo, "g", x.k, "mov")); } }) : null,
           ]),
         ]));
       }
@@ -1397,9 +1397,8 @@
     ];
   }
 
-  async function evolutionView(p) {
-    const body = await periodView(p[1] === "periodo" ? p : ["evolucion", "periodo"]);
-    return [topbar("Evolución"), el("main", {}, body), nav("evolucion")];
+  async function compareView(p) {
+    return [topbar("Comparar"), el("main", {}, await periodView(p)), nav("comparar")];
   }
 
   /* ---------- barras de una serie mensual (gráfica «Por mes» de Categorías con varios meses) ---------- */
@@ -1661,7 +1660,7 @@
       if (kind === "mes") view = await monthView(MONTHS.includes(p[1]) ? p[1] : CUR, tipoOf(p[2]));
       else if (kind === "categorias") view = await accumulatedView(p);
       else if (kind === "ahorro") view = await savingsView();
-      else if (kind === "evolucion") view = await evolutionView(p);
+      else if (kind === "comparar") view = await compareView(p);
       else if (kind === "rango") view = await rangeView(p);
       else if (kind === "movimiento") view = await movementView(p[2]);
       else view = await diaryView(top === "diario" ? p[1] : "");
