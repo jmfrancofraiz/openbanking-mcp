@@ -1089,7 +1089,9 @@
     const cut = await monthlyRows(day, heroSince);
     const cutBy = new Map(cut.map((r) => [r.month, r]));
     const { now, refs } = L.paceRefs((m) => (cutBy.get(m) ? cutBy.get(m).expense : 0), CUR, CLOSED);
-    const refLabel = (r) => (r.n === 1 ? `${L.cap(L.monthInitial(r.ms[0]))} a día ${day}` : `Media ${r.ms.length} meses`);
+    // «Media 3m»/«Media 6m», no «Media 3 meses»/«Media 6 meses» (30-oct-2026, petición del Señor:
+    // la pastilla del hero debe caber en una sola línea).
+    const refLabel = (r) => (r.n === 1 ? `${L.cap(L.monthInitial(r.ms[0]))} a día ${day}` : `Media ${r.ms.length}m`);
     const hero = el("section", { className: "hero" }, [
       el("div", { className: "lead", textContent: `Gastos de ${L.monthName(CUR)} · a día ${day} de ${CUT.days}` }),
       el("div", { className: "num amt", textContent: eur0.format(now) }),
