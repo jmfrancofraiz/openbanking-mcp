@@ -197,19 +197,37 @@ def breakdown(session: Session, start: date, end: date) -> dict:
     }
 
 
-def monthly(session: Session, today: date, day: int | None = None) -> list[dict]:
-    """Totales de cada mes, del primero con movimientos al actual.
+def monthly(session: Session, today: date, day: int | None = None,
+            since: str | None = None, until: str | None = None) -> list[dict]:
+    """Totales de cada mes, del primero con movimientos al actual (o del rango acotado).
 
     Con `day`, cada mes se recorta del día 1 al `day` (o a su último día si es más
     corto): es la comparación «a la misma fecha» con el mes en curso.
+
+    Con `since`/`until` (AAAA-MM) se acota el rango de meses devueltos -y la propia
+    consulta a la BD, para no recorrer toda la historia si no hace falta-: el panel
+    web (pestaña Ahorro) pide primero solo el año en curso y cada «Cargar año
+    anterior» añade un año concreto, en vez de cargar toda la historia de golpe. Sin
+    ellos, el comportamiento es el de siempre: del primer mes con movimientos al actual.
     """
     first = _first_booked(session) or today
-    months = month_range(first, today)
+    first_month = date(first.year, first.month, 1)
+    current_month_start = date(today.year, today.month, 1)
+    start_month = parse_month(since) if since else first_month
+    if start_month < first_month:
+        start_month = first_month
+    end_month = parse_month(until) if until else current_month_start
+    if end_month > current_month_start:
+        end_month = current_month_start
+    if end_month < start_month:
+        return []
+    months = month_range(start_month, end_month)
     current = month_key(today)
     acc = {m: {"credit": 0.0, "debit": 0.0, "income": 0.0, "expense": 0.0,
                "bills": 0.0, "refunds": 0.0, "count": 0} for m in months}
-    start = date(first.year, first.month, 1)
-    end = date(today.year, today.month, days_in(today))
+    start = date(start_month.year, start_month.month, 1)
+    end = (date(today.year, today.month, days_in(today)) if end_month == current_month_start
+           else date(end_month.year, end_month.month, days_in(end_month)))
     for t in _computable(session, start, end):
         booked = t.booked_at.date()
         row = acc.get(month_key(booked))

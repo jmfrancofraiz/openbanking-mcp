@@ -106,7 +106,9 @@
   const resetData = () => { cache.clear(); diary = null; };
   const aggsOf = (b) => ({ ingresos: b.income, gastos: b.expense, "no-computables": b.neutral });
   const breakdownOf = (from, to) => api("breakdown", { from, to });
-  const monthlyRows = (day) => api("monthly", day ? { day } : {}).then((b) => b.months);
+  const monthlyRows = (day, since, until) => api("monthly", {
+    ...(day ? { day } : {}), ...(since ? { since } : {}), ...(until ? { until } : {}),
+  }).then((b) => b.months);
   const seriesOf = (from, to) => api("series", { from, to });
   const referencesOf = (to) => api("references", { to });
   const groupsOf = () => api("groups");
@@ -1080,8 +1082,11 @@
 
   async function paceView() {
     const day = CUT.day;
-    const [full, cut] = await Promise.all([monthlyRows(), monthlyRows(day)]);
-    const fullBy = new Map(full.map((r) => [r.month, r]));
+    // El «ritmo» (hero) solo necesita una ventana corta y fija: `paceRefs` nunca mira más allá
+    // de los últimos 6 meses cerrados, así que esta petición nunca crece con los años que el
+    // Señor vaya cargando más abajo (30-oct-2026, su petición: no recorrer toda la historia).
+    const heroSince = CLOSED.length ? CLOSED[Math.max(0, CLOSED.length - 6)] : CUR;
+    const cut = await monthlyRows(day, heroSince);
     const cutBy = new Map(cut.map((r) => [r.month, r]));
     const { now, refs } = L.paceRefs((m) => (cutBy.get(m) ? cutBy.get(m).expense : 0), CUR, CLOSED);
     const refLabel = (r) => (r.n === 1 ? `${L.cap(L.monthInitial(r.ms[0]))} a día ${day}` : `Media ${r.ms.length} meses`);
@@ -1097,13 +1102,20 @@
       ]))) : null,
     ]);
 
-    // Lista de meses (más reciente primero): el ahorro manda.
-    const rows = [...MONTHS].reverse().map((m) => (m === CUR ? { ...cutBy.get(m), partial: true } : { ...fullBy.get(m), partial: false }))
-      .filter((r) => r.month);
-    const closedRows = rows.filter((r) => !r.partial);
-    const maxNet = Math.max(...closedRows.map((r) => r.net), 1);
-    const avgNet = closedRows.length ? sum(closedRows.map((r) => r.net)) / closedRows.length : 0;
-    const monthRow = (r) => el("button", { className: `mrow2${r.partial ? " inprog" : ""}`, type: "button", onclick: () => go(H("mes", r.month, "gastos")) }, [
+    // Gráfica «Ingresos y gastos por mes» y lista «Ahorro mes a mes»: por años, cargados bajo
+    // demanda (30-oct-2026, petición del Señor: «no quiero cargar toda la historia de golpe,
+    // tarda mucho»). Al entrar, solo el año en curso; el botón «Cargar año anterior» añade un
+    // año concreto cada vez (sin repetir lo ya traído: cada año se pide una sola vez) hasta
+    // llegar al primer año con datos, momento en que el botón desaparece.
+    const curYear = Number(CUR.slice(0, 4));
+    const firstYear = MONTHS.length ? Number(MONTHS[0].slice(0, 4)) : curYear;
+    let oldestYear = curYear;
+    const fullBy = new Map();
+    const mergeRows = (rows) => rows.forEach((r) => fullBy.set(r.month, r));
+    mergeRows(await monthlyRows(undefined, `${oldestYear}-01`));
+
+    const refSpan = (r) => (r.n === 1 ? L.monthLabel(r.ms[0]) : `${L.monthInitial(r.ms[0])}–${L.monthShort(r.ms[r.ms.length - 1])}`);
+    const monthRow = (r, maxNet) => el("button", { className: `mrow2${r.partial ? " inprog" : ""}`, type: "button", onclick: () => go(H("mes", r.month, "gastos")) }, [
       el("span", { className: "ml" }, [
         el("span", { className: "n" }, [L.cap(L.monthName(r.month)), r.partial ? el("span", { className: "tag", textContent: "en curso" }) : null]),
         el("span", { className: "s" }, ["Ingresos ", amt(r.income), " · Gastos ", amt(r.expense)]),
@@ -1115,28 +1127,69 @@
       ]),
       !r.partial && r.net > 0 ? el("span", { className: "sbar" }, el("i", { style: { width: `${(r.net / maxNet) * 100}%` } })) : null,
     ]);
-    const list = [];
-    let year = null;
-    for (const r of rows) {
-      const y = r.month.slice(0, 4);
-      if (y !== year) {
-        year = y;
-        const yr = closedRows.filter((x) => x.month.startsWith(y));
-        const span = yr.length === 12 ? "año completo" : yr.length ? `${L.monthInitial(yr[yr.length - 1].month)}–${L.monthInitial(yr[0].month)}` : "";
-        list.push(el("div", { className: "yhead" }, [el("b", { textContent: y }),
-          yr.length ? el("span", {}, ["Ahorro ", amt(sum(yr.map((x) => x.net))), ` · ${span}`]) : null]));
+
+    const body = el("div", {});
+    let loadingYear = false;
+    const paintBody = () => {
+      // Lista de meses (más reciente primero), limitada a los años ya cargados: el ahorro manda.
+      const monthsLoaded = MONTHS.filter((m) => Number(m.slice(0, 4)) >= oldestYear);
+      const rows = [...monthsLoaded].reverse().map((m) => (m === CUR ? { ...cutBy.get(m), partial: true } : { ...fullBy.get(m), partial: false }))
+        .filter((r) => r.month);
+      const closedRows = rows.filter((r) => !r.partial);
+      const maxNet = Math.max(...closedRows.map((r) => r.net), 1);
+      const avgNet = closedRows.length ? sum(closedRows.map((r) => r.net)) / closedRows.length : 0;
+      const list = [];
+      let year = null;
+      for (const r of rows) {
+        const y = r.month.slice(0, 4);
+        if (y !== year) {
+          year = y;
+          const yr = closedRows.filter((x) => x.month.startsWith(y));
+          const span = yr.length === 12 ? "año completo" : yr.length ? `${L.monthInitial(yr[yr.length - 1].month)}–${L.monthInitial(yr[0].month)}` : "";
+          list.push(el("div", { className: "yhead" }, [el("b", { textContent: y }),
+            yr.length ? el("span", {}, ["Ahorro ", amt(sum(yr.map((x) => x.net))), ` · ${span}`]) : null]));
+        }
+        list.push(monthRow(r, maxNet));
       }
-      list.push(monthRow(r));
-    }
-    const refSpan = (r) => (r.n === 1 ? L.monthLabel(r.ms[0]) : `${L.monthInitial(r.ms[0])}–${L.monthShort(r.ms[r.ms.length - 1])}`);
-    // Gráfica de todos los meses, de más antiguo a más reciente (con desplazamiento lateral, abierta en los últimos).
-    const chartRows = MONTHS.map((m) => fullBy.get(m)).filter(Boolean);
+      // Gráfica de los meses ya cargados, de más antiguo a más reciente (desplazamiento lateral, abierta en los últimos).
+      const chartRows = monthsLoaded.map((m) => fullBy.get(m)).filter(Boolean);
+      const hayMasAños = oldestYear > firstYear;
+      const moreBtn = hayMasAños
+        ? el("button", { className: "more", type: "button", textContent: `Cargar año anterior · ${oldestYear - 1}` })
+        : null;
+      if (moreBtn) {
+        moreBtn.addEventListener("click", async () => {
+          if (loadingYear) return;
+          const targetYear = oldestYear - 1;
+          loadingYear = true;
+          moreBtn.disabled = true;
+          moreBtn.textContent = "Cargando…";
+          try {
+            mergeRows(await monthlyRows(undefined, `${targetYear}-01`, `${targetYear}-12`));
+            oldestYear = targetYear;
+            loadingYear = false;
+            paintBody();
+          } catch (err) {
+            loadingYear = false;
+            if (err instanceof PinRequired) { render(); return; }
+            moreBtn.disabled = false;
+            moreBtn.textContent = `No se ha podido cargar ${targetYear} · Reintentar`;
+          }
+        });
+      }
+      body.replaceChildren(...[
+        ...incomeExpenseChart(chartRows),
+        el("h2", { textContent: "Ahorro mes a mes" }),
+        el("p", { className: "muted lead2" }, ["Ahorro medio: ", amt(avgNet), ` al mes en ${closedRows.length} meses cerrados. Toque un mes para ver su detalle.`]),
+        ...list,
+        moreBtn,
+      ].filter(Boolean));
+    };
+    paintBody();
+
     return [
       hero,
-      ...incomeExpenseChart(chartRows),
-      el("h2", { textContent: "Ahorro mes a mes" }),
-      el("p", { className: "muted lead2" }, ["Ahorro medio: ", amt(avgNet), ` al mes en ${closedRows.length} meses cerrados. Toque un mes para ver su detalle.`]),
-      ...list,
+      body,
       el("footer", { className: "note" }, [
         refs.length ? el("p", { textContent: `Comparaciones con el gasto acumulado del día 1 al ${day} de cada mes: ${refs.map((r) => `${r.n === 1 ? "mes anterior" : `media ${r.ms.length} meses`} = ${refSpan(r)}`).join("; ")}.` }) : null,
         el("p", { textContent: "Importes netos de devoluciones. El ahorro del mes en curso es provisional: los ingresos suelen entrar a final de mes." }),

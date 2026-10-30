@@ -79,6 +79,22 @@ def test_monthly_y_monthly_a_dia_d(client):
     assert cut[0]["expense"] == 120.0 and cut[0]["cut_day"] == 10
 
 
+def test_monthly_con_since_y_until(client):
+    """Carga por años de la pestaña Ahorro: `since`/`until` acotan sin tocar el resto."""
+    solo_marzo = client.get("/api/monthly", params={"since": "2026-03", "until": "2026-03"}).json()["months"]
+    desde_abril = client.get("/api/monthly", params={"since": "2026-04"}).json()["months"]
+
+    assert [m["month"] for m in solo_marzo] == ["2026-03"]
+    assert solo_marzo[0]["expense"] == 170.0
+    assert [m["month"] for m in desde_abril] == ["2026-04"]
+
+
+def test_monthly_since_posterior_a_until_es_error(client):
+    r = client.get("/api/monthly", params={"since": "2026-04", "until": "2026-03"})
+
+    assert r.status_code == 400
+
+
 def test_series(client):
     r = client.get("/api/series", params={"from": "2026-03", "to": "2026-04"})
 

@@ -249,6 +249,10 @@ def _month_param(request: Request, name: str) -> str:
     return value
 
 
+def _optional_month_param(request: Request, name: str) -> str | None:
+    return _month_param(request, name) if request.query_params.get(name) else None
+
+
 def _kind_param(request: Request) -> str:
     value = request.query_params.get("type", "")
     if value not in KIND_PARAM:
@@ -388,7 +392,11 @@ def create_app(
 
     def api_monthly(request: Request) -> JSONResponse:
         day = _day_param(request)
-        return JSONResponse({"months": query(lambda s: dashboard.monthly(s, today(), day=day))})
+        since = _optional_month_param(request, "since")
+        until = _optional_month_param(request, "until")
+        if since and until and since > until:
+            raise ParamError("«since» no puede ser posterior a «until».")
+        return JSONResponse({"months": query(lambda s: dashboard.monthly(s, today(), day=day, since=since, until=until))})
 
     def api_breakdown(request: Request) -> JSONResponse:
         start, end = _range_params(request)

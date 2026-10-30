@@ -192,6 +192,41 @@ def test_monthly_sin_datos_devuelve_el_mes_actual(session):
     assert rows[0]["net"] == 0.0
 
 
+def test_monthly_since_acota_al_año_en_curso(session, ejemplo):
+    """Carga por años del panel (pestaña Ahorro): al entrar, solo el año/mes pedido."""
+    rows = d.monthly(session, today=TODAY, since="2026-04")
+
+    assert [r["month"] for r in rows] == ["2026-04"]
+    assert rows[0]["partial"] is True
+
+
+def test_monthly_since_anterior_al_primer_mes_no_se_adelanta(session, ejemplo):
+    """`since` antes del primer movimiento no inventa meses: se recorta al primero real."""
+    rows = d.monthly(session, today=TODAY, since="2020-01")
+
+    assert [r["month"] for r in rows] == ["2026-03", "2026-04"]
+
+
+def test_monthly_until_acota_un_año_concreto_sin_recalcular_los_demas(session, ejemplo):
+    """«Cargar año anterior»: pide un año ya cerrado con `since`+`until`, nada más."""
+    rows = d.monthly(session, today=TODAY, since="2026-03", until="2026-03")
+
+    assert [r["month"] for r in rows] == ["2026-03"]
+    mar = rows[0]
+    assert (mar["income"], mar["expense"], mar["net"]) == (3000.0, 1070.0, 1930.0)
+    assert mar["partial"] is False and mar["cut_day"] is None
+
+
+def test_monthly_until_posterior_a_hoy_se_recorta_al_mes_actual(session, ejemplo):
+    rows = d.monthly(session, today=TODAY, until="2099-12")
+
+    assert [r["month"] for r in rows] == ["2026-03", "2026-04"]
+
+
+def test_monthly_since_posterior_a_until_devuelve_vacio(session, ejemplo):
+    assert d.monthly(session, today=TODAY, since="2026-04", until="2026-03") == []
+
+
 # --- series ------------------------------------------------------------------
 
 
