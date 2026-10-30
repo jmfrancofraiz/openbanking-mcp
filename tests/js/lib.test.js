@@ -368,8 +368,8 @@ test("tirar para sincronizar: solo la lista del Diario (y lo que cae en ella) pu
     assert.equal(L.pullEnabled(v(h)), true, h);
   }
   // El resto de vistas, no: pestañas, listas de movimientos de un periodo y detalle de un movimiento.
-  const otras = { "#/mes/2026-10/gastos": "mes", "#/mes": "mes", "#/ahorro": "ahorro", "#/evolucion": "evolucion",
-    "#/evolucion/acumulado": "evolucion", "#/evolucion/periodo/mes": "evolucion",
+  const otras = { "#/mes/2026-10/gastos": "mes", "#/mes": "mes", "#/categorias/12/gastos": "categorias", "#/ahorro": "ahorro",
+    "#/evolucion/periodo": "evolucion", "#/evolucion/periodo/mes": "evolucion",
     "#/rango/acumulado/2026-09-01/2026-09-30/gastos/g/Vivienda/mov": "rango",
     "#/diario/mov/abc-123": "movimiento" };
   for (const [h, view] of Object.entries(otras)) {
@@ -379,12 +379,17 @@ test("tirar para sincronizar: solo la lista del Diario (y lo que cae en ella) pu
   assert.equal(L.pullEnabled(""), false); // cargando, error o PIN: nada en pantalla
 });
 
-test("rutas antiguas: Ahorro mensual (antes en Evolución) y Tendencias (retirada) siguen abriendo algo con sentido", () => {
-  const v = (hash) => L.viewOf(L.parseHash(hash));
-  assert.equal(v("#/evolucion/meses"), "ahorro");                 // la subpestaña es ahora la pestaña Ahorro
-  assert.equal(v("#/tendencias"), "evolucion");                   // su gráfica vive en Evolución › Análisis por categoría
-  assert.equal(v("#/rango/tendencias/2026-09-01/2026-09-30/gastos/g/Vivienda/mov"), "rango"); // enlaces viejos a movimientos
-  for (const h of ["#/ahorro", "#/evolucion/meses", "#/tendencias"]) assert.equal(L.pullEnabled(v(h)), false, h);
+test("rutas antiguas: se sustituyen por la pestaña que heredó su contenido", () => {
+  const moved = (hash) => L.legacyRoute(L.parseHash(hash));
+  assert.deepEqual(moved("#/evolucion"), ["ahorro"]);                       // Ahorro mensual era la subpestaña por defecto
+  assert.deepEqual(moved("#/evolucion/meses"), ["ahorro"]);
+  assert.deepEqual(moved("#/evolucion/acumulado/12/ingresos"), ["categorias", "12", "ingresos"]); // conserva periodo y tipo
+  assert.deepEqual(moved("#/evolucion/acumulado"), ["categorias"]);
+  assert.deepEqual(moved("#/tendencias"), ["categorias", "12", "gastos"]); // su gráfica: «Por mes» de cada categoría
+  // Las vigentes no se tocan (tampoco los enlaces viejos a movimientos: «rango» admite cualquier origen).
+  for (const h of ["", "#/diario", "#/mes/2026-10/gastos", "#/categorias/6/gastos", "#/ahorro", "#/evolucion/periodo/mes",
+    "#/rango/tendencias/2026-09-01/2026-09-30/gastos/g/Vivienda/mov"]) assert.equal(moved(h), null, h);
+  for (const h of ["#/categorias/3/gastos", "#/ahorro"]) assert.equal(L.pullEnabled(L.viewOf(L.parseHash(h))), false, h);
 });
 
 test("seriesStats: media, último y máximo solo de los meses cerrados (el mes en curso no cuenta)", () => {

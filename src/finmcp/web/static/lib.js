@@ -314,15 +314,25 @@
     });
   }
 
-  // Vista que pinta una ruta (ya con parseHash): «mes», «ahorro», «evolucion», «rango» (movimientos de un periodo),
-  // «movimiento» (detalle del Diario) o «diario» (la lista, que además es la de las rutas desconocidas o incompletas).
-  // Rutas antiguas: «#/evolucion/meses» (Ahorro mensual era una subpestaña de Evolución) pinta Ahorro, y
-  // «#/tendencias» (pestaña retirada; su gráfica está en Evolución › Análisis por categoría) pinta Evolución.
+  // Rutas antiguas (ya con parseHash) → la ruta vigente que las sustituye, o null si la ruta ya es vigente:
+  //  · «#/evolucion» y «#/evolucion/meses»: Ahorro mensual, que era la subpestaña por defecto de Evolución → Ahorro;
+  //  · «#/evolucion/acumulado/<periodo>/<tipo>»: Análisis por categoría → Categorías con ese periodo;
+  //  · «#/tendencias»: pestaña retirada; su gráfica es la «Por mes» de cada categoría → Categorías, 1 año.
+  function legacyRoute(p) {
+    const [top, sub, ...rest] = p;
+    if (top === "tendencias") return ["categorias", "12", "gastos"];
+    if (top !== "evolucion") return null;
+    if (sub === "acumulado") return ["categorias", ...rest];
+    if (sub === undefined || sub === "meses") return ["ahorro"];
+    return null;
+  }
+
+  // Vista que pinta una ruta vigente (ya con parseHash): «mes» y «categorias» (pestaña Categorías: un mes o varios
+  // acumulados), «ahorro», «evolucion», «rango» (movimientos de un periodo), «movimiento» (detalle del Diario) o
+  // «diario» (la lista, que además es la de las rutas desconocidas o incompletas).
   function viewOf(p) {
     const top = p[0] || "diario";
-    if (top === "mes" || top === "ahorro") return top;
-    if (top === "evolucion") return p[1] === "meses" ? "ahorro" : "evolucion";
-    if (top === "tendencias") return "evolucion";
+    if (top === "mes" || top === "categorias" || top === "ahorro" || top === "evolucion") return top;
     if (top === "rango" && p.length >= 7) return "rango";
     if (top === "diario" && p[1] === "mov" && p[2]) return "movimiento";
     return "diario";
@@ -472,7 +482,7 @@
     colorFor, share, shown, cleanTitle, titleOf, signedEur, topN, delta, parseHash,
     refPct, fadeHex, refFill, withAllGroups, monthlyTotals,
     DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams, cuentaIds, toggleCuenta,
-    PULL, pullDistance, pullZone, waitLabel, syncResult, viewOf, pullEnabled,
+    PULL, pullDistance, pullZone, waitLabel, syncResult, legacyRoute, viewOf, pullEnabled,
     totalNote, figureChars, TAPE_LEN, odoTape, rollDelay,
     periodsOf, comparisonCut, periodRange, accumulatedMonths,
     PACE_REFS, paceRefs, verdict, seriesStats, trendOf, diffGroups, diffSubcategories,

@@ -1,9 +1,10 @@
 "use strict";
 /* Panel finmcp · interfaz (variante B «Relato del mes»).
    Diario (pestaña de apertura): último saldo de cada cuenta y lista plana de todos los movimientos, sin agregaciones.
-   Mes: ingresos y gastos del mes seleccionado, sin comparaciones (solo minigráficas de 6 meses).
+   Categorías: ingresos, gastos y no computables por categoría de un mes (con su barra ‹ ›, minigráficas de 6 meses y
+   mediana de referencia) o de varios meses acumulados (3 y 6 meses, 1 año, año actual, todo).
    Ahorro: ritmo de gasto del mes en curso, ingresos y gastos por mes y el ahorro de cada mes.
-   Evolución: «Análisis por categoría» y «Periodo contra periodo».
+   Evolución: «Periodo contra periodo».
    Los importes llegan calculados de la API de solo lectura (/api/*); aquí solo se presentan.
    Única acción: tirar hacia abajo desde arriba del todo de la lista del Diario pide sincronizar con los bancos y recarga los datos. */
 (() => {
@@ -25,6 +26,8 @@
     return v && v.trim() ? v.trim() : fallback;
   };
   const ACC_PERIODS = [["3", "3 meses"], ["6", "6 meses"], ["12", "1 año"], ["ano", "Año actual"], ["todo", "Todo"]];
+  // Selector de periodo de la pestaña Categorías: un mes (ruta #/mes/…) o varios meses acumulados (#/categorias/…).
+  const CAT_PERIODS = [["mes", "Mes"], ...ACC_PERIODS];
   const PERIOD_TYPES = [["mes", "Mes"], ["trimestre", "Trimestre"], ["semestre", "Semestre"], ["ano", "Año"]];
 
   let MONTHS = [];   // meses con datos, ascendentes (AAAA-MM)
@@ -147,6 +150,9 @@
 
   /* ---------- componentes ---------- */
 
+  // Pestaña de la barra inferior que corresponde a una vista (`L.viewOf`).
+  const navOf = (view) => ({ mes: "categorias", rango: "categorias", movimiento: "diario" }[view] || view);
+
   function nav(active) {
     const item = (key, label, d, target) => el("button", {
       className: key === active ? "on" : "", type: "button",
@@ -156,9 +162,9 @@
       el("span", { textContent: label })]);
     return el("nav", { className: "nav" }, [
       item("diario", "Diario", "M9 6h12M9 12h12M9 18h12M3.5 5.5h1v1h-1zM3.5 11.5h1v1h-1zM3.5 17.5h1v1h-1z", "#/diario"),
-      item("mes", "Mes", "M12 3a9 9 0 1 0 9 9h-9zM15 3.5A9 9 0 0 1 20.5 9H15z", H("mes", CUR, "gastos")),
+      item("categorias", "Categorías", "M12 3a9 9 0 1 0 9 9h-9zM15 3.5A9 9 0 0 1 20.5 9H15z", H("mes", CUR, "gastos")),
       item("ahorro", "Ahorro", "M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.16 3.16 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1zM15.5 10a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0M2 8v1a2 2 0 0 0 2 2h1", "#/ahorro"),
-      item("evolucion", "Evolución", "M5 20V11M11 20V5M17 20v-7M3 20h18", "#/evolucion"),
+      item("evolucion", "Evolución", "M5 20V11M11 20V5M17 20v-7M3 20h18", "#/evolucion/periodo"),
     ]);
   }
 
@@ -169,6 +175,14 @@
         attrs: { role: "tab", "aria-selected": String(k === current) },
         onclick: () => { if (k !== current) onChange(k); },
       }, [el("span", { textContent: label }), total === undefined ? null : el("small", { className: "amt", textContent: eur0.format(total) })])));
+  }
+
+  // Periodo de la pestaña Categorías, en una sola fila compacta: «Mes» abre el mes en curso; el resto, el acumulado de
+  // ese periodo («año actual» se rotula con el año). Conserva el tipo (ingresos, gastos, no computables).
+  function periodChips(current, tipo) {
+    const opts = CAT_PERIODS.map(([k, l]) => [k, k === "ano" ? CUR.slice(0, 4) : k === "3" || k === "6" ? `${k} m` : l]);
+    return subtabs(opts, current, (k) => go(k === "mes" ? H("mes", CUR, tipo) : H("categorias", k, tipo), { replace: true }),
+      "small periods");
   }
 
   function chipRow(options, current, onChange, label) {
@@ -424,7 +438,7 @@
     ];
   }
 
-  // Barras mensuales de una categoría o subcategoría (Evolución › Análisis por categoría): una barra por mes del
+  // Barras mensuales de una categoría o subcategoría (Categorías con varios meses): una barra por mes del
   // periodo (el mes en curso, rayado), media discontinua de los meses cerrados y, encima, sus cifras (media, último
   // mes, máximo) y la tendencia (lo que aportaba la antigua pestaña Tendencias). Al tocar una barra:
   //  · sin `onPick` (ficha de la categoría, sin lista debajo): enlace «Ver movimientos ›» de ese mes (`onMonth`);
@@ -587,7 +601,7 @@
 
   // Un bloque único con todos los saldos (`.saldos`): arriba el total, a todo el ancho, y debajo las cuentas como
   // subtarjetas traslúcidas en una rejilla de dos columnas (`.bgrid`) — mismo estilo que las `.hstat` de la cabecera
-  // de Evolución › Ahorro mensual (25-oct-2026, petición del Señor; antes iban a borde a borde, sin hueco ni fondo
+  // de Ahorro › cabecera (25-oct-2026, petición del Señor; antes iban a borde a borde, sin hueco ni fondo
   // propio). Cada celda de cuenta es un botón que filtra por esa cuenta; togglear varias las combina (no se excluyen
   // entre sí); el total no es un filtro y no es una subtarjeta (va directo sobre el degradado, como el resto del hero).
   //
@@ -907,7 +921,7 @@
     ];
   }
 
-  /* ---------- Mes ---------- */
+  /* ---------- Categorías › Mes ---------- */
 
   async function monthView(ym, tipo) {
     const from = L.monthStart(ym), to = L.monthEnd(ym);
@@ -927,6 +941,7 @@
     return [
       monthBar(ym, tipo),
       el("main", {}, [
+        periodChips("mes", tipo),
         subtabs([["ingresos", "Ingresos", aggs.ingresos.total], ["gastos", "Gastos", aggs.gastos.total],
                  ["no-computables", "No computables", aggs["no-computables"].total]], tipo,
           (t) => go(H("mes", ym, t), { replace: true })),
@@ -942,7 +957,7 @@
           PIN ? el("button", { className: "lockbtn", type: "button", textContent: "Bloquear el panel", onclick: lockPanel }) : null,
         ]),
       ]),
-      nav("mes"),
+      nav("categorias"),
     ];
   }
 
@@ -953,10 +968,10 @@
     const [, origin, from, to, tipo0, kind, key, extra] = p;
     const tipo = tipoOf(tipo0);
     const label = L.rangeLabel(from, to);
-    // Pestaña de la barra inferior que se marca. «acumulado» es Evolución › Análisis por categoría; «tendencias»
-    // (enlaces de la pestaña retirada) también cae en Evolución, donde está ahora su gráfica.
-    const navKey = ["evolucion", "acumulado", "tendencias"].includes(origin) ? "evolucion" : "mes";
-    // Solo en Evolución › Acumulado (petición del Señor, 24-oct-2026): meses del periodo para la
+    // Pestaña de la barra inferior que se marca: «evolucion» viene de Periodo contra periodo; el resto («mes»,
+    // «acumulado» y los enlaces viejos de «tendencias»), de Categorías.
+    const navKey = origin === "evolucion" ? "evolucion" : "categorias";
+    // Solo en Categorías con varios meses, origen «acumulado» (petición del Señor, 24-oct-2026): meses del periodo para la
     // minigráfica mensual. Meses cerrados dentro de [from,to], más el mes en curso si el periodo
     // llega hasta hoy (año actual/todo, 25-oct-2026): `miniBars` ya pinta ese mes con la trama
     // discontinua de «parcial» en cuanto detecta `CUR` en la lista, sin cambio adicional aquí.
@@ -1213,20 +1228,21 @@
     return [el("h2", { textContent: "Ingresos y gastos por mes" }), el("div", { className: "chart-card" }, [legend, chartBox]), selBox];
   }
 
-  /* ---------- Evolución › Análisis por categoría (ruta «acumulado») ---------- */
+  /* ---------- Categorías › varios meses acumulados: #/categorias/<periodo>/<tipo> ---------- */
+  // Origen «acumulado» en las rutas de detalle (#/rango/acumulado/…), que añade la gráfica «Por mes».
 
   async function accumulatedView(p) {
-    const period = ACC_PERIODS.some(([k]) => k === p[2]) ? p[2] : "3";
-    const tipo = tipoOf(p[3]);
+    const period = ACC_PERIODS.some(([k]) => k === p[1]) ? p[1] : "3";
+    const tipo = tipoOf(p[2]);
     const year = CUR.slice(0, 4);
-    const nav2 = (per, t, keep = false) => go(H("evolucion", "acumulado", per, t), { replace: true, keep });
-    const periods = chipRow(ACC_PERIODS, period, (k) => nav2(k, tipo), "Periodo");
+    const periods = periodChips(period, tipo);
+    const page = (body) => [topbar("Categorías"), el("main", {}, body), nav("categorias")];
     // "ano" y "todo" incluyen el mes en curso (parcial, hasta hoy); los demás son de meses cerrados.
     const months = L.accumulatedMonths(period, CLOSED, year, CUR);
     const n = months.length;
     if (!n) {
-      return [periods, el("p", { className: "muted empty", textContent: period === "ano"
-        ? `Aún no hay meses cerrados en ${year}: ${L.monthLabel(CUR)} está en curso.` : "Aún no hay meses cerrados." })];
+      return page([periods, el("p", { className: "muted empty", textContent: period === "ano"
+        ? `Aún no hay meses cerrados en ${year}: ${L.monthLabel(CUR)} está en curso.` : "Aún no hay meses cerrados." })]);
     }
     const includesCurrent = months[n - 1] === CUR;
     const closedCount = includesCurrent ? n - 1 : n;
@@ -1236,7 +1252,7 @@
     const inc = b.income.total, exp = b.expense.total, net = b.net, bills = b.bills;
     const stat = (t, v) => el("div", { className: "hstat" }, [el("span", { className: "t", textContent: t }), el("span", { className: "v amt", textContent: eur0.format(v) })]);
     const billsPct = exp > 0 ? Math.max(0, Math.min(100, (bills / exp) * 100)) : 0;
-    return [
+    return page([
       periods,
       el("section", { className: "hero" }, [
         el("div", { className: "lead", textContent: `${period === "ano" ? "Año actual" : "Acumulado"} · ${L.rangeLabel(from, to)}` }),
@@ -1247,10 +1263,10 @@
         el("div", { className: "hstats" }, [stat("Ingresos", inc), stat("Gastos", exp), stat("Ahorro", net)]),
         el("div", { className: "sub avg" }, ["Al mes: ingresos ", amt(inc / n), " · gastos ", amt(exp / n), " · ahorro ", amt(net / n)]),
       ]),
-      el("h2", { textContent: "Acumulado por categoría" }),
       subtabs([["ingresos", "Ingresos", aggs.ingresos.total], ["gastos", "Gastos", aggs.gastos.total],
-               ["no-computables", "No computables", aggs["no-computables"].total]], tipo, (t) => nav2(period, t, true)),
-      ...categoryBlock(aggs[tipo], tipo, { origin: "acumulado", from, to, months: n }).slice(1),
+               ["no-computables", "No computables", aggs["no-computables"].total]], tipo,
+        (t) => go(H("categorias", period, t), { replace: true, keep: true })),
+      ...categoryBlock(aggs[tipo], tipo, { origin: "acumulado", from, to, months: n }),
       tipo === "gastos" ? el("h2", { textContent: "Fijo frente a variable" }) : null,
       tipo === "gastos" ? el("div", { className: "card" }, [
         el("div", {}, ["El ", el("b", { textContent: `${Math.round(billsPct)} %` }), " del gasto fueron recibos: ", amt(bills / n),
@@ -1267,8 +1283,9 @@
           "Estos movimientos no cuentan como ingreso ni como gasto: traspasos entre cuentas propias, "
           + "liquidaciones de tarjeta, ajustes de saldo, o dinero recibido y gastado a través de Bonusly." }) : null,
         coverageNote(from),
+        PIN ? el("button", { className: "lockbtn", type: "button", textContent: "Bloquear el panel", onclick: lockPanel }) : null,
       ]),
-    ];
+    ]);
   }
 
   /* ---------- Evolución › Periodo contra periodo ---------- */
@@ -1381,20 +1398,11 @@
   }
 
   async function evolutionView(p) {
-    const mode = p[1] === "periodo" ? "periodo" : "acumulado";
-    const body = mode === "periodo" ? await periodView(p) : await accumulatedView(p);
-    return [
-      topbar("Evolución"),
-      el("main", {}, [
-        subtabs([["acumulado", "Análisis por categoría"], ["periodo", "Periodo contra periodo"]], mode,
-          (k) => go(H("evolucion", k), { replace: true }), "tabs2 tabs3"),
-        ...body,
-      ]),
-      nav("evolucion"),
-    ];
+    const body = await periodView(p[1] === "periodo" ? p : ["evolucion", "periodo"]);
+    return [topbar("Evolución"), el("main", {}, body), nav("evolucion")];
   }
 
-  /* ---------- barras de una serie mensual (gráfica «Por mes» de Evolución › Análisis por categoría) ---------- */
+  /* ---------- barras de una serie mensual (gráfica «Por mes» de Categorías con varios meses) ---------- */
 
   function miniBars(vals, months, { color, avg, selected, onSelect, scroll = false }) {
     // `scroll`: con muchos meses (p. ej. Acumulado › Todo), ensancha el SVG más allá del contenedor
@@ -1621,7 +1629,7 @@
       el("p", { textContent: "No se han podido cargar los datos." }),
       el("p", { className: "muted", textContent: (err && err.message) || String(err) }),
       el("button", { className: "link", type: "button", textContent: "Reintentar", onclick: () => { resetData(); render(); } }),
-    ]), CUR ? nav(L.parseHash(location.hash)[0] || "diario") : null].filter(Boolean);
+    ]), CUR ? nav(navOf(L.viewOf(L.parseHash(location.hash)))) : null].filter(Boolean);
   }
 
   // Las cifras de los saldos ruedan una sola vez por carga de la página, la primera vez que se pintan: al filtrar, elegir una
@@ -1641,7 +1649,9 @@
     const my = ++seq;
     const y = window.scrollY;
     document.querySelectorAll(".backdrop").forEach((n) => n.remove());
-    const p = L.parseHash(location.hash);
+    let p = L.parseHash(location.hash);
+    const moved = L.legacyRoute(p); // ruta antigua (marcador, historial): se sustituye por la vigente
+    if (moved) { history.replaceState(history.state, "", H(...moved)); p = moved; }
     const top = p[0] || "diario";
     const kind = L.viewOf(p);
     if (kind !== pullView) setPullView(""); // al salir de la lista del Diario el gesto se apaga ya, sin esperar a la carga
@@ -1649,6 +1659,7 @@
     let view, shown = "";
     try {
       if (kind === "mes") view = await monthView(MONTHS.includes(p[1]) ? p[1] : CUR, tipoOf(p[2]));
+      else if (kind === "categorias") view = await accumulatedView(p);
       else if (kind === "ahorro") view = await savingsView();
       else if (kind === "evolucion") view = await evolutionView(p);
       else if (kind === "rango") view = await rangeView(p);

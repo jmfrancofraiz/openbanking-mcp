@@ -97,6 +97,7 @@ h2 { font-family:Georgia,serif; font-weight:400; font-size:1.2rem; margin:22px 0
 .seg.tabs3 button { font-size:.86rem; line-height:1.15; padding:0 4px; }
 .seg.small { margin:0 0 10px; }
 .seg.small button { min-height:34px; font-size:.85rem; }
+.seg.periods { margin-top:8px; }
 .refrow { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:-6px 0 4px; font-size:.85rem; }
 .chips { display:flex; gap:6px; flex-wrap:wrap; margin:4px 0 8px; }
 .chip { min-height:36px; padding:6px 12px; border-radius:999px; border:1px solid var(--line); background:var(--card); font-size:.88rem; cursor:pointer; }
