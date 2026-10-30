@@ -332,17 +332,20 @@
       : H("rango", ctx.origin, ctx.from, ctx.to, tipo, "g", g.group);
   }
 
-  // Barra de la mediana de 12 meses al entrar en una categoría (28-oct-2026, petición del Señor:
-  // «algo más visual» que solo texto) — misma `refFill` que tiñe el fondo de su fila en la lista
-  // de Mes, aquí como barra propia bajo el total, con su leyenda corta debajo. `null` sin
-  // referencia útil (la llamada ya decide cuándo pedirla: un único mes, y no una subcategoría
-  // genuina).
-  function refGauge(color, pct, months, ref) {
-    if (pct === null || pct === undefined) return null;
-    return el("div", {}, [
-      el("div", { className: "refbar", style: { background: L.refFill(color, pct) } }),
+  // Gráfico de barras de los últimos 12 meses de la categoría al entrar en ella (el mostrado + los
+  // 11 anteriores, los que haya con menos histórico), con una línea horizontal en la mediana
+  // (30-oct-2026, petición del Señor —corregido el mismo día de 2 a 12 meses—: sustituye a la
+  // antigua barra de progreso `refGauge`, que solo comunicaba un % de la mediana sin mostrar la
+  // evolución real). Reutiliza `miniBars` (misma gráfica de Categorías › Acumulado) pasándole la
+  // mediana como `avg`: la línea discontinua que ya dibuja para la media sirve igual para la
+  // mediana, solo cambia lo que mide. `null` sin referencia útil (la llamada ya decide cuándo
+  // pedirla: un único mes, y no una subcategoría genuina) o sin ningún mes que pintar.
+  function medianBars(color, ref, refMonths, months, vals) {
+    if (ref === undefined || ref === null || !months || !months.length) return null;
+    return el("div", { className: "card refchart" }, [
+      miniBars(vals, months, { color, avg: ref, onSelect: () => {} }),
       el("div", { className: "refcap muted",
-        textContent: `Mediana ${months} meses: ${eur0.format(ref)} (${Math.round(pct)} %)` }),
+        textContent: `Mediana ${refMonths} meses: ${eur0.format(ref)}` }),
     ]);
   }
 
@@ -1002,14 +1005,24 @@
       // lista). Solo tiene sentido comparando UN mes (origin «mes»); en Acumulado o Periodo
       // el total ya es de varios meses y no hay «mes mostrado» con el que pedir la
       // referencia.
-      const refs = origin === "mes" ? await referencesOf(from.slice(0, 7)) : null;
+      const ym = from.slice(0, 7);
+      const refs = origin === "mes" ? await referencesOf(ym) : null;
       const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
       const ref = refs && refs.months > 0 ? refs[refKey][key] : undefined;
-      const pct = L.refPct(g.total, ref);
-      const [chartRows, bareRows] = await Promise.all([
+      // Los últimos 12 meses de la categoría (el mostrado + los 11 anteriores) para la gráfica de
+      // barras bajo el total (30-oct-2026, petición del Señor, corregido el mismo día de 2 a 12
+      // meses), solo cuando hay mediana útil que dibujar como línea — mismo criterio que antes
+      // decidía si se pedía la mediana. Con menos de 12 meses de histórico hasta aquí, usa los que
+      // haya (igual que la minigráfica de 6 meses de la lista de Mes).
+      const yi = MONTHS.indexOf(ym);
+      const yearMonths = ref !== undefined && ref !== null
+        ? (yi >= 0 ? MONTHS.slice(Math.max(0, yi - 11), yi + 1) : [ym]) : null;
+      const [chartRows, bareRows, yearSeries] = await Promise.all([
         found && periodMonths.length > 1 ? txOf(from, to, tipo, "g", g.group) : null,
         bare ? txOf(from, to, tipo, "c", g.group) : null,
+        yearMonths ? seriesOf(yearMonths[0], ym) : null,
       ]);
+      const yearVals = yearSeries ? (yearSeries[refKey][key] || yearSeries.months.map(() => 0)) : null;
       const chart = chartRows ? monthlyChart(chartRows, periodMonths, tipo, g.group,
         (m) => go(H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "g", g.group, "mov"))) : null;
       return [
@@ -1019,7 +1032,7 @@
             el("div", { className: "muted", textContent: found
               ? `${g.count} movimientos · ${L.share(g.total, agg.total)} % de los ${word(tipo)}`
               : "Sin movimientos en este periodo." }),
-            refGauge(L.colorFor(key), pct, refs ? refs.months : null, ref)]),
+            medianBars(L.colorFor(key), ref, refs ? refs.months : null, yearSeries ? yearSeries.months : null, yearVals)]),
           ...(chart ? chart.nodes : []),
           subcats.length ? el("h2", { textContent: "Por subcategoría" }) : null,
           subcats.length ? el("div", { className: "cards" }, subcats.map((c) => el("button", { className: "gcard", type: "button",
@@ -1050,7 +1063,15 @@
     const refs = (kind === "c" && !isSub && origin === "mes") ? await referencesOf(from.slice(0, 7)) : null;
     const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
     const ref = refs && refs.months > 0 ? refs[refKey][key] : undefined;
-    const pct = L.refPct(total, ref);
+    // Los últimos 12 meses de la categoría (el mostrado + los 11 anteriores), igual que en la
+    // vista «g» (30-oct-2026, petición del Señor, corregido el mismo día de 2 a 12 meses): solo
+    // cuando hay mediana útil que dibujar como línea.
+    const ym2 = from.slice(0, 7);
+    const yi2 = MONTHS.indexOf(ym2);
+    const yearMonths = ref !== undefined && ref !== null
+      ? (yi2 >= 0 ? MONTHS.slice(Math.max(0, yi2 - 11), yi2 + 1) : [ym2]) : null;
+    const yearSeries = yearMonths ? await seriesOf(yearMonths[0], ym2) : null;
+    const yearVals = yearSeries ? (yearSeries[refKey][key] || yearSeries.months.map(() => 0)) : null;
     // Gráfica y lista enlazadas en los dos sentidos (peticiones del Señor, 30-oct-2026): el buscador
     // recalcula la gráfica con los movimientos a la vista, y tocar una barra resalta en la lista los
     // movimientos de ese mes y atenúa el resto, sin quitarlos y sin salir de la pantalla (aquí no hay
@@ -1064,7 +1085,7 @@
       el("main", {}, [
         el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(total) }),
           el("div", { className: "muted", textContent: `${rows.length} movimientos` }),
-          refGauge(L.colorFor(key), pct, refs ? refs.months : null, ref)]),
+          medianBars(L.colorFor(key), ref, refs ? refs.months : null, yearSeries ? yearSeries.months : null, yearVals)]),
         ...(chart ? chart.nodes : []),
         ...panel.nodes,
       ]),

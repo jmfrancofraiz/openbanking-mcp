@@ -137,8 +137,8 @@ h2 { font-family:Georgia,serif; font-weight:400; font-size:1.2rem; margin:22px 0
 .subcats .r { display:flex; justify-content:space-between; gap:8px; font-size:.85rem; padding:4px 0; }
 .ghead { padding:6px 0 8px; }
 .ghead .big { display:block; font-family:Georgia,serif; font-size:2rem; font-variant-numeric:tabular-nums; }
-.refbar { height:14px; border-radius:7px; margin-top:10px; }
 .refcap { margin-top:5px; font-size:.8rem; }
+.refchart { margin-top:10px; }
 
 /* gráfico de barras y fijo/variable */
 .chart-card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px 8px 6px; }
