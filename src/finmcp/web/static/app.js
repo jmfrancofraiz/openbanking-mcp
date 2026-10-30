@@ -424,10 +424,13 @@
   }
 
   // Barras mensuales de una categoría o subcategoría (Evolución › Acumulado), al estilo de Tendencias:
-  // una barra por mes del periodo, media discontinua y, al tocar una barra, enlace a sus movimientos.
+  // una barra por mes del periodo y media discontinua. Al tocar una barra:
+  //  · sin `onPick` (ficha de la categoría, sin lista debajo): enlace «Ver movimientos ›» de ese mes (`onMonth`);
+  //  · con `onPick(mes|null)` (pantalla de movimientos, con la lista debajo): avisa del mes elegido para que la
+  //    lista lo resalte y atenúe el resto, sin salir de la pantalla; tocarla otra vez o «Quitar» lo deshace.
   // Devuelve `{ nodes, update }`: `update(rows)` la recalcula con otro conjunto de movimientos (p. ej. lo
   // que deja a la vista el buscador de la lista de abajo), conservando el mes seleccionado.
-  function monthlyChart(rows, months, tipo, colorKey, onMonth) {
+  function monthlyChart(rows, months, tipo, colorKey, onMonth, onPick) {
     if (months.length < 2) return null; // un solo mes: no aporta nada mostrar una gráfica
     const sign = tipo === "gastos" ? -1 : 1; // igual criterio que el total de la cabecera (ghead)
     let vals = L.monthlyTotals(rows, months, sign);
@@ -436,17 +439,22 @@
     let sel = -1;
     const chartBox = el("div", { className: "chart-scroll", attrs: { "data-noswipe": "1" } });
     const selLine = el("div", { className: "tsel" });
+    const pick = (i) => { sel = i; paintChart(); paintSel(); if (onPick) onPick(sel >= 0 ? months[sel] : null); };
     const paintSel = () => {
+      const action = !onPick
+        ? (Math.abs(vals[sel]) >= 0.005 ? el("button", { type: "button", textContent: "Ver movimientos ›",
+            onclick: () => onMonth(months[sel]) }) : "")
+        : el("button", { type: "button", textContent: "Quitar", onclick: () => pick(-1) });
       selLine.replaceChildren(sel >= 0
-        ? el("span", {}, [`${L.monthLabel(months[sel])}: `, amt(vals[sel]),
-            Math.abs(vals[sel]) >= 0.005 ? el("button", { type: "button", textContent: "Ver movimientos ›",
-              onclick: () => onMonth(months[sel]) }) : ""])
-        : el("span", { className: "muted", textContent: "Toque una barra para ver ese mes." }));
+        ? el("span", {}, [`${L.monthLabel(months[sel])}: `, amt(vals[sel]), action])
+        : el("span", { className: "muted", textContent: onPick
+          ? "Toque una barra para resaltar ese mes en la lista." : "Toque una barra para ver ese mes." }));
     };
     const paintChart = () => {
       const left = chartBox.scrollLeft; // repintar no debe mover el desplazamiento horizontal
-      chartBox.replaceChildren(miniBars(vals, months, { color, avg: avgOf(), selected: sel, scroll: true,
-        onSelect: (i) => { sel = sel === i ? -1 : i; paintChart(); paintSel(); } }));
+      // `selected` sin selección debe ser `undefined` (con −1, `miniBars` atenuaba TODAS las barras en reposo).
+      chartBox.replaceChildren(miniBars(vals, months, { color, avg: avgOf(), selected: sel >= 0 ? sel : undefined, scroll: true,
+        onSelect: (i) => pick(sel === i ? -1 : i) }));
       chartBox.scrollLeft = left;
     };
     paintChart();
@@ -456,12 +464,15 @@
     return { nodes: [el("h2", { textContent: "Por mes" }), el("div", { className: "card" }, [chartBox, selLine])], update };
   }
 
-  function txList(rows, { byDay = true, showCat = false, income = false } = {}) {
+  // `hl` (AAAA-MM, opcional): mes resaltado; los movimientos de otros meses —y sus cabeceras de día— se
+  // atenúan (clase `dim`), pero siguen en la lista.
+  function txList(rows, { byDay = true, showCat = false, income = false, hl = null } = {}) {
     const out = [];
     let last = null;
     for (const t of rows) {
+      const dim = hl && t.date.slice(0, 7) !== hl ? " dim" : "";
       if (byDay && t.date !== last) {
-        out.push(el("div", { className: "day", textContent: L.dayLabel(t.date) }));
+        out.push(el("div", { className: `day${dim}`, textContent: L.dayLabel(t.date) }));
         last = t.date;
       }
       const meta = [byDay ? null : L.dayLabel(t.date), t.bank, showCat || income ? t.category : null, ...t.tags.map((x) => `#${x}`),
@@ -470,7 +481,7 @@
         el("p", { textContent: t.description || "—" }),
         el("p", { className: "muted", textContent: `${t.category} · id ${t.id}` }),
       ]);
-      out.push(el("div", { className: "tx", attrs: { role: "button", tabindex: "0" }, onclick: () => det.classList.toggle("hidden") }, [
+      out.push(el("div", { className: `tx${dim}`, attrs: { role: "button", tabindex: "0" }, onclick: () => det.classList.toggle("hidden") }, [
         el("div", { className: "tx-main" }, [el("div", { className: "tx-title", textContent: L.cleanTitle(t.merchant || t.description) }),
           el("div", { className: "tx-meta", textContent: meta })]),
         el("div", { className: `tx-amt amt${t.amount > 0 ? " pos" : ""}`, textContent: (t.amount > 0 ? "+" : "−") + eur.format(Math.abs(t.amount)) }),
@@ -484,9 +495,12 @@
   // Se abre siempre con la fecha descendente (lo más reciente primero), como el Diario.
   // `onFilter(filtrados)`: si se pasa, se le avisa cada vez que cambia el texto del buscador con los
   // movimientos que quedan a la vista (p. ej. para recalcular la gráfica «Por mes» de encima).
-  function txPanel(rows, tipo, showCat, onFilter) {
+  // Devuelve `{ nodes, highlight }`: `highlight(mes|null)` resalta los movimientos de ese mes y atenúa el
+  // resto, sin quitarlos (ni de la lista ni del total: siguen en pantalla).
+  function txPanel(rows, tipo, showCat, { onFilter } = {}) {
     let sort = "desc";
     let lastQ = "";
+    let hl = null;
     // «income»: signo natural (sin invertir) y sin etiqueta «devolución/abono» — vale tanto para
     // Ingresos como para No computables (estos no tienen semántica de devolución).
     const income = tipo === "ingresos" || tipo === "no-computables";
@@ -504,13 +518,13 @@
       const net = sum(r.map((t) => t.amount));
       total.replaceChildren(el("span", { textContent: `${r.length} mov.` }),
         el("span", { className: "amt", textContent: eur.format(nz(income ? net : -net)) }));
-      list.replaceChildren(...txList(r, { byDay: sort !== "amount", showCat, income }));
+      list.replaceChildren(...txList(r, { byDay: sort !== "amount", showCat, income, hl }));
       chips.replaceChildren(...[["desc", "Fecha ↓"], ["asc", "Fecha ↑"], ["amount", "Importe"]].map(([v, l]) =>
         el("button", { type: "button", className: `chip${v === sort ? " on" : ""}`, textContent: l, onclick: () => { sort = v; paint(); } })));
     };
     input.addEventListener("input", paint);
     paint();
-    return [input, chips, list, total];
+    return { nodes: [input, chips, list, total], highlight: (m) => { hl = m; paint(); } };
   }
 
   /* ---------- Diario: el día a día, sin agregaciones ---------- */
@@ -981,7 +995,7 @@
             el("span", { className: `v${c.total < 0 ? " neg" : ""}` }, amt(c.total)),
           ]))) : null,
           bareRows ? el("h2", { textContent: "Sin subcategoría" }) : null,
-          ...(bareRows ? txPanel(bareRows, tipo, false) : []),
+          ...(bareRows ? txPanel(bareRows, tipo, false).nodes : []),
           found ? el("button", { className: "link", type: "button", textContent: `Ver los ${g.count} movimientos`,
             onclick: () => go(H("rango", origin, from, to, tipo, "g", g.group, "mov")) }) : null,
         ]),
@@ -1002,10 +1016,14 @@
     const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
     const ref = refs && refs.months > 0 ? refs[refKey][key] : undefined;
     const pct = L.refPct(total, ref);
-    const chart = periodMonths.length > 1 ? monthlyChart(rows, periodMonths, tipo, key,
-      (m) => go(kind === "g"
-        ? H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "g", key, "mov")
-        : H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "c", key))) : null;
+    // Gráfica y lista enlazadas en los dos sentidos (peticiones del Señor, 30-oct-2026): el buscador
+    // recalcula la gráfica con los movimientos a la vista, y tocar una barra resalta en la lista los
+    // movimientos de ese mes y atenúa el resto, sin quitarlos y sin salir de la pantalla (aquí no hay
+    // «Ver movimientos ›»: ya están debajo). `panel` se asigna justo después; el toque llega más tarde.
+    let panel = null;
+    const chart = periodMonths.length > 1
+      ? monthlyChart(rows, periodMonths, tipo, key, null, (m) => panel.highlight(m)) : null;
+    panel = txPanel(rows, tipo, kind === "g", { onFilter: chart ? chart.update : undefined });
     return [
       detailBar(isSub ? first.label : L.shown(key), isSub ? `${L.shown(first.group)} · ${label}` : label),
       el("main", {}, [
@@ -1013,9 +1031,7 @@
           el("div", { className: "muted", textContent: `${rows.length} movimientos` }),
           refGauge(L.colorFor(key), pct, refs ? refs.months : null, ref)]),
         ...(chart ? chart.nodes : []),
-        // La gráfica «Por mes» sigue al buscador de la lista: solo suma los movimientos a la vista
-        // (petición del Señor, 30-oct-2026).
-        ...txPanel(rows, tipo, kind === "g", chart ? chart.update : undefined),
+        ...panel.nodes,
       ]),
       nav(navKey),
     ];

@@ -204,6 +204,11 @@ h2 { font-family:Georgia,serif; font-weight:400; font-size:1.2rem; margin:22px 0
 .tx-amt.pos { color:var(--good); }
 .tx-det { grid-column:1/-1; font-size:.85rem; overflow-wrap:anywhere; }
 .tx-det p { margin:4px 0; }
+/* Mes resaltado desde la gráfica «Por mes»: lo de otros meses se atenúa, no desaparece. La cabecera de
+   día es pegajosa (fondo opaco), así que solo se apaga su texto; si color-mix no existe, queda igual. */
+.tx { transition:opacity .15s; }
+.tx.dim { opacity:.35; }
+.day.dim { color:color-mix(in srgb, var(--muted) 45%, var(--bg)); }
 .tx-sum { z-index:6; position:sticky; bottom:74px; display:flex; justify-content:space-between; padding:12px 14px; margin-top:8px; border-radius:14px; background:var(--accent); color:#fff; font-weight:600; }
 
 /* diario */
