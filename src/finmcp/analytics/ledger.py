@@ -280,28 +280,45 @@ def closing_balances(session: Session, account_id: str) -> dict | None:
         i = bisect.bisect_left(days, d)
         return before_day[i] if i < len(days) else _cents(anchor_value)
 
-    # El Diario agrupa por fecha de operación: su saldo al cierre va por esa fecha. Las fotos
-    # del banco se siguen contrastando por fecha contable (`checks`); un descuadre se ve en rojo.
+    # El Diario agrupa por fecha de operación: su saldo al cierre va por esa fecha.
+    op_days = sorted(per_op_day)
     op_closing: dict[date, int] = {}
+    op_before_day: list[int] = [0] * len(op_days)
     running = _cents(anchor_value)
-    for d in sorted(per_op_day, reverse=True):
-        op_closing[d] = running
-        running -= sum(per_op_day[d])
+    for i in range(len(op_days) - 1, -1, -1):
+        op_closing[op_days[i]] = running
+        running -= sum(per_op_day[op_days[i]])
+        op_before_day[i] = running
+
+    def op_before(d: date) -> int:
+        """Saldo (por fecha de operación) al cierre del día anterior a `d`."""
+        i = bisect.bisect_left(op_days, d)
+        return op_before_day[i] if i < len(op_days) else _cents(anchor_value)
+
+    # Cada foto se da por buena si cuadra contando por fecha contable O por fecha de
+    # operación: hay bancos (BBVA) que unas veces descuentan un cargo en su fecha valor y
+    # otras en la contable. Solo es descuadre si no cuadra con ninguna de las dos.
+    def check(d: date, value: float) -> bool | None:
+        results = [_subset_sum(per_day.get(d, []), _cents(value) - before(d)),
+                   _subset_sum(per_op_day.get(d, []), _cents(value) - op_before(d))]
+        if True in results:
+            return True
+        return None if None in results else False
 
     checks = []
     for s, value, _ in snaps:
         d = local_date(s.snapshot_at)
-        checks.append((s, value, d, _subset_sum(per_day.get(d, []), _cents(value) - before(d))))
+        checks.append((s, value, d, check(d, value)))
     bad = [c for c in checks if c[3] is False]
     last_bad = None
     if bad:
         s, value, d, _ = bad[-1]
-        last_bad = {
+        last_bad = {  # cifras del Diario: por fecha de operación
             "at": iso_utc(s.snapshot_at),
             "date": d.isoformat(),
             "bank_value": round(value, 2),
-            "calc_prev": before(d) / 100,
-            "calc_day": before(d + timedelta(days=1)) / 100,
+            "calc_prev": op_before(d) / 100,
+            "calc_day": op_before(d + timedelta(days=1)) / 100,
         }
     return {
         "anchor": {"value": round(anchor_value, 2), "kind": anchor_kind, "at": iso_utc(anchor.snapshot_at)},

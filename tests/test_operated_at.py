@@ -92,3 +92,41 @@ def test_diario_por_fecha_de_operacion(make_tx, session):
     marzo = ledger.movements(session, account="acc1", start=date(2026, 3, 1),
                              end=date(2026, 3, 31))
     assert len(marzo["transactions"]) == 2
+
+
+def _foto(session, value, when):
+    session.add(models.Balance(account_id="acc1", available=value, current=value,
+                               currency="EUR", snapshot_at=when))
+    session.commit()
+
+
+def test_foto_cuadra_por_fecha_valor_o_por_contable(make_tx, session):
+    utc = timezone.utc
+    # Cargo de 50 € con fecha valor 30-mar y contable 1-abr.
+    make_tx(50.0, booked_at=datetime(2026, 4, 1, tzinfo=utc),
+            operated_at=datetime(2026, 3, 30, tzinfo=utc))
+    _foto(session, 150.0, datetime(2026, 3, 29, 20, tzinfo=utc))  # antes del cargo
+    _foto(session, 100.0, datetime(2026, 3, 31, 20, tzinfo=utc))  # ya descontado (fecha valor)
+    _foto(session, 100.0, datetime(2026, 4, 2, 6, tzinfo=utc))
+    check = ledger.closing_balances(session, "acc1")["check"]
+    assert check["bad"] == 0 and check["suspect_through"] is None
+
+
+def test_foto_cuadra_si_el_banco_espera_a_la_contable(make_tx, session):
+    utc = timezone.utc
+    make_tx(50.0, booked_at=datetime(2026, 4, 1, tzinfo=utc),
+            operated_at=datetime(2026, 3, 30, tzinfo=utc))
+    _foto(session, 150.0, datetime(2026, 3, 31, 20, tzinfo=utc))  # aún sin descontar
+    _foto(session, 100.0, datetime(2026, 4, 2, 6, tzinfo=utc))
+    assert ledger.closing_balances(session, "acc1")["check"]["bad"] == 0
+
+
+def test_descuadre_real_sigue_en_rojo(make_tx, session):
+    utc = timezone.utc
+    make_tx(50.0, booked_at=datetime(2026, 4, 1, tzinfo=utc),
+            operated_at=datetime(2026, 3, 30, tzinfo=utc))
+    _foto(session, 137.0, datetime(2026, 3, 31, 20, tzinfo=utc))  # no cuadra con ninguna
+    _foto(session, 100.0, datetime(2026, 4, 2, 6, tzinfo=utc))
+    check = ledger.closing_balances(session, "acc1")["check"]
+    assert check["bad"] == 1 and check["suspect_through"] == "2026-03-31"
+    assert check["last_bad"]["calc_day"] == 100.0  # cifra del Diario (fecha de operación)
