@@ -340,19 +340,24 @@
   // mediana como `avg`: la línea discontinua que ya dibuja para la media sirve igual para la
   // mediana, solo cambia lo que mide. `null` sin referencia útil (la llamada ya decide cuándo
   // pedirla: un único mes, y no una subcategoría genuina) o sin ningún mes que pintar.
-  // Tocar una barra muestra su importe (30-oct-2026, petición del Señor, mismo día): mismo patrón
-  // que `monthlyChart` (`selected`/`onSelect` de `miniBars`, atenuando las demás a 0.35), pero sin
-  // «Ver movimientos» ni resaltado de lista — aquí no hay lista debajo que resaltar, solo una línea
-  // con el mes y su importe bajo la mediana; tocar la misma barra, o nada, lo quita.
-  function medianBars(color, ref, refMonths, months, vals) {
+  // Tocar una barra muestra su importe (30-oct-2026, petición del Señor, mismo día) y, a su derecha,
+  // un enlace «Ver detalle del mes ›» que recarga esta misma ficha para el mes tocado (mismo patrón
+  // que el `.tsel`/«Ver movimientos ›» de `monthlyChart`, pero aquí vuelve a ESTA pantalla —ghead +
+  // gráfica + subcategorías o movimientos— en vez de a la lista de movimientos de ese mes, porque no
+  // hay lista debajo que resaltar). Se muestra siempre que haya un mes elegido, incluso a 0 €
+  // (mismo criterio que el resto de la ficha: un mes sin movimiento también tiene detalle útil, la
+  // mediana). `onMonth(mes)` lo decide la llamada.
+  function medianBars(color, ref, refMonths, months, vals, onMonth) {
     if (ref === undefined || ref === null || !months || !months.length) return null;
     let sel = -1;
     const chartBox = el("div", {});
-    const selLine = el("div", { className: "refcap muted" });
+    const selLine = el("div", { className: "tsel" });
     const paintSel = () => {
-      selLine.textContent = sel >= 0
-        ? `${L.monthLabel(months[sel])}${months[sel] === CUR ? ` (a día ${CUT.day})` : ""}: ${eur0.format(vals[sel])}`
-        : "Toque una barra para ver su importe.";
+      selLine.replaceChildren(sel >= 0
+        ? el("span", {}, [`${L.monthLabel(months[sel])}${months[sel] === CUR ? ` (a día ${CUT.day})` : ""}: `,
+            amt(vals[sel]),
+            el("button", { type: "button", textContent: "Ver detalle del mes ›", onclick: () => onMonth(months[sel]) })])
+        : el("span", { className: "muted", textContent: "Toque una barra para ver su importe." }));
     };
     const paintChart = () => {
       chartBox.replaceChildren(miniBars(vals, months, { color, avg: ref, selected: sel >= 0 ? sel : undefined,
@@ -1051,7 +1056,8 @@
             el("div", { className: "muted", textContent: found
               ? `${g.count} movimientos · ${L.share(g.total, agg.total)} % de los ${word(tipo)}`
               : "Sin movimientos en este periodo." }),
-            medianBars(L.colorFor(key), ref, refs ? refs.months : null, yearSeries ? yearSeries.months : null, yearVals)]),
+            medianBars(L.colorFor(key), ref, refs ? refs.months : null, yearSeries ? yearSeries.months : null, yearVals,
+              (m) => go(H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "g", g.group)))]),
           ...(chart ? chart.nodes : []),
           subcats.length ? el("h2", { textContent: "Por subcategoría" }) : null,
           subcats.length ? el("div", { className: "cards" }, subcats.map((c) => el("button", { className: "gcard", type: "button",
@@ -1104,7 +1110,8 @@
       el("main", {}, [
         el("div", { className: "ghead" }, [el("span", { className: "big amt", textContent: eur.format(total) }),
           el("div", { className: "muted", textContent: `${rows.length} movimientos` }),
-          medianBars(L.colorFor(key), ref, refs ? refs.months : null, yearSeries ? yearSeries.months : null, yearVals)]),
+          medianBars(L.colorFor(key), ref, refs ? refs.months : null, yearSeries ? yearSeries.months : null, yearVals,
+            (m) => go(H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "c", key)))]),
         ...(chart ? chart.nodes : []),
         ...panel.nodes,
       ]),
