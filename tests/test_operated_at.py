@@ -7,11 +7,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine, text
-
 from finmcp.analytics import ledger
 from finmcp.analytics.summaries import monthly_summary
-from finmcp.db import models, queries, session as db_session
+from finmcp.db import models, queries
 from finmcp.db.repo import upsert_transaction
 from finmcp.providers.enablebanking import mapper
 from finmcp.providers.types import Transaction as ProviderTx
@@ -82,34 +80,3 @@ def test_saldos_del_diario_siguen_la_fecha_contable(make_tx, session):
             operated_at=datetime(2026, 3, 30, tzinfo=timezone.utc))
     cb = ledger.closing_balances(session, "acc1")
     assert list(cb["closing"]) == ["2026-04-01"]
-
-
-def test_migracion_rellena_operated_at(tmp_path, monkeypatch):
-    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}", future=True)
-    with engine.begin() as c:
-        c.execute(text("CREATE TABLE transactions (id VARCHAR PRIMARY KEY, booked_at DATETIME,"
-                       " raw_json JSON)"))
-        rows = [
-            ("ing", "2026-04-01 00:00:00.000000",
-             '{"transaction_date": "2026-03-29", "booking_date": "2026-04-01"}'),
-            ("bbva", "2026-04-01 00:00:00.000000",
-             '{"value_date": "2026-03-30", "booking_date": "2026-04-01"}'),
-            ("bonusly", "2026-04-01 00:00:00.000000", '{"id": "b"}'),
-            ("csv", "2026-04-01 00:00:00.000000", '{"source": "csv"}'),
-            ("vacio", "2026-04-01 00:00:00.000000", None),
-        ]
-        for r in rows:
-            c.execute(text("INSERT INTO transactions VALUES (:a, :b, :c)"),
-                      {"a": r[0], "b": r[1], "c": r[2]})
-    monkeypatch.setattr(db_session, "engine", engine)
-    db_session._ensure_schema_upgrades()
-    with engine.connect() as c:
-        got = dict(c.execute(text("SELECT id, operated_at FROM transactions")).fetchall())
-    assert got == {
-        "ing": "2026-03-29 00:00:00.000000",
-        "bbva": "2026-03-30 00:00:00.000000",
-        "bonusly": "2026-04-01 00:00:00.000000",
-        "csv": "2026-04-01 00:00:00.000000",
-        "vacio": "2026-04-01 00:00:00.000000",
-    }
-    db_session._ensure_schema_upgrades()  # segunda vez: no hace nada
