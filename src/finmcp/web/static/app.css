@@ -46,7 +46,10 @@ button, input, select { font:inherit; color:inherit; }
 header.top { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:2px; padding:6px; background:var(--bg); }
 .ib { min-width:44px; min-height:44px; border:0; background:none; font-size:1.5rem; border-radius:50%; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; color:var(--fg); }
 .ttl { flex:1; min-width:0; text-align:center; }
-.spacer { width:44px; flex:none; }
+/* Ojo del modo discreto: solo en escritorio (≥ 1024 px); en móvil y tableta el modo se alterna agitando el dispositivo.
+   Se oculta con visibility, no con display: sigue ocupando su hueco y el título de la cabecera queda centrado. */
+.privbtn { visibility:hidden; }
+@media (min-width:1024px) { .privbtn { visibility:visible; } }
 .mon { font-family:Georgia,"Iowan Old Style",serif; font-size:1.35rem; text-transform:capitalize; }
 .dtitle { font-family:Georgia,"Iowan Old Style",serif; font-size:1.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .partial { font-size:.75rem; color:var(--warn); }
@@ -321,5 +324,11 @@ h2.h2first { margin-top:6px; }
 .pin .link:disabled { opacity:.6; }
 .pin-msg { min-height:2.8em; color:var(--bad); font-size:.9rem; }
 .lockbtn { margin-top:8px; min-height:44px; padding:0; border:0; background:none; color:var(--muted); font-size:.82rem; text-decoration:underline; cursor:pointer; }
+
+/* Modo discreto (clase `private` en <html>): difumina los importes y, más suave, los gráficos y el dato original del banco.
+   El radio crece con el tamaño de la letra (.45em, nunca menos de 8 px): con un radio fijo, las cifras grandes (el total de
+   saldos, las del encabezado) dejaban adivinar la forma de los dígitos. */
+html.private .amt, html.private .raw pre { filter:blur(max(8px, .45em)); }
+html.private .donut svg, html.private .spark, html.private .bars, html.private .mini { filter:blur(3px); }
 
 @media (prefers-reduced-motion: reduce) { * { transition:none !important; } .odo-tape { animation:none !important; } }

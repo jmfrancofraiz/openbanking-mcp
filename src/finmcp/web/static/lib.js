@@ -169,6 +169,32 @@
   // Tema efectivo: el forzado por el usuario si lo hay; si no, el del sistema.
   const isDarkTheme = (override, systemPrefersDark) => (override ? override === "dark" : Boolean(systemPrefersDark));
 
+  // Modo discreto en móvil y tableta: se alterna agitando el dispositivo. `shakeDetector()` devuelve una función que
+  // recibe cada lectura del acelerómetro (m/s², con la gravedad incluida salvo que se pase `gravity` 0) y su instante
+  // en ms, y responde true al reconocer una sacudida. Cuenta un golpe cada vez que la aceleración se aparta de la
+  // gravedad al menos `threshold` (vuelve a contar cuando baja de `rearm`); hacen falta `hits` golpes en menos de
+  // `window` ms. Después ignora el sensor `cooldown` ms, para que una misma sacudida no conmute dos veces. Andar con el
+  // móvil en la mano o dejarlo en la mesa da un golpe suelto o ninguno.
+  const SHAKE = { threshold: 14, rearm: 7, hits: 3, window: 1000, cooldown: 1500 };
+  const GRAVITY = 9.81;
+  function shakeDetector(opts = {}) {
+    const o = { ...SHAKE, ...opts };
+    let armed = true, hits = [], quietUntil = -Infinity;
+    return (x, y, z, t, gravity = GRAVITY) => {
+      if (![x, y, z, t].every(Number.isFinite)) return false;
+      const dev = Math.abs(Math.hypot(x, y, z) - gravity);
+      if (dev < o.rearm) { armed = true; return false; }
+      if (dev < o.threshold || !armed || t < quietUntil) return false;
+      armed = false;
+      hits = hits.filter((h) => t - h < o.window);
+      hits.push(t);
+      if (hits.length < o.hits) return false;
+      hits = [];
+      quietUntil = t + o.cooldown;
+      return true;
+    };
+  }
+
   function colorFor(name) {
     let h = 0;
     for (const ch of name) h = (h * 31 + ch.codePointAt(0)) >>> 0;
@@ -487,6 +513,6 @@
     totalNote, figureChars, TAPE_LEN, odoTape, rollDelay,
     periodsOf, comparisonCut, periodRange, accumulatedMonths,
     PACE_REFS, paceRefs, verdict, seriesStats, trendOf, diffGroups, diffSubcategories,
-    nextTheme, isDarkTheme,
+    nextTheme, isDarkTheme, SHAKE, shakeDetector,
   };
 });

@@ -129,6 +129,44 @@ test("modo oscuro: ciclo del alternador y tema efectivo", () => {
   assert.equal(L.isDarkTheme("light", true), false);
 });
 
+test("modo discreto: detector de sacudidas", () => {
+  const G = 9.81;
+  // Lecturas a 60 Hz (cada ~16 ms) con la aceleración total `mag` en el eje z.
+  const feed = (det, mags, t0 = 0) => mags.map((m, i) => det(0, 0, m, t0 + i * 16));
+  // Una sacudida: tres golpes fuertes (> 14 m/s² sobre la gravedad) con reposo entre medias, en menos de 1 s.
+  const shake = [G, G + 20, G, G, G + 22, G, G, G + 25, G];
+  let det = L.shakeDetector();
+  assert.deepEqual(feed(det, shake).filter(Boolean).length, 1);
+  // El aviso llega justo con el tercer golpe.
+  det = L.shakeDetector();
+  assert.equal(feed(det, shake).indexOf(true), 7);
+  // Andar con el móvil en la mano: oscilaciones de ±4 m/s², nunca llegan al umbral.
+  det = L.shakeDetector();
+  assert.equal(feed(det, Array.from({ length: 120 }, (_, i) => G + 4 * Math.sin(i / 4))).some(Boolean), false);
+  // Un golpe suelto (dejar el móvil en la mesa) o dos: no basta.
+  det = L.shakeDetector();
+  assert.equal(feed(det, [G, G + 30, G, G, G + 30, G]).some(Boolean), false);
+  // Mantener la aceleración alta sin volver a reposo cuenta como un único golpe (histéresis con `rearm`).
+  det = L.shakeDetector();
+  assert.equal(feed(det, [G, G + 20, G + 19, G + 21, G + 20, G + 22, G]).some(Boolean), false);
+  // Golpes demasiado espaciados (más de 1 s entre el primero y el tercero): no es una sacudida.
+  det = L.shakeDetector();
+  assert.equal([det(0, 0, G + 20, 0), det(0, 0, G, 10), det(0, 0, G + 20, 600), det(0, 0, G, 610),
+    det(0, 0, G + 20, 1200)].some(Boolean), false);
+  // Tras una sacudida, 1,5 s de silencio: seguir agitando no vuelve a conmutar…
+  det = L.shakeDetector();
+  const again = [...shake, ...shake, ...shake];
+  assert.equal(feed(det, again).filter(Boolean).length, 1);
+  // …pero pasado ese tiempo, otra sacudida sí.
+  assert.equal(feed(det, shake, 3000).filter(Boolean).length, 1);
+  // Lecturas incompletas (algunos navegadores dan null en un eje): se ignoran sin romper nada.
+  det = L.shakeDetector();
+  assert.equal(det(null, 0, G, 0), false);
+  // Con la aceleración lineal (sin gravedad), se pasa gravity = 0.
+  det = L.shakeDetector();
+  assert.equal([20, 0, 20, 0, 20].map((m, i) => det(m, 0, 0, i * 16, 0)).filter(Boolean).length, 1);
+});
+
 test("parseHash decodifica los segmentos", () => {
   assert.deepEqual(L.parseHash("#/rango/mes/2026-03-01/2026-03-31/gastos/g/Moda%20y%20complementos"),
     ["rango", "mes", "2026-03-01", "2026-03-31", "gastos", "g", "Moda y complementos"]);

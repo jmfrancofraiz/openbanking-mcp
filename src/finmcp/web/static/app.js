@@ -78,7 +78,6 @@
     : tipo === "no-computables" ? "movimientos no computables" : "gastos");
   const tipoOf = (x) => (x === "ingresos" || x === "no-computables" ? x : "gastos");
   const H = (...segs) => `#/${segs.map((x) => encodeURIComponent(x)).join("/")}`;
-  const spacer = () => el("span", { className: "spacer" });
   const stepMonth = (ym, d) => MONTHS[MONTHS.indexOf(ym) + d] || null;
   const sum = (xs) => xs.reduce((a, v) => a + v, 0);
 
@@ -235,13 +234,60 @@
       attrs: { "aria-label": `Modo de color: ${label}. Tocar para cambiar.` }, onclick: cycleTheme }, [themeIcon()]);
   }
 
-  const topbar = (title) => el("header", { className: "top" }, [spacer(), el("div", { className: "ttl" }, el("div", { className: "mon", textContent: title })), themeBtn()]);
+  /* ---------- modo discreto ---------- */
+
+  // Difumina las cifras (importes y gráficos) para enseñar el panel sin que se vean. Se alterna con el ojo de la
+  // cabecera, que el CSS solo muestra en pantallas de escritorio (≥ 1024 px), o agitando el móvil o la tableta. Se
+  // recuerda en el dispositivo (es una preferencia, no una cifra): recargar la página no destapa nada.
+  const PRIVATE_KEY = "finmcp.private";
+  const isPrivate = () => document.documentElement.classList.contains("private");
+  try { if (localStorage.getItem(PRIVATE_KEY)) document.documentElement.classList.add("private"); } catch { /* sin almacenamiento */ }
+  function eyeIcon(hidden) {
+    const common = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 2,
+      "stroke-linecap": "round", "aria-hidden": "true" };
+    const eye = [svg("path", { d: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" }), svg("circle", { cx: 12, cy: 12, r: 3 })];
+    return svg("svg", common, hidden ? [...eye, svg("path", { d: "M3 3l18 18" })] : eye);
+  }
+  function paintPrivBtn(b) {
+    const on = isPrivate();
+    b.setAttribute("aria-pressed", String(on));
+    b.setAttribute("aria-label", on ? "Modo discreto: cifras ocultas. Tocar para mostrarlas." : "Modo discreto: tocar para ocultar las cifras.");
+    b.replaceChildren(eyeIcon(on));
+  }
+  function setPrivate(on) {
+    document.documentElement.classList.toggle("private", on);
+    try { if (on) localStorage.setItem(PRIVATE_KEY, "1"); else localStorage.removeItem(PRIVATE_KEY); } catch { /* queda solo en esta carga */ }
+    document.querySelectorAll(".privbtn").forEach(paintPrivBtn);
+  }
+  // Ocupa el hueco izquierdo de la cabecera; por debajo de 1024 px el CSS lo vuelve invisible (sigue centrando el título).
+  function privBtn() {
+    const b = el("button", { className: "ib privbtn", type: "button", onclick: () => setPrivate(!isPrivate()) });
+    paintPrivBtn(b);
+    return b;
+  }
+  // Agitar el dispositivo alterna el modo. El navegador solo da el acelerómetro en un contexto seguro (HTTPS, o
+  // `localhost`); por HTTP en la red de casa `DeviceMotionEvent` no existe y el gesto queda inactivo sin más.
+  function setupShake() {
+    if (!window.isSecureContext || typeof window.DeviceMotionEvent === "undefined") return;
+    const shaken = L.shakeDetector();
+    window.addEventListener("devicemotion", (e) => {
+      const g = e.accelerationIncludingGravity, lin = e.acceleration;
+      const withGravity = g && g.x !== null;
+      const s = withGravity ? g : lin;
+      if (!s || !shaken(s.x, s.y, s.z, e.timeStamp, withGravity ? undefined : 0)) return;
+      setPrivate(!isPrivate());
+      try { if (navigator.vibrate) navigator.vibrate(isPrivate() ? [40, 60, 40] : 40); } catch { /* sin vibración */ }
+    });
+  }
+  setupShake();
+
+  const topbar = (title) => el("header", { className: "top" }, [privBtn(), el("div", { className: "ttl" }, el("div", { className: "mon", textContent: title })), themeBtn()]);
 
   function detailBar(title, subtitle) {
     return el("header", { className: "top" }, [
       el("button", { className: "ib", type: "button", textContent: "‹", attrs: { "aria-label": "Volver" }, onclick: back }),
       el("div", { className: "ttl" }, [el("div", { className: "dtitle", textContent: title }), el("div", { className: "muted", textContent: subtitle })]),
-      spacer(),
+      privBtn(),
     ]);
   }
 
@@ -372,8 +418,7 @@
     paintChart();
     paintSel();
     return el("div", { className: "card refchart" }, [
-      el("div", { className: "refcap muted",
-        textContent: `Mediana ${refMonths} meses: ${eur0.format(ref)}` }),
+      el("div", { className: "refcap muted" }, [`Mediana ${refMonths} meses: `, amt(ref)]),
       chartBox,
       selLine,
     ]);
@@ -433,8 +478,8 @@
       }, [
         el("span", { className: "dot", style: { background: color } }),
         el("span", { className: "n", textContent: L.shown(g.group) }),
-        el("span", { className: "s", textContent: [`${L.share(g.total, agg.total)} %`, `${g.count} mov.`,
-          ctx.months > 1 ? `${eur0.format(g.total / ctx.months)}/mes` : null].filter(Boolean).join(" · ") }),
+        el("span", { className: "s" }, [`${L.share(g.total, agg.total)} %`, `${g.count} mov.`,
+          ctx.months > 1 ? [amt(g.total / ctx.months), "/mes"] : null].filter(Boolean).flatMap((x, i) => (i ? [" · ", x] : [x]))),
         el("span", { className: `v${g.total < 0 ? " neg" : ""}` }, [amt(g.total), ctx.spark ? sparkOf(ctx.spark, g.group) : null]),
       ]);
     };
@@ -697,13 +742,14 @@
     const src = a.manual ? "el saldo anotado a mano" : "la foto del banco";
     if (!bal) return el("div", { className: "acc-note" }, el("p", { textContent: `${a.bank}: ${a.manual ? "no tiene ningún saldo anotado" : "no hay foto de saldo del banco"}, así que no se puede calcular el saldo de cada día.` }));
     const c = bal.check;
-    const ps = [el("p", { textContent: `La cifra junto a cada día es el saldo al cierre, calculado hacia atrás desde ${src} de ${L.whenLabel(bal.anchor.at, TODAY)} `
-      + `(${eur.format(bal.anchor.value)}${bal.anchor.kind === "disponible" ? ", saldo disponible" : ""}). ${a.manual ? "Es un cálculo, no un saldo anotado." : "No es un dato del banco."}` })];
+    const ps = [el("p", {}, [`La cifra junto a cada día es el saldo al cierre, calculado hacia atrás desde ${src} de ${L.whenLabel(bal.anchor.at, TODAY)} (`,
+      amt(bal.anchor.value, eur), `${bal.anchor.kind === "disponible" ? ", saldo disponible" : ""}). ${a.manual ? "Es un cálculo, no un saldo anotado." : "No es un dato del banco."}`])];
     const snaps = (n) => (a.manual ? (n === 1 ? "el saldo anotado" : `los ${n} saldos anotados`) : (n === 1 ? "la foto del banco" : `las ${n} fotos del banco`));
     if (c.bad) {
       const b = c.last_bad;
-      ps.push(el("p", { className: "warnv", textContent: `⚠ No cuadra con ${c.bad} de ${snaps(c.snapshots)}. ${a.manual ? "El más reciente" : "La más reciente"}, de ${L.whenLabel(b.at, TODAY)}: ${a.manual ? "el saldo anotado era" : "el banco daba"} ${eur.format(b.bank_value)}; `
-        + `el cálculo da ${eur.format(b.calc_prev)} al cierre del día anterior y ${eur.format(b.calc_day)} al cierre de ese día. Falta o sobra algún movimiento: los saldos hasta el ${dshort(b.date)} (en rojo) pueden estar desviados.` }));
+      ps.push(el("p", { className: "warnv" }, [`⚠ No cuadra con ${c.bad} de ${snaps(c.snapshots)}. ${a.manual ? "El más reciente" : "La más reciente"}, de ${L.whenLabel(b.at, TODAY)}: ${a.manual ? "el saldo anotado era" : "el banco daba"} `,
+        amt(b.bank_value, eur), "; el cálculo da ", amt(b.calc_prev, eur), " al cierre del día anterior y ", amt(b.calc_day, eur),
+        ` al cierre de ese día. Falta o sobra algún movimiento: los saldos hasta el ${dshort(b.date)} (en rojo) pueden estar desviados.`]));
     } else if (c.ok) {
       ps.push(el("p", { textContent: `Cuadra con ${snaps(c.ok)} desde el ${dshort(c.since)}`
         + `${c.unknown ? ` (${c.unknown} sin poder comprobar)` : ""}; antes no hay ${a.manual ? "saldos con los que" : "fotos con las que"} comprobarlo.` }));
@@ -919,6 +965,10 @@
     return b;
   }
 
+  // Datos del banco que llevan importes (el saldo tras el movimiento, el importe original del cambio de divisa):
+  // se marcan como cifra para que el modo discreto los difumine.
+  const BANK_AMOUNTS = new Set(["Saldo tras el movimiento", "Tipo de cambio"]);
+
   async function movementView(id) {
     const t = await api("movement", { id });
     const a = t.account_info;
@@ -946,7 +996,7 @@
         ])),
         el("h2", { textContent: "Datos del banco" }),
         el("div", { className: "card" }, t.source === "feed"
-          ? (t.bank_data.length ? kv(t.bank_data.map((x) => [x.label, x.value])) : el("p", { className: "muted", textContent: "El banco no envió más datos." }))
+          ? (t.bank_data.length ? kv(t.bank_data.map((x) => [x.label, BANK_AMOUNTS.has(x.label) ? el("span", { className: "amt", textContent: x.value }) : x.value])) : el("p", { className: "muted", textContent: "El banco no envió más datos." }))
           : el("p", { className: "muted", textContent: t.source === "csv"
             ? "Importado de un extracto descargado del banco: no hay datos originales de la conexión bancaria."
             : "Sin datos originales del banco." })),
@@ -1138,8 +1188,8 @@
 
   function trendPill(d) {
     if (d.flat) return el("span", { className: "trend flat", textContent: "≈ igual" });
-    const size = d.pct === null ? eur0.format(Math.abs(d.diff)) : `${Math.abs(d.pct).toFixed(0)} %`;
-    return el("span", { className: `trend ${d.tone}`, textContent: `${d.diff > 0 ? "▲" : "▼"} ${size}` });
+    const size = d.pct === null ? amt(Math.abs(d.diff)) : `${Math.abs(d.pct).toFixed(0)} %`;
+    return el("span", { className: `trend ${d.tone}` }, [`${d.diff > 0 ? "▲" : "▼"} `, size]);
   }
 
   async function paceView() {
