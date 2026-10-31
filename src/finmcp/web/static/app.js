@@ -346,7 +346,11 @@
   // esta misma pantalla, para su propio enlace de Categorías › Acumulado—; aquí no hay lista debajo
   // que resaltar, así que no hace falta un `onPick`). Se muestra siempre que haya un mes elegido,
   // incluso a 0 € (mismo criterio que el resto de la ficha: un mes sin movimiento también tiene
-  // detalle útil, la mediana). `onMonth(mes)` lo decide la llamada.
+  // detalle útil, la mediana), EXCEPTO para la última barra (30-oct-2026, mismo turno, petición del
+  // Señor): esa barra es SIEMPRE el mes ya mostrado en esta misma pantalla (los `months` que recibe
+  // esta función siempre terminan en él, por construcción de quien la llama — ventana de 12 meses
+  // que TERMINA en el mes mostrado), así que el enlace llevaría a la pantalla en la que ya se está;
+  // ahí solo se ve el importe, sin acción. `onMonth(mes)` lo decide la llamada.
   function medianBars(color, ref, refMonths, months, vals, onMonth) {
     if (ref === undefined || ref === null || !months || !months.length) return null;
     let sel = -1;
@@ -356,7 +360,9 @@
       selLine.replaceChildren(sel >= 0
         ? el("span", {}, [`${L.monthLabel(months[sel])}${months[sel] === CUR ? ` (a día ${CUT.day})` : ""}: `,
             amt(vals[sel]),
-            el("button", { type: "button", textContent: "Ver detalle del mes ›", onclick: () => onMonth(months[sel]) })])
+            sel < months.length - 1
+              ? el("button", { type: "button", textContent: "Ver detalle del mes ›", onclick: () => onMonth(months[sel]) })
+              : ""])
         : el("span", { className: "muted", textContent: "Toque una barra para ver su importe." }));
     };
     const paintChart = () => {
