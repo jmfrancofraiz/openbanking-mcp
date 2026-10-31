@@ -8,6 +8,10 @@
 <meta name="referrer" content="no-referrer">
 <title>Finanzas · finmcp</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<!-- Instalable como aplicación (PWA) cuando se sirve por HTTPS. Sin service worker a propósito: nada del panel,
+     y menos aún una cifra, queda guardado en el dispositivo para usarlo sin conexión. -->
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>

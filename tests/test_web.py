@@ -188,6 +188,31 @@ def test_index_y_estaticos(client):
     assert css.status_code == 200
 
 
+def test_instalable_como_aplicacion_sin_service_worker(client):
+    """PWA: manifiesto enlazado, servido con su tipo y con lo que Chrome exige para instalar; sin service worker."""
+    import json
+    import struct
+
+    index = client.get("/")
+    assert '<link rel="manifest" href="/static/manifest.webmanifest">' in index.text
+    # Ningún service worker: nada del panel queda guardado en el dispositivo.
+    assert "serviceWorker" not in client.get("/static/app.js").text
+
+    r = client.get("/static/manifest.webmanifest")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/manifest+json")
+    m = json.loads(r.text)
+    assert m["name"] and m["short_name"] and m["display"] == "standalone"
+    assert m["start_url"] == "/" and m["scope"] == "/"
+    sizes = {(i["sizes"], i.get("purpose", "any")) for i in m["icons"]}
+    assert {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")} <= sizes
+    for icon in m["icons"]:
+        png = client.get(icon["src"])
+        assert png.status_code == 200 and png.headers["content-type"] == "image/png"
+        assert png.content[:8] == b"\x89PNG\r\n\x1a\n"
+        w, h = struct.unpack(">II", png.content[16:24])
+        assert f"{w}x{h}" == icon["sizes"]
+
+
 def test_cabeceras_de_seguridad_y_cache(client):
     api = client.get("/api/meta")
     index = client.get("/")
