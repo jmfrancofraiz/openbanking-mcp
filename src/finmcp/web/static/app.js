@@ -340,12 +340,31 @@
   // mediana como `avg`: la línea discontinua que ya dibuja para la media sirve igual para la
   // mediana, solo cambia lo que mide. `null` sin referencia útil (la llamada ya decide cuándo
   // pedirla: un único mes, y no una subcategoría genuina) o sin ningún mes que pintar.
+  // Tocar una barra muestra su importe (30-oct-2026, petición del Señor, mismo día): mismo patrón
+  // que `monthlyChart` (`selected`/`onSelect` de `miniBars`, atenuando las demás a 0.35), pero sin
+  // «Ver movimientos» ni resaltado de lista — aquí no hay lista debajo que resaltar, solo una línea
+  // con el mes y su importe bajo la mediana; tocar la misma barra, o nada, lo quita.
   function medianBars(color, ref, refMonths, months, vals) {
     if (ref === undefined || ref === null || !months || !months.length) return null;
+    let sel = -1;
+    const chartBox = el("div", {});
+    const selLine = el("div", { className: "refcap muted" });
+    const paintSel = () => {
+      selLine.textContent = sel >= 0
+        ? `${L.monthLabel(months[sel])}${months[sel] === CUR ? ` (a día ${CUT.day})` : ""}: ${eur0.format(vals[sel])}`
+        : "Toque una barra para ver su importe.";
+    };
+    const paintChart = () => {
+      chartBox.replaceChildren(miniBars(vals, months, { color, avg: ref, selected: sel >= 0 ? sel : undefined,
+        onSelect: (i) => { sel = sel === i ? -1 : i; paintChart(); paintSel(); } }));
+    };
+    paintChart();
+    paintSel();
     return el("div", { className: "card refchart" }, [
-      miniBars(vals, months, { color, avg: ref, onSelect: () => {} }),
       el("div", { className: "refcap muted",
         textContent: `Mediana ${refMonths} meses: ${eur0.format(ref)}` }),
+      chartBox,
+      selLine,
     ]);
   }
 
