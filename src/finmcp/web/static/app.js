@@ -342,11 +342,11 @@
   // pedirla: un único mes, y no una subcategoría genuina) o sin ningún mes que pintar.
   // Tocar una barra muestra su importe (30-oct-2026, petición del Señor, mismo día) y, a su derecha,
   // un enlace «Ver detalle del mes ›» que recarga esta misma ficha para el mes tocado (mismo patrón
-  // que el `.tsel`/«Ver movimientos ›» de `monthlyChart`, pero aquí vuelve a ESTA pantalla —ghead +
-  // gráfica + subcategorías o movimientos— en vez de a la lista de movimientos de ese mes, porque no
-  // hay lista debajo que resaltar). Se muestra siempre que haya un mes elegido, incluso a 0 €
-  // (mismo criterio que el resto de la ficha: un mes sin movimiento también tiene detalle útil, la
-  // mediana). `onMonth(mes)` lo decide la llamada.
+  // `.tsel` que `monthlyChart` —que desde este mismo turno usa idéntico texto y el mismo destino,
+  // esta misma pantalla, para su propio enlace de Categorías › Acumulado—; aquí no hay lista debajo
+  // que resaltar, así que no hace falta un `onPick`). Se muestra siempre que haya un mes elegido,
+  // incluso a 0 € (mismo criterio que el resto de la ficha: un mes sin movimiento también tiene
+  // detalle útil, la mediana). `onMonth(mes)` lo decide la llamada.
   function medianBars(color, ref, refMonths, months, vals, onMonth) {
     if (ref === undefined || ref === null || !months || !months.length) return null;
     let sel = -1;
@@ -470,7 +470,10 @@
   // Barras mensuales de una categoría o subcategoría (Categorías con varios meses): una barra por mes del
   // periodo (el mes en curso, rayado), media discontinua de los meses cerrados y, encima, sus cifras (media, último
   // mes, máximo) y la tendencia (lo que aportaba la antigua pestaña Tendencias). Al tocar una barra:
-  //  · sin `onPick` (ficha de la categoría, sin lista debajo): enlace «Ver movimientos ›» de ese mes (`onMonth`);
+  //  · sin `onPick` (ficha de la categoría, sin lista debajo): enlace «Ver detalle del mes ›» de ese mes (`onMonth`;
+  //    renombrado de «Ver movimientos ›» el 30-oct-2026, petición del Señor, para que el texto y el destino
+  //    coincidan con el enlace homónimo de `medianBars` — quien lo llama decide la ruta, aquí siempre la ficha
+  //    de categoría de Categorías › Mes para ese mes, nunca ya la lista de movimientos);
   //  · con `onPick(mes|null)` (pantalla de movimientos, con la lista debajo): avisa del mes elegido para que la
   //    lista lo resalte y atenúe el resto, sin salir de la pantalla; tocarla otra vez o «Quitar» lo deshace.
   // Devuelve `{ nodes, update }`: `update(rows)` la recalcula con otro conjunto de movimientos (p. ej. lo
@@ -500,7 +503,7 @@
     };
     const paintSel = () => {
       const action = !onPick
-        ? (Math.abs(vals[sel]) >= 0.005 ? el("button", { type: "button", textContent: "Ver movimientos ›",
+        ? (Math.abs(vals[sel]) >= 0.005 ? el("button", { type: "button", textContent: "Ver detalle del mes ›",
             onclick: () => onMonth(months[sel]) }) : "")
         : el("button", { type: "button", textContent: "Quitar", onclick: () => pick(-1) });
       selLine.replaceChildren(sel >= 0
@@ -1047,8 +1050,14 @@
         yearMonths ? seriesOf(yearMonths[0], ym) : null,
       ]);
       const yearVals = yearSeries ? (yearSeries[refKey][key] || yearSeries.months.map(() => 0)) : null;
+      // «Ver detalle del mes ›» de esta gráfica (30-oct-2026, petición del Señor: antes «Ver
+      // movimientos ›» de ese mes) lleva SIEMPRE a la ficha de Categorías › Mes de esa misma
+      // categoría para el mes tocado —origen «mes» fijo, no el `origin` de esta pantalla (aquí
+      // siempre «acumulado», al ser la única que pasa `onMonth` a `monthlyChart`)—, igual que el
+      // enlace homónimo de `medianBars`: es la MISMA pantalla, con su propia mediana de 12 meses y
+      // su propio enlace para seguir navegando mes a mes.
       const chart = chartRows ? monthlyChart(chartRows, periodMonths, tipo, g.group,
-        (m) => go(H("rango", origin, L.monthStart(m), monthEndFor(m), tipo, "g", g.group, "mov"))) : null;
+        (m) => go(H("rango", "mes", L.monthStart(m), monthEndFor(m), tipo, "g", g.group))) : null;
       return [
         detailBar(L.shown(key), label),
         el("main", {}, [
