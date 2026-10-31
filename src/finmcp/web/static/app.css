@@ -326,9 +326,9 @@ h2.h2first { margin-top:6px; }
 .lockbtn { margin-top:8px; min-height:44px; padding:0; border:0; background:none; color:var(--muted); font-size:.82rem; text-decoration:underline; cursor:pointer; }
 
 /* Modo discreto (clase `private` en <html>): difumina los importes y, más suave, los gráficos y el dato original del banco.
-   El radio crece con el tamaño de la letra (.45em, nunca menos de 8 px): con un radio fijo, las cifras grandes (el total de
+   El radio crece con el tamaño de la letra (.33em, nunca menos de 6 px): con un radio fijo, las cifras grandes (el total de
    saldos, las del encabezado) dejaban adivinar la forma de los dígitos. */
-html.private .amt, html.private .raw pre { filter:blur(max(8px, .45em)); }
-html.private .donut svg, html.private .spark, html.private .bars, html.private .mini { filter:blur(3px); }
+html.private .amt, html.private .raw pre { filter:blur(max(6px, .33em)); }
+html.private .donut svg, html.private .spark, html.private .bars, html.private .mini { filter:blur(2px); }
 
 @media (prefers-reduced-motion: reduce) { * { transition:none !important; } .odo-tape { animation:none !important; } }
