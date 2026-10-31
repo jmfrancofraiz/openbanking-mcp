@@ -49,7 +49,7 @@ def list_bills(session: Session, lookback_months: int = 6) -> list[dict]:
     bills: list[dict] = []
     for items in groups.values():
         amounts = [i.amount for i in items]
-        dates = sorted(i.booked_at for i in items)
+        dates = sorted(i.operated_at for i in items)
         diffs = [(dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)]
         cadence = _cadence(statistics.median(diffs)) if diffs else "única"
         bills.append(

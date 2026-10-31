@@ -46,14 +46,14 @@ def monthly_summary(session: Session, year: int, month: int) -> dict:
             "out": round(sum(t.amount for t in neutral_txs if t.type == "debit"), 2),
             "transactions": [
                 {
-                    "date": t.booked_at.date().isoformat(),
+                    "date": t.operated_at.date().isoformat(),
                     "type": t.type,
                     "amount": t.amount,
                     "currency": t.currency,
                     "merchant": t.merchant_name or t.description,
                     "category": category_of(t),
                 }
-                for t in sorted(neutral_txs, key=lambda t: t.booked_at)
+                for t in sorted(neutral_txs, key=lambda t: t.operated_at)
             ],
         },
     }

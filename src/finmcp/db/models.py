@@ -80,7 +80,12 @@ class Transaction(Base):
     account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id"))
     amount: Mapped[float] = mapped_column(Float)
     currency: Mapped[str] = mapped_column(String)
+    # Fecha contable: la del banco; con ella se reconstruyen los saldos del Diario.
     booked_at: Mapped[datetime] = mapped_column(DateTime)
+    # Fecha de la operación (operación → valor → contable): la de los cálculos.
+    operated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda ctx: ctx.get_current_parameters()["booked_at"]
+    )
     description: Mapped[str] = mapped_column(String, default="")
     type: Mapped[str] = mapped_column(String)  # debit | credit
     merchant_name: Mapped[str | None] = mapped_column(String, nullable=True)

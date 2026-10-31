@@ -69,7 +69,7 @@ def _flag(t, med: float, z: float | None) -> dict:
         "merchant": t.merchant_name or t.description,
         "amount": round(t.amount, 2),
         "currency": t.currency,
-        "date": t.booked_at.date().isoformat(),
+        "date": t.operated_at.date().isoformat(),
         "usual_amount": round(med, 2),
         "z_score": z,
     }

@@ -277,6 +277,7 @@ def import_transactions(
                 amount=amount,
                 currency=acc.currency,
                 booked_at=r["date"],
+                operated_at=r["date"],
                 description=r["description"],
                 type=side,
                 merchant_name=r["description"] or None,

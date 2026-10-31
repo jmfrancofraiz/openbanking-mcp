@@ -43,6 +43,7 @@ def upsert_transaction(
     existing.amount = tx.amount
     existing.currency = tx.currency
     existing.booked_at = tx.booked_at
+    existing.operated_at = tx.operated_at or tx.booked_at
     existing.description = tx.description
     existing.type = tx.type
     existing.merchant_name = tx.merchant_name

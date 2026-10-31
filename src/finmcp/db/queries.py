@@ -78,9 +78,9 @@ def query_transactions(
     if bank_id:
         q = q.join(models.Account).filter(models.Account.bank_id == bank_id)
     if start:
-        q = q.filter(models.Transaction.booked_at >= start)
+        q = q.filter(models.Transaction.operated_at >= start)
     if end:
-        q = q.filter(models.Transaction.booked_at <= end)
+        q = q.filter(models.Transaction.operated_at <= end)
     if type:
         q = q.filter(models.Transaction.type == type)
     if neutral is not None:
@@ -108,7 +108,7 @@ def query_transactions(
                 )
             )
         )
-    q = q.order_by(models.Transaction.booked_at.desc())
+    q = q.order_by(models.Transaction.operated_at.desc())
     if limit:
         q = q.limit(limit)
     return q.all()

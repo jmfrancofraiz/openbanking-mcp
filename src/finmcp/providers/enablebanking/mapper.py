@@ -93,16 +93,23 @@ def to_transaction(raw: dict) -> Transaction:
     side = "debit" if indicator == "DBIT" or amount < 0 else "credit"
     party = raw.get("creditor") if side == "debit" else raw.get("debtor")
     merchant = (party or {}).get("name")
+    # Contable (saldos) y de operación (cálculos), cada una con la otra cadena de respaldo.
     booked = (
         raw.get("booking_date")
         or raw.get("value_date")
         or raw.get("transaction_date")
+    )
+    operated = (
+        raw.get("transaction_date")
+        or raw.get("value_date")
+        or raw.get("booking_date")
     )
     return Transaction(
         provider_id=_provider_id(raw),
         amount=abs(amount),
         currency=raw.get("transaction_amount", {}).get("currency", "EUR"),
         booked_at=_parse_date(booked),
+        operated_at=_parse_date(operated),
         description=_description(raw),
         type=side,
         merchant_name=merchant,

@@ -23,7 +23,7 @@ def _tx_dict(t: models.Transaction) -> dict:
         "account_id": t.account_id,
         "amount": t.amount,
         "currency": t.currency,
-        "date": t.booked_at.date().isoformat(),
+        "date": t.operated_at.date().isoformat(),
         "description": t.description,
         "type": t.type,
         "merchant": t.merchant_name,

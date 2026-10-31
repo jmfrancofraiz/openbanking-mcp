@@ -122,8 +122,8 @@ def _computable(session: Session, start: date, end: date) -> list[models.Transac
     return query_transactions(session, start=_day_start(start), end=_day_end(end), neutral=False)
 
 
-def _first_booked(session: Session) -> date | None:
-    first = session.query(func.min(models.Transaction.booked_at)).scalar()
+def _first_operated(session: Session) -> date | None:
+    first = session.query(func.min(models.Transaction.operated_at)).scalar()
     return first.date() if first else None
 
 
@@ -210,7 +210,7 @@ def monthly(session: Session, today: date, day: int | None = None,
     anterior» añade un año concreto, en vez de cargar toda la historia de golpe. Sin
     ellos, el comportamiento es el de siempre: del primer mes con movimientos al actual.
     """
-    first = _first_booked(session) or today
+    first = _first_operated(session) or today
     first_month = date(first.year, first.month, 1)
     current_month_start = date(today.year, today.month, 1)
     start_month = parse_month(since) if since else first_month
@@ -229,7 +229,7 @@ def monthly(session: Session, today: date, day: int | None = None,
     end = (date(today.year, today.month, days_in(today)) if end_month == current_month_start
            else date(end_month.year, end_month.month, days_in(end_month)))
     for t in _computable(session, start, end):
-        booked = t.booked_at.date()
+        booked = t.operated_at.date()
         row = acc.get(month_key(booked))
         if row is None or (day is not None and booked.day > day):
             continue
@@ -271,11 +271,11 @@ def series(session: Session, start_month: str, end_month: str) -> dict:
     for t in _computable(session, first, end_date):
         cat = category_of(t)
         values = out[kind_of(cat)].setdefault(group_of(cat), [0.0] * len(months))
-        values[index[month_key(t.booked_at)]] += value_of(t, cat)
+        values[index[month_key(t.operated_at)]] += value_of(t, cat)
     for t in query_transactions(session, start=_day_start(first), end=_day_end(end_date), neutral=True):
         cat = category_of(t)
         values = out[NEUTRAL].setdefault(group_of(cat), [0.0] * len(months))
-        values[index[month_key(t.booked_at)]] += t.amount if t.type == "credit" else -t.amount
+        values[index[month_key(t.operated_at)]] += t.amount if t.type == "credit" else -t.amount
     return {
         "months": months,
         INCOME: {g: [_round(v) for v in vals] for g, vals in out[INCOME].items()},
@@ -298,7 +298,7 @@ def references(session: Session, to_month: str, window: int = REFERENCE_WINDOW) 
     end = parse_month(to_month)
     last_closed = _shift_month(end, -1)
     last_closed_key = month_key(last_closed)
-    first = _first_booked(session)
+    first = _first_operated(session)
     if first is None or last_closed_key < month_key(first):
         return {"months": 0, INCOME: {}, EXPENSE: {}, NEUTRAL: {}}
     start = _shift_month(last_closed, -(window - 1))
@@ -366,7 +366,7 @@ def transactions(
             continue
         rows.append({
             "id": t.id,
-            "date": t.booked_at.date().isoformat(),
+            "date": t.operated_at.date().isoformat(),
             "amount": t.amount if t.type == "credit" else -t.amount,
             "category": cat,
             "group": group_of(cat),
@@ -383,9 +383,9 @@ def transactions(
 
 def meta(session: Session, today: date) -> dict:
     """Contexto del panel: meses disponibles, mes en curso, cobertura y última sincronización."""
-    first = _first_booked(session) or today
+    first = _first_operated(session) or today
     coverage_rows = (
-        session.query(models.Account.bank_id, func.min(models.Transaction.booked_at))
+        session.query(models.Account.bank_id, func.min(models.Transaction.operated_at))
         .join(models.Transaction, models.Transaction.account_id == models.Account.id)
         .group_by(models.Account.bank_id)
         .all()

@@ -38,3 +38,5 @@ class Transaction:
     merchant_name: str | None = None
     provider_category: str | None = None
     raw: dict = field(default_factory=dict)
+    # Fecha de la operación; si el proveedor no la distingue, la contable.
+    operated_at: datetime | None = None
