@@ -200,7 +200,7 @@ def test_movements_todo_por_fecha_descendente_con_no_computables(session, lista)
     assert page["next"] is None and page["closing"] is None
     first = page["transactions"][0]
     assert first == {
-        "id": "tx2", "date": "2026-10-20", "amount": 500.0, "currency": "EUR", "merchant": None,
+        "id": "tx2", "date": "2026-10-20", "booked": None, "amount": 500.0, "currency": "EUR", "merchant": None,
         "description": "Traspaso desde BBVA", "category": "Traspasos internos", "uncategorized": False,
         "bank": "ING", "account": "acc1", "tags": [], "is_bill": False, "neutral": True, "manual": False,
     }

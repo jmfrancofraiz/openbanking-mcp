@@ -134,7 +134,7 @@ def accounts(session: Session, now: datetime) -> list[dict]:
     stats = {
         acc: (n, first, last)
         for acc, n, first, last in session.query(
-            T.account_id, func.count(T.id), func.min(T.booked_at), func.max(T.booked_at)
+            T.account_id, func.count(T.id), func.min(T.operated_at), func.max(T.operated_at)
         ).group_by(T.account_id)
     }
     out = []
@@ -260,11 +260,14 @@ def closing_balances(session: Session, account_id: str) -> dict | None:
     anchor, anchor_value, anchor_kind = snaps[-1]
 
     per_day: dict[date, list[int]] = {}
-    for booked, typ, amount in session.query(T.booked_at, T.type, T.amount).filter(
-            T.account_id == account_id):
-        per_day.setdefault(booked.date(), []).append(_cents(amount if typ == "credit" else -amount))
+    per_op_day: dict[date, list[int]] = {}
+    for booked, operated, typ, amount in session.query(
+            T.booked_at, T.operated_at, T.type, T.amount).filter(T.account_id == account_id):
+        cents = _cents(amount if typ == "credit" else -amount)
+        per_day.setdefault(booked.date(), []).append(cents)
+        per_op_day.setdefault((operated or booked).date(), []).append(cents)
     days = sorted(per_day)  # ascendente
-    closing: dict[date, int] = {}
+    closing: dict[date, int] = {}  # por fecha contable: el saldo del banco
     before_day: list[int] = [0] * len(days)  # cierre del día anterior a cada día con movimientos
     running = _cents(anchor_value)
     for i in range(len(days) - 1, -1, -1):
@@ -276,6 +279,14 @@ def closing_balances(session: Session, account_id: str) -> dict | None:
         """Saldo calculado al cierre del día anterior a `d`."""
         i = bisect.bisect_left(days, d)
         return before_day[i] if i < len(days) else _cents(anchor_value)
+
+    # El Diario agrupa por fecha de operación: su saldo al cierre va por esa fecha. Las fotos
+    # del banco se siguen contrastando por fecha contable (`checks`); un descuadre se ve en rojo.
+    op_closing: dict[date, int] = {}
+    running = _cents(anchor_value)
+    for d in sorted(per_op_day, reverse=True):
+        op_closing[d] = running
+        running -= sum(per_op_day[d])
 
     checks = []
     for s, value, _ in snaps:
@@ -294,7 +305,7 @@ def closing_balances(session: Session, account_id: str) -> dict | None:
         }
     return {
         "anchor": {"value": round(anchor_value, 2), "kind": anchor_kind, "at": iso_utc(anchor.snapshot_at)},
-        "closing": {d.isoformat(): c / 100 for d, c in closing.items()},
+        "closing": {d.isoformat(): c / 100 for d, c in op_closing.items()},
         "check": {
             "snapshots": len(checks),
             "ok": sum(1 for c in checks if c[3] is True),
@@ -314,7 +325,10 @@ def closing_balances(session: Session, account_id: str) -> dict | None:
 def _row(t: models.Transaction, banks: dict[str, str]) -> dict:
     return {
         "id": t.id,
-        "date": t.booked_at.date().isoformat(),
+        "date": t.operated_at.date().isoformat(),
+        # Fecha contable, solo si es otro día (el cargo se contabilizó antes o después).
+        "booked": (t.booked_at.date().isoformat()
+                   if t.booked_at.date() != t.operated_at.date() else None),
         "amount": round(signed(t), 2) + 0.0,
         "currency": t.currency,
         "merchant": t.merchant_name,
@@ -338,7 +352,7 @@ def _haystack(t: models.Transaction, bank: str) -> str:
 
 
 def encode_cursor(t: models.Transaction) -> str:
-    return f"{t.booked_at.isoformat()}|{t.id}"
+    return f"{t.operated_at.isoformat()}|{t.id}"
 
 
 def movements(
@@ -387,13 +401,13 @@ def movements(
             models.TransactionTag.tag.has(models.Tag.name == normalize_tag(tag)),
         )))
     if start:
-        q = q.filter(T.booked_at >= datetime.combine(start, time.min))
+        q = q.filter(T.operated_at >= datetime.combine(start, time.min))
     if end:
-        q = q.filter(T.booked_at < datetime.combine(end + timedelta(days=1), time.min))
+        q = q.filter(T.operated_at < datetime.combine(end + timedelta(days=1), time.min))
     if cursor:
         at, tx_id = cursor
-        q = q.filter(or_(T.booked_at < at, and_(T.booked_at == at, T.id < tx_id)))
-    q = q.order_by(T.booked_at.desc(), T.id.desc())
+        q = q.filter(or_(T.operated_at < at, and_(T.operated_at == at, T.id < tx_id)))
+    q = q.order_by(T.operated_at.desc(), T.id.desc())
 
     words = fold(text).split() if text else []
     if not words:

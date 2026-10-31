@@ -759,7 +759,8 @@
 
   function ledgerRow(t, showBank) {
     const cat = t.uncategorized && t.category === "Sin categoría" ? null : t.category;
-    const meta = [showBank ? t.bank : null, cat, ...t.tags.map((x) => `#${x}`)].filter(Boolean).join(" · ");
+    const meta = [showBank ? t.bank : null, cat, ...t.tags.map((x) => `#${x}`),
+      t.booked ? `contable ${dshort(t.booked)}` : null].filter(Boolean).join(" · ");
     return el("div", { className: "tx", attrs: { role: "button", tabindex: "0" }, onclick: () => go(H("diario", "mov", t.id)) }, [
       el("div", { className: "tx-main" }, [
         el("div", { className: "tx-title", textContent: L.titleOf(t) }),

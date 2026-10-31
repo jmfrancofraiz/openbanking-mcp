@@ -1,11 +1,11 @@
 """Fecha de operación (`operated_at`) frente a fecha contable (`booked_at`).
 
-Los cálculos (resúmenes, gasto, filtros por fecha) usan la de operación; los saldos
-del Diario se reconstruyen con la contable, que es la que usa el banco.
+Todo usa la de operación, también el Diario; el saldo del banco (por fecha contable)
+se contrastan con las fotos del banco por fecha contable.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from finmcp.analytics import ledger
 from finmcp.analytics.summaries import monthly_summary
@@ -71,12 +71,24 @@ def test_resumen_y_filtros_por_fecha_de_operacion(make_tx, session):
     assert [t.merchant_name for t in marzo] == ["Cena"]
 
 
-def test_saldos_del_diario_siguen_la_fecha_contable(make_tx, session):
+def test_diario_por_fecha_de_operacion(make_tx, session):
+    # Foto del banco del 2-abr: 100 €. Cargo de 50 € hecho el 30-mar, contabilizado el 1-abr;
+    # otro de 10 € el 28-mar, sin desfase.
     session.add(models.Balance(account_id="acc1", available=100.0, current=100.0,
                                currency="EUR",
                                snapshot_at=datetime(2026, 4, 2, 6, tzinfo=timezone.utc)))
     session.commit()
     make_tx(50.0, booked_at=datetime(2026, 4, 1, tzinfo=timezone.utc),
             operated_at=datetime(2026, 3, 30, tzinfo=timezone.utc))
+    make_tx(10.0, booked_at=datetime(2026, 3, 28, tzinfo=timezone.utc))
     cb = ledger.closing_balances(session, "acc1")
-    assert list(cb["closing"]) == ["2026-04-01"]
+    assert cb["closing"] == {"2026-03-30": 100.0, "2026-03-28": 150.0}
+
+    page = ledger.movements(session, account="acc1")
+    rows = page["transactions"]
+    assert [(r["date"], r["booked"]) for r in rows] == [("2026-03-30", "2026-04-01"),
+                                                         ("2026-03-28", None)]
+    # Filtro de fechas del Diario: también por fecha de operación.
+    marzo = ledger.movements(session, account="acc1", start=date(2026, 3, 1),
+                             end=date(2026, 3, 31))
+    assert len(marzo["transactions"]) == 2
