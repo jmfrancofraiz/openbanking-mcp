@@ -505,7 +505,7 @@
   return {
     MONTHS, MS, REST, eur, eur0, pct,
     ymOf, daysIn, monthStart, monthEnd, upTo, monthLabel, monthName, monthShort, monthInitial,
-    dayLabel, dayShort, cap, rangeLabel, addDays, dayHeading, dayLong, localStamp, whenLabel,
+    dayLabel, dayShort, cap, rangeLabel, addDays, otherYear, dayHeading, dayLong, localStamp, whenLabel,
     colorFor, share, shown, cleanTitle, titleOf, signedEur, topN, delta, parseHash,
     refPct, fadeHex, refFill, withAllGroups, monthlyTotals,
     DIARY_KEYS, diaryFilters, diaryQuery, ledgerParams, cuentaIds, toggleCuenta,

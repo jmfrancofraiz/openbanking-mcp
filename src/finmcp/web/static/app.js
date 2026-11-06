@@ -582,13 +582,15 @@
   function txList(rows, { byDay = true, showCat = false, income = false, hl = null } = {}) {
     const out = [];
     let last = null;
+    // Cabecera de día: «mar 20 oct»; si el año no es el vigente, «mar 30 dic 2025» (misma regla que el Diario).
+    const dtext = (iso) => L.dayLabel(iso) + L.otherYear(iso, TODAY);
     for (const t of rows) {
       const dim = hl && t.date.slice(0, 7) !== hl ? " dim" : "";
       if (byDay && t.date !== last) {
-        out.push(el("div", { className: `day${dim}`, textContent: L.dayLabel(t.date) }));
+        out.push(el("div", { className: `day${dim}`, textContent: dtext(t.date) }));
         last = t.date;
       }
-      const meta = [byDay ? null : L.dayLabel(t.date), t.bank, showCat || income ? t.category : null, ...t.tags.map((x) => `#${x}`),
+      const meta = [byDay ? null : dtext(t.date), t.bank, showCat || income ? t.category : null, ...t.tags.map((x) => `#${x}`),
         t.is_bill ? "recibo" : null, t.amount > 0 && !income ? "devolución/abono" : null].filter(Boolean).join(" · ");
       const det = el("div", { className: "tx-det hidden" }, [
         el("p", { textContent: t.description || "—" }),
@@ -650,7 +652,7 @@
   const diaryHash = (f) => { const qs = L.diaryQuery(f); return qs ? H("diario", qs) : "#/diario"; };
   const ledgerPage = (f, cursor) => api("ledger", { ...L.ledgerParams(f), ...(cursor ? { cursor } : {}) });
   const tailOf = (a) => (a.iban_tail ? `··${a.iban_tail}` : a.name);
-  const dshort = (iso) => L.dayShort(iso) + (iso.slice(0, 4) !== TODAY.slice(0, 4) ? ` ${iso.slice(0, 4)}` : "");
+  const dshort = (iso) => L.dayShort(iso) + L.otherYear(iso, TODAY);
 
   function marksOf(t) {
     return [t.uncategorized && ["sin categoría", "warn"], t.is_bill && ["recibo", ""], t.neutral && ["no computa", ""],

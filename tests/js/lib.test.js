@@ -274,6 +274,9 @@ test("Diario: cabeceras de día con «Hoy», «Ayer» y el año si no es el actu
   assert.equal(L.dayHeading("2026-10-19", "2026-10-21"), "lun 19 oct");
   assert.equal(L.dayHeading("2025-12-31", "2026-01-01"), "Ayer · mié 31 dic 2025");
   assert.equal(L.dayHeading("2025-12-30", "2026-10-21"), "mar 30 dic 2025");
+  // `otherYear` va suelto para las listas de movimientos, que no usan el prefijo «Hoy/Ayer».
+  assert.equal(L.otherYear("2026-10-20", "2026-10-21"), "");
+  assert.equal(L.otherYear("2025-12-30", "2026-10-21"), " 2025");
   assert.equal(L.addDays("2026-03-01", -1), "2026-02-28");
   assert.equal(L.dayLong("2026-10-21"), "miércoles, 21 de octubre de 2026");
 });
