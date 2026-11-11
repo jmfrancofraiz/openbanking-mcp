@@ -26,7 +26,7 @@ entregado "tal cual", sin garantías (ver [LICENSE](LICENSE)). Lee las [notas PS
 
 ```txt
 Tu banco (PSD2)                     Bonusly (puntos de reconocimiento)
-   -> Enable Banking (AIS)             -> API de Bonusly      [interfaz BankDataProvider]
+   -> Enable Banking (AIS)             -> MCP de Bonusly (OAuth)  [interfaz BankDataProvider]
    -> Capa de sincronización        (pull idempotente e incremental)
    -> SQLite (SQLAlchemy)
    -> Capa de analítica             (funciones puras)
@@ -386,19 +386,43 @@ Si su empresa usa [Bonusly](https://bonus.ly), finmcp puede tratar su saldo de p
 cuenta más, en euros: los reconocimientos recibidos entran como ingresos y los canjes como
 gastos en el comercio de la recompensa (p. ej. una tarjeta regalo de Amazon).
 
-1. En Bonusly, *Settings → API → Create token*, con los scopes `user:read`, `recognition:read`
-   y `rewards:read`. El token caduca (máximo un año): renuévelo cuando Bonusly le avise.
-2. En `.env`:
+**Autenticación: OAuth, no un token personal.** Desde noviembre de 2026 el MCP de Bonusly
+(`https://bonus.ly/mcp`) rechaza los PAT e impone OAuth 2.0 con *authorization code* + PKCE
+S256; el cliente se registra por DCR. El alta es un consentimiento único por navegador; después,
+finmcp refresca el acceso solo y reescribe el *refresh token* cuando Bonusly lo rota.
+
+1. Pida el enlace de consentimiento (registra el cliente si aún no existe):
 
    ```bash
-   BONUSLY_API_TOKEN=...          # el token
-   BONUSLY_EUR_PER_POINT=1.08     # valor de un punto en euros (2 decimales como máximo)
+   python scripts/bonusly_oauth_login.py url
    ```
 
-3. `finmcp banks list` mostrará el banco `Bonusly`, y `finmcp sync` lo incluirá con los demás.
-   No necesita `auth`. Para traer el histórico: `finmcp sync --bank Bonusly --from 2022-01-01`.
+   Ábralo en el navegador, inicie sesión en Bonusly y autorice los scopes `user:read`,
+   `recognition:read` y `rewards:read`. Al terminar, el navegador salta a
+   `http://127.0.0.1:8765/callback?code=...`; si el navegador está en esta misma máquina y
+   lanzó antes `python scripts/bonusly_callback_listener.py`, la página dirá «Listo». Si no,
+   copie la URL completa de la barra de direcciones (el código caduca en minutos).
 
-Si `finmcp sync` da un error 401 o 403 de Bonusly, el token ha caducado o le falta algún scope.
+2. Canjee el código y guarde las credenciales en `.env` (permisos 600):
+
+   ```bash
+   python scripts/bonusly_oauth_login.py redeem --callback-url '<URL del callback>'
+   ```
+
+   Escribe `BONUSLY_OAUTH_CLIENT_ID` y `BONUSLY_OAUTH_REFRESH_TOKEN`. El valor del punto se fija
+   aparte, con dos decimales como máximo para que los importes sean céntimos exactos:
+
+   ```bash
+   BONUSLY_EUR_PER_POINT=1.08     # valor de un punto en euros
+   ```
+
+3. `finmcp banks list` mostrará el banco `Bonusly` como «vinculado», y `finmcp sync` lo incluirá
+   con los demás. No necesita `auth` de Enable Banking. Para traer el histórico:
+   `finmcp sync --bank Bonusly --from 2022-01-01`.
+
+Si `finmcp sync` da 401 de Bonusly, o se revocó el acceso (*Settings → Apps*) o el modelo de
+autenticación ha cambiado otra vez: repita el paso 1. Un PAT nuevo ya no arregla nada — el PAT
+solo sirve para los sondeos REST (`GET /api/v1/users/me`), no para el MCP.
 
 ## Sincronización programada (macOS / launchd)
 

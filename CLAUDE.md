@@ -64,16 +64,22 @@ provider client (HTTP)  ->  sync/service.run_sync  ->  SQLite (db/)  ->  analyti
   MCP tools and `db/models.Account`/`SyncRun` carry a `bank_id` to disambiguate.
 - **Providers** (`src/finmcp/providers/`): two implement `providers/base.BankDataProvider` (a
   `Protocol`): Enable Banking (`enablebanking/`: `auth.py` consent/link flow + credentials,
-  `client.py`, `mapper.py`) and **Bonusly** (`bonusly/`: `client.py`, `mapper.py`; no auth flow).
+  `client.py`, `mapper.py`) and **Bonusly** (`bonusly/`: `client.py`, `mapper.py`, `oauth.py`).
   `BankConfig.provider` (`"enablebanking"` default | `"bonusly"`) picks the client in
   `factory.get_provider(bank)`; `factory.is_linked(bank)` is the shared "can it sync?" check
-  (Enable Banking link store / Bonusly token) used by `banks list` and MCP `list_banks`. Sync and
+  (Enable Banking link store / Bonusly OAuth credentials) used by `banks list` and MCP `list_banks`. Sync and
   analytics never import a concrete provider.
 - **Bonusly** (`providers/bonusly/`): read-only client for the JSON-RPC tools at
-  `https://bonus.ly/mcp` plus a mapper. It is registered as a bank when `BONUSLY_API_TOKEN` is
-  set. The redeemable points balance is the account: received recognitions are income and reward
-  redemptions are expenses, priced at `BONUSLY_EUR_PER_POINT`. Keep that rate at no more than
-  2 decimals, so every amount is whole cents and the ledger balance checks hold.
+  `https://bonus.ly/mcp` plus a mapper. **Auth is OAuth 2.0 (authorization code + PKCE S256,
+  client registered by DCR since Nov 2026); the PAT no longer works against `/mcp`.** It is
+  registered as a bank when `BONUSLY_OAUTH_CLIENT_ID` + `BONUSLY_OAUTH_REFRESH_TOKEN` are set;
+  `oauth.TokenProvider` refreshes lazily, retries once after a 401 and atomically persists the
+  rotated refresh token into `.env` (a lost write leaves a dead token, so never bypass it).
+  Onboarding is a single browser consent: `scripts/bonusly_oauth_login.py url` then
+  `... redeem --callback-url`. The redeemable points balance is the account: received
+  recognitions are income and reward redemptions are expenses, priced at
+  `BONUSLY_EUR_PER_POINT`. Keep that rate at no more than 2 decimals, so every amount is whole
+  cents and the ledger balance checks hold.
 - **Rule for every provider mapper:** never put free text written by third parties (messages,
   notes) in `description` or `merchant_name`. Category rules match by substring and union the
   tags of every matching rule, so stray words would mis-categorise and mis-tag movements. Keep
