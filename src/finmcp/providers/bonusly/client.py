@@ -11,6 +11,7 @@ import httpx
 
 from finmcp.config import BankConfig
 from finmcp.providers.bonusly import mapper
+from finmcp.providers.bonusly.oauth import TokenProvider
 from finmcp.providers.types import Account, Balance, Transaction
 
 MCP_URL = "https://bonus.ly/mcp"
@@ -49,23 +50,51 @@ class BonuslyClient:
         token: str | None = None,
         eur_per_point: float | None = None,
         transport: httpx.BaseTransport | None = None,
+        token_provider: TokenProvider | None = None,
     ) -> None:
-        if token is None or eur_per_point is None:
+        if eur_per_point is None or (token is None and token_provider is None):
             from finmcp import config
 
-            token = config.settings.bonusly_api_token if token is None else token
             if eur_per_point is None:
                 eur_per_point = config.settings.bonusly_eur_per_point
-        if not token:
-            raise BonuslyError("Falta BONUSLY_API_TOKEN en .env.")
+            if token is None and token_provider is None:
+                token = config.settings.bonusly_api_token
+                if config.settings.bonusly_oauth_refresh_token:
+                    token_provider = TokenProvider(
+                        client_id=config.settings.bonusly_oauth_client_id,
+                        refresh_token=config.settings.bonusly_oauth_refresh_token,
+                        token_url=config.settings.bonusly_oauth_token_url,
+                        env_file=getattr(config.settings, "_env_file_path", None),
+                    )
+        if token_provider is None and not token:
+            raise BonuslyError(
+                "Falta BONUSLY_OAUTH_REFRESH_TOKEN en .env: repita el alta con "
+                "scripts/bonusly_oauth_login.py."
+            )
         self._bank = bank
         self._token = token
+        self._token_provider = token_provider
         self._eur = eur_per_point
         self._transport = transport
         self._ids = itertools.count(1)
         self._balance: dict | None = None
 
     # --- transporte -------------------------------------------------------------------
+
+    def _headers(self) -> dict[str, str]:
+        token = self._token_provider.access_token() if self._token_provider else self._token
+        return {"Authorization": f"Bearer {token}", "Accept": "application/json, text/event-stream"}
+
+    def _post(self, payload: dict) -> httpx.Response:
+        """Una llamada al MCP; ante un 401 con OAuth, refresca el token y reintenta una vez."""
+        with httpx.Client(timeout=60, transport=self._transport, headers=self._headers()) as c:
+            r = c.post(MCP_URL, json=payload)
+            if r.status_code == 401 and self._token_provider is not None:
+                self._token_provider.invalidate()
+                with httpx.Client(timeout=60, transport=self._transport,
+                                  headers=self._headers()) as c2:
+                    r = c2.post(MCP_URL, json=payload)
+        return r
 
     def _call(self, tool: str, arguments: dict | None = None) -> dict:
         payload = {
@@ -74,16 +103,14 @@ class BonuslyClient:
             "method": "tools/call",
             "params": {"name": tool, "arguments": arguments or {}},
         }
-        headers = {
-            "Authorization": f"Bearer {self._token}",
-            "Accept": "application/json, text/event-stream",
-        }
-        with httpx.Client(timeout=60, transport=self._transport, headers=headers) as c:
-            r = c.post(MCP_URL, json=payload)
+        r = self._post(payload)
         if r.status_code in (401, 403):
-            raise BonuslyError(
-                f"Bonusly {r.status_code} en {tool}: token caducado, revocado o sin el scope necesario."
+            hint = (
+                "OAuth: repita el alta con scripts/bonusly_oauth_login.py."
+                if self._token_provider is not None
+                else "token caducado, revocado o sin el scope necesario."
             )
+            raise BonuslyError(f"Bonusly {r.status_code} en {tool}: {hint}")
         r.raise_for_status()
         body = r.json()
         if body.get("error"):

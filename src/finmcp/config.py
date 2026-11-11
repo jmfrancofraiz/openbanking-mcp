@@ -78,8 +78,13 @@ class Settings(BaseSettings):
     enablebanking_redirect_uri: str = "https://localhost:3000/callback"
 
     # --- Bonusly (puntos de reconocimiento tratados como una cuenta; solo lectura) ---
-    # PAT de Bonusly (Settings → API) con scopes user:read, recognition:read y rewards:read.
+    # Desde nov-2026 el MCP de Bonusly no acepta el PAT: exige OAuth 2.0 (code + PKCE).
+    # El alta es un consentimiento único: `scripts/bonusly_oauth_login.py`.
+    # El PAT se conserva solo para sondeos REST (no sirve en https://bonus.ly/mcp).
     bonusly_api_token: str = ""
+    bonusly_oauth_client_id: str = ""
+    bonusly_oauth_refresh_token: str = ""
+    bonusly_oauth_token_url: str = "https://bonus.ly/oauth/token"
     bonusly_bank_id: str = "Bonusly"
     # Valor en euros de un punto (NetCoin). Con dos decimales como máximo, cada movimiento
     # es un número exacto de céntimos y el saldo cuadra al céntimo con la suma de movimientos.
@@ -145,7 +150,7 @@ class Settings(BaseSettings):
                     country=self.enablebanking_country,
                 )
             ]
-        if self.bonusly_api_token:
+        if self.bonusly_oauth_refresh_token or self.bonusly_api_token:
             banks.append(
                 BankConfig(id=self.bonusly_bank_id, aspsp_name="Bonusly", provider="bonusly")
             )

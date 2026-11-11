@@ -44,7 +44,10 @@ def auth(
     """Autoriza con Enable Banking y guarda las credenciales cifradas (Bonusly no lo necesita)."""
     b = _resolve_bank(bank)
     if b.provider == "bonusly":
-        typer.echo("Bonusly no usa `auth`: basta con BONUSLY_API_TOKEN en .env.", err=True)
+        typer.echo(
+            "Bonusly no usa `auth`: su OAuth se da de alta con scripts/bonusly_oauth_login.py.",
+            err=True,
+        )
         raise typer.Exit(code=2)
     from finmcp.providers.enablebanking.auth import run_link_flow
 

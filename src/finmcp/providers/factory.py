@@ -18,11 +18,12 @@ def get_provider(bank: BankConfig) -> BankDataProvider:
 
 
 def is_linked(bank: BankConfig) -> bool:
-    """¿Puede sincronizarse ya? Enable Banking: vínculo de `auth`. Bonusly: token en .env."""
+    """¿Puede sincronizarse ya? Enable Banking: vínculo de `auth`. Bonusly: OAuth en .env."""
     if bank.provider == "bonusly":
         from finmcp import config
 
-        return bool(config.settings.bonusly_api_token)
+        s = config.settings
+        return bool(s.bonusly_oauth_refresh_token and s.bonusly_oauth_client_id)
     from finmcp.providers.enablebanking.auth import has_link
 
     return has_link(bank.id)

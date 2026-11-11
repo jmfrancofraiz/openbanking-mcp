@@ -15,7 +15,10 @@ def test_bonusly_devuelve_su_cliente(monkeypatch):
     from finmcp.providers.bonusly.client import BonuslyClient
 
     monkeypatch.setattr(
-        config, "settings", SimpleNamespace(bonusly_api_token="tok", bonusly_eur_per_point=1.08)
+        config, "settings",
+        SimpleNamespace(bonusly_api_token="", bonusly_eur_per_point=1.08,
+                        bonusly_oauth_refresh_token="r1", bonusly_oauth_client_id="cid",
+                        bonusly_oauth_token_url="https://bonus.ly/oauth/token"),
     )
     assert isinstance(factory.get_provider(BONUSLY), BonuslyClient)
 
@@ -32,8 +35,13 @@ def test_proveedor_desconocido():
         factory.get_provider(BankConfig(id="x", provider="otro"))
 
 
-def test_bonusly_vinculado_si_hay_token(monkeypatch):
-    monkeypatch.setattr(config, "settings", SimpleNamespace(bonusly_api_token="tok"))
+def test_bonusly_vinculado_solo_con_oauth(monkeypatch):
+    monkeypatch.setattr(config, "settings",
+                        SimpleNamespace(bonusly_oauth_refresh_token="r1",
+                                        bonusly_oauth_client_id="cid", bonusly_api_token=""))
     assert factory.is_linked(BONUSLY) is True
-    monkeypatch.setattr(config, "settings", SimpleNamespace(bonusly_api_token=""))
+    # Un PAT suelto ya no vincula: el MCP dejó de aceptarlo (nov-2026).
+    monkeypatch.setattr(config, "settings",
+                        SimpleNamespace(bonusly_oauth_refresh_token="",
+                                        bonusly_oauth_client_id="", bonusly_api_token="tok"))
     assert factory.is_linked(BONUSLY) is False

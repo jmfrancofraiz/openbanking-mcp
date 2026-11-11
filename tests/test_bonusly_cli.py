@@ -15,7 +15,13 @@ BONUSLY = BankConfig(id="Bonusly", aspsp_name="Bonusly", provider="bonusly")
 
 
 def _settings(monkeypatch, token="tok"):
-    monkeypatch.setattr(config, "settings", SimpleNamespace(banks=[BONUSLY], bonusly_api_token=token))
+    """`token` simula el refresh token OAuth guardado en .env (vacío = sin alta)."""
+    monkeypatch.setattr(
+        config,
+        "settings",
+        SimpleNamespace(banks=[BONUSLY], bonusly_oauth_refresh_token=token,
+                        bonusly_oauth_client_id="cid" if token else "", bonusly_api_token=""),
+    )
 
 
 def test_banks_list_muestra_bonusly_vinculado(monkeypatch):
@@ -33,7 +39,7 @@ def test_auth_rechaza_bonusly(monkeypatch):
     _settings(monkeypatch)
     res = CliRunner().invoke(app, ["auth", "--bank", "Bonusly"])
     assert res.exit_code == 2
-    assert "BONUSLY_API_TOKEN" in res.output
+    assert "bonusly_oauth_login.py" in res.output
 
 
 def test_mcp_list_banks_da_proveedor_y_vinculo(monkeypatch):

@@ -147,5 +147,5 @@ def test_is_error_da_error():
 
 
 def test_sin_token():
-    with pytest.raises(BonuslyError, match="BONUSLY_API_TOKEN"):
+    with pytest.raises(BonuslyError, match="BONUSLY_OAUTH_REFRESH_TOKEN"):
         BonuslyClient(BANK, token="", eur_per_point=1.08)
