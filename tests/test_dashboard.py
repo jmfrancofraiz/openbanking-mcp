@@ -247,6 +247,18 @@ def test_series_incluye_neutral(session, ejemplo):
     assert s["neutral"]["Traspasos internos"] == [-500.00, 0.0]
 
 
+def test_series_indexa_tambien_por_subcategoria(session, ejemplo):
+    """`by_category` lleva la categoría completa, para la gráfica de la ficha de subcategoría."""
+    s = d.series(session, "2026-02", "2026-04")
+
+    assert s[d.BY_CATEGORY][d.EXPENSE]["Alimentación - Supermercado"] == [0.0, 120.0, 60.0]
+    assert s[d.BY_CATEGORY][d.EXPENSE]["Vivienda - Hipoteca"] == [0.0, 900.0, 0.0]
+    # Una categoría sin « - » aparece igual en ambos índices, con los mismos valores.
+    assert s[d.BY_CATEGORY][d.EXPENSE]["Restauración"] == s[d.EXPENSE]["Restauración"]
+    # El índice por grupo sigue conteniendo solo el primer nivel.
+    assert "Alimentación - Supermercado" not in s[d.EXPENSE]
+
+
 # --- references ----------------------------------------------------------------
 
 
@@ -263,10 +275,27 @@ def test_references_mediana_de_cerrados_excluye_el_mes_pedido(session, make_tx):
     assert refs[d.EXPENSE]["Alimentación"] == 150.0
 
 
+def test_references_mediana_por_subcategoria(session, make_tx):
+    """La mediana de una subcategoría es suya, no la de la familia entera (21-nov-2026)."""
+    make_tx(100.00, booked_at=at(2026, 1, 15), my_category="Alimentación - Supermercado")
+    make_tx(200.00, booked_at=at(2026, 2, 15), my_category="Alimentación - Supermercado")
+    make_tx(600.00, booked_at=at(2026, 3, 15), my_category="Alimentación - Supermercado")
+    make_tx(50.00, booked_at=at(2026, 1, 20), my_category="Alimentación - Panadería")
+    make_tx(70.00, booked_at=at(2026, 2, 20), my_category="Alimentación - Panadería")
+
+    refs = d.references(session, "2026-04")
+
+    # familia: ene 150, feb 270, mar 600 -> mediana 270; cada subcategoría, la suya.
+    assert refs[d.EXPENSE]["Alimentación"] == 270.0
+    assert refs[d.BY_CATEGORY][d.EXPENSE]["Alimentación - Supermercado"] == 200.0
+    assert refs[d.BY_CATEGORY][d.EXPENSE]["Alimentación - Panadería"] == 50.0  # [50, 70, 0]
+
+
 def test_references_sin_meses_cerrados_devuelve_vacio(session, make_tx):
     make_tx(50.00, merchant="Super", booked_at=at(2026, 4, 5), my_category="Alimentación - Supermercado")
 
-    assert d.references(session, "2026-04") == {"months": 0, d.INCOME: {}, d.EXPENSE: {}, d.NEUTRAL: {}}
+    assert d.references(session, "2026-04") == {"months": 0, d.INCOME: {}, d.EXPENSE: {}, d.NEUTRAL: {},
+                                                d.BY_CATEGORY: {d.INCOME: {}, d.EXPENSE: {}, d.NEUTRAL: {}}}
 
 
 def test_references_ventana_configurable(session, make_tx):

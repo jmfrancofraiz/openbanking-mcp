@@ -1148,14 +1148,19 @@
     const first = rows[0];
     const isSub = kind === "c" && first && first.group !== key;
     const total = nz((tipo === "ingresos" || tipo === "no-computables") ? net : -net);
-    // Mismo tratamiento que arriba: solo cuando esta vista «c» es en realidad una categoría
-    // entera con una única subcategoría (catHref enruta directo a «c» en ese caso — `!isSub`),
-    // y solo para un único mes (origin «mes»). Una subcategoría genuina (llegada desde «Por
-    // subcategoría») no lleva mediana: su histórico es demasiado irregular para ser útil (ver
-    // skill «web-panel.md»).
-    const refs = (kind === "c" && !isSub && origin === "mes") ? await referencesOf(from.slice(0, 7)) : null;
+    // Mismo tratamiento que la ficha de primer nivel: la gráfica de barras de los últimos 12
+    // meses con la línea de la mediana (21-nov-2026, petición del Señor: hasta hoy una
+    // subcategoría genuina —llegada desde «Por subcategoría»— se quedaba sin ella; se retiró
+    // aquella exclusión por «histórico demasiado irregular»). Se sigue pidiendo solo para un
+    // único mes (`origin === "mes"`): en Acumulado o Periodo el total ya abarca varios meses y
+    // no hay «mes mostrado» sobre el que centrar la ventana. La mediana y las barras de la
+    // subcategoría salen del índice `by_category` que la API publica desde esa misma fecha
+    // (`/api/references` y `/api/series`); para una categoría sin subcategoría propia (su
+    // categoría ES el grupo) ambos índices coinciden.
+    const refs = (kind === "c" && origin === "mes") ? await referencesOf(from.slice(0, 7)) : null;
     const refKey = tipo === "ingresos" ? "income" : tipo === "no-computables" ? "neutral" : "expense";
-    const ref = refs && refs.months > 0 ? refs[refKey][key] : undefined;
+    const byCat = (body) => body && body.by_category ? body.by_category[refKey] : undefined;
+    const ref = refs && refs.months > 0 ? (byCat(refs)?.[key] ?? refs[refKey][key]) : undefined;
     // Los últimos 12 meses de la categoría (el mostrado + los 11 anteriores), igual que en la
     // vista «g» (30-oct-2026, petición del Señor, corregido el mismo día de 2 a 12 meses): solo
     // cuando hay mediana útil que dibujar como línea.
@@ -1164,7 +1169,8 @@
     const yearMonths = ref !== undefined && ref !== null
       ? (yi2 >= 0 ? MONTHS.slice(Math.max(0, yi2 - 11), yi2 + 1) : [ym2]) : null;
     const yearSeries = yearMonths ? await seriesOf(yearMonths[0], ym2) : null;
-    const yearVals = yearSeries ? (yearSeries[refKey][key] || yearSeries.months.map(() => 0)) : null;
+    const yearVals = yearSeries
+      ? (byCat(yearSeries)?.[key] ?? yearSeries[refKey][key] ?? yearSeries.months.map(() => 0)) : null;
     // Gráfica y lista enlazadas en los dos sentidos (peticiones del Señor, 30-oct-2026): el buscador
     // recalcula la gráfica con los movimientos a la vista, y tocar una barra resalta en la lista los
     // movimientos de ese mes y atenúa el resto, sin quitarlos y sin salir de la pantalla (aquí no hay

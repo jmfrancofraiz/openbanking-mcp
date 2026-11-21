@@ -31,6 +31,9 @@ INCOME = "income"
 EXPENSE = "expense"
 NEUTRAL = "neutral"
 KINDS = (INCOME, EXPENSE, NEUTRAL)
+# Índice por categoría COMPLETA (subcategoría) que acompaña a `series()`/`references()` desde
+# el 21-nov-2026; fuera de `KINDS` a propósito, para que nadie lo itere como si fuera un tipo.
+BY_CATEGORY = "by_category"
 
 INCOME_PREFIX = "Ingresos"
 EXTRA_INCOME_CATEGORIES = frozenset({"Otros ingresos", "Intereses"})
@@ -262,25 +265,46 @@ def monthly(session: Session, today: date, day: int | None = None,
 
 
 def series(session: Session, start_month: str, end_month: str) -> dict:
-    """Total de cada categoría del panel por mes (ingresos, gastos y no computables)."""
+    """Total de cada categoría del panel por mes (ingresos, gastos y no computables).
+
+    Cada valor va indexado dos veces: por categoría de primer nivel (`group_of`, lo que consumía
+    el panel hasta ahora) y, aparte, bajo `BY_CATEGORY` por la categoría COMPLETA (la
+    subcategoría tal cual se almacena, «Alimentación - Supermercado»). El segundo índice existe
+    para que la ficha de una subcategoría pueda dibujar su propia gráfica de 12 meses con su
+    propia mediana (21-nov-2026, petición del Señor: hasta hoy solo la categoría de primer nivel
+    la mostraba). No se mezclan en los mismos diccionarios para no alterar ninguna lectura
+    existente por nombre de grupo.
+    """
     first, last = parse_month(start_month), parse_month(end_month)
     months = month_range(first, last)
     index = {m: i for i, m in enumerate(months)}
     end_date = date(last.year, last.month, days_in(last))
     out: dict[str, dict[str, list[float]]] = {INCOME: {}, EXPENSE: {}, NEUTRAL: {}}
+    by_cat: dict[str, dict[str, list[float]]] = {INCOME: {}, EXPENSE: {}, NEUTRAL: {}}
+
+    def bump(kind: str, name: str, i: int, value: float) -> None:
+        out[kind].setdefault(name, [0.0] * len(months))[i] += value
+
     for t in _computable(session, first, end_date):
         cat = category_of(t)
-        values = out[kind_of(cat)].setdefault(group_of(cat), [0.0] * len(months))
-        values[index[month_key(t.operated_at)]] += value_of(t, cat)
+        i = index[month_key(t.operated_at)]
+        val = value_of(t, cat)
+        kind = kind_of(cat)
+        bump(kind, group_of(cat), i, val)
+        by_cat[kind].setdefault(cat, [0.0] * len(months))[i] += val
     for t in query_transactions(session, start=_day_start(first), end=_day_end(end_date), neutral=True):
         cat = category_of(t)
-        values = out[NEUTRAL].setdefault(group_of(cat), [0.0] * len(months))
-        values[index[month_key(t.operated_at)]] += t.amount if t.type == "credit" else -t.amount
+        i = index[month_key(t.operated_at)]
+        val = t.amount if t.type == "credit" else -t.amount
+        bump(NEUTRAL, group_of(cat), i, val)
+        by_cat[NEUTRAL].setdefault(cat, [0.0] * len(months))[i] += val
     return {
         "months": months,
         INCOME: {g: [_round(v) for v in vals] for g, vals in out[INCOME].items()},
         EXPENSE: {g: [_round(v) for v in vals] for g, vals in out[EXPENSE].items()},
         NEUTRAL: {g: [_round(v) for v in vals] for g, vals in out[NEUTRAL].items()},
+        BY_CATEGORY: {kind: {c: [_round(v) for v in vals] for c, vals in cats.items()}
+                      for kind, cats in by_cat.items()},
     }
 
 
@@ -294,13 +318,17 @@ def references(session: Session, to_month: str, window: int = REFERENCE_WINDOW) 
     categorías): por eso `to_month` NUNCA entra en su propio cálculo — si está en curso, su cifra
     parcial sesgaría a la baja la referencia contra la que se compara. Con menos meses cerrados
     disponibles que `window` se usan los que haya; con ninguno, no hay referencia posible.
+
+    Desde el 21-nov-2026 devuelve además `BY_CATEGORY` con la mediana de cada subcategoría (misma
+    ventana, misma regla), para la gráfica de 12 meses de la ficha de segundo nivel.
     """
     end = parse_month(to_month)
     last_closed = _shift_month(end, -1)
     last_closed_key = month_key(last_closed)
     first = _first_operated(session)
     if first is None or last_closed_key < month_key(first):
-        return {"months": 0, INCOME: {}, EXPENSE: {}, NEUTRAL: {}}
+        return {"months": 0, INCOME: {}, EXPENSE: {}, NEUTRAL: {},
+                BY_CATEGORY: {INCOME: {}, EXPENSE: {}, NEUTRAL: {}}}
     start = _shift_month(last_closed, -(window - 1))
     start_key = max(month_key(start), month_key(first))
     ser = series(session, start_key, last_closed_key)
@@ -309,6 +337,8 @@ def references(session: Session, to_month: str, window: int = REFERENCE_WINDOW) 
         INCOME: {g: _round(statistics.median(vals)) for g, vals in ser[INCOME].items()},
         EXPENSE: {g: _round(statistics.median(vals)) for g, vals in ser[EXPENSE].items()},
         NEUTRAL: {g: _round(statistics.median(vals)) for g, vals in ser[NEUTRAL].items()},
+        BY_CATEGORY: {kind: {c: _round(statistics.median(vals)) for c, vals in cats.items()}
+                      for kind, cats in ser[BY_CATEGORY].items()},
     }
 
 
